@@ -374,9 +374,10 @@ std::unique_ptr<MenuScreen> SettingsPages::Display() {
                          {{"BILINEAR", {{"present_effect", "\"bilinear\""}}},
                           {"CAS", {{"present_effect", "\"cas\""}}},
                           {"FSR 1", {{"present_effect", "\"fsr\""}}}}));
-  // HDR output (#417, first stage): the same image on an HDR (scRGB)
-  // swapchain with its white at the paper white, so an HDR desktop does not
-  // wash it out. Offered when the display has HDR on, or while it is set.
+  // HDR output (#417): the image on an HDR (scRGB) swapchain with its white
+  // at the paper white, so an HDR desktop does not wash it out, and the
+  // scene's highlights (not the HUD or menus) expanded towards the peak.
+  // Offered when the display has HDR on, or while it is set.
   const rex::ui::vulkan::HdrOutputState hdr = rex::ui::vulkan::GetHdrOutputState();
   if (hdr.offered || hdr.active || SameValue(Unquote(Saved("present_hdr")), "true")) {
     rows.push_back(Toggle("HDR", "present_hdr"));
@@ -386,6 +387,12 @@ std::unique_ptr<MenuScreen> SettingsPages::Display() {
           {std::string(nits) + " NITS", {{"present_hdr_paper_white_nits", nits}}});
     }
     rows.push_back(Setting("HDR PAPER WHITE", std::move(paper_white)));
+    // At or below the paper white nothing is expanded.
+    std::vector<Choice> peak = {{"OFF", {{"present_hdr_peak_nits", "80"}}}};
+    for (const char* nits : {"400", "600", "800", "1000", "1500"}) {
+      peak.push_back({std::string(nits) + " NITS", {{"present_hdr_peak_nits", nits}}});
+    }
+    rows.push_back(Setting("HDR HIGHLIGHTS", std::move(peak)));
   }
   // The rate the game simulates and renders at, which sets every CPU cost
   // (LS-1.4). DISPLAY follows the refresh rate: 144 Hz and faster displays
