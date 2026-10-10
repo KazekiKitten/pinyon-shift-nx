@@ -20,6 +20,7 @@
 #if defined(__ANDROID__)
 #include <rex/ui/vulkan/android_gpu_driver.h>
 #endif
+#include <rex/ui/vulkan/presenter.h>
 
 #include "cheats.h"
 #include "config/default_keys.h"
@@ -373,6 +374,19 @@ std::unique_ptr<MenuScreen> SettingsPages::Display() {
                          {{"BILINEAR", {{"present_effect", "\"bilinear\""}}},
                           {"CAS", {{"present_effect", "\"cas\""}}},
                           {"FSR 1", {{"present_effect", "\"fsr\""}}}}));
+  // HDR output (#417, first stage): the same image on an HDR (scRGB)
+  // swapchain with its white at the paper white, so an HDR desktop does not
+  // wash it out. Offered when the display has HDR on, or while it is set.
+  const rex::ui::vulkan::HdrOutputState hdr = rex::ui::vulkan::GetHdrOutputState();
+  if (hdr.offered || hdr.active || SameValue(Unquote(Saved("present_hdr")), "true")) {
+    rows.push_back(Toggle("HDR", "present_hdr"));
+    std::vector<Choice> paper_white;
+    for (const char* nits : {"100", "150", "200", "250", "300"}) {
+      paper_white.push_back(
+          {std::string(nits) + " NITS", {{"present_hdr_paper_white_nits", nits}}});
+    }
+    rows.push_back(Setting("HDR PAPER WHITE", std::move(paper_white)));
+  }
   // The rate the game simulates and renders at, which sets every CPU cost
   // (LS-1.4). DISPLAY follows the refresh rate: 144 Hz and faster displays
   // then render that many frames. 40 is an even third of 120 Hz (LS-1.6).
@@ -392,6 +406,10 @@ std::unique_ptr<MenuScreen> SettingsPages::Display() {
     const auto game = Number(Unquote(Saved("pinyon_shift_fh1_render_fps_limit")));
     if (present && *present > 0 && game && (*game == 0 || *game > *present)) {
       return std::string("THE GAME RENDERS FRAMES THE FRAME RATE LIMIT DROPS");
+    }
+    if (SameValue(Unquote(Saved("present_hdr")), "true") &&
+        !rex::ui::vulkan::GetHdrOutputState().offered) {
+      return std::string("HDR NEEDS HDR TURNED ON FOR THIS DISPLAY");
     }
     return ResolutionLine();
   };
