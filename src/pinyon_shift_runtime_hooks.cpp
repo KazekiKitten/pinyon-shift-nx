@@ -57,6 +57,11 @@
 #include "ui/fh1_ui_api.h"
 #include "ui/ui_strings.h"
 
+REXCVAR_DEFINE_BOOL(pinyon_shift_skip_empty_array_walk, true, "Pinyon Shift",
+                    "Skip the empty 16-byte element walk in the title's array release "
+                    "(sub_8282EA80) before it frees the buffer; it has no effect but "
+                    "took about a fifth of a streaming worker thread")
+    .lifecycle(rex::cvar::Lifecycle::kHotReload);
 REXCVAR_DEFINE_BOOL(pinyon_shift_skip_opening_movies, false, "Pinyon Shift",
                     "Complete the opening splash movies immediately");
 REXCVAR_DEFINE_BOOL(fh1_render_test_rally_ai_driver, false, "Pinyon Shift",
@@ -8528,4 +8533,21 @@ void PinyonShiftTraceRetainSourceSlot(PPCRegister& r3, PPCRegister& r4,
        {"table_base", Hex32(r27.u32)},
        {"slot_index", Hex32(r29.u32)},
        {"owner", Hex32(r31.u32)}});
+}
+
+// sub_8282EA80 releases a {begin, end, capacity} array of 16-byte elements
+// with trivial destructors: it steps a pointer from begin to end doing
+// nothing, then frees begin. The generated loop keeps r11 and cr6 in the
+// context on every step, so jump straight to the free with the registers
+// the loop would have left. A size that is not a whole number of elements
+// keeps the title's own loop.
+bool PinyonShiftArrayReleaseWalk(PPCContext& ctx, [[maybe_unused]] uint8_t* base) {
+  if (!REXCVAR_GET(pinyon_shift_skip_empty_array_walk) ||
+      ((ctx.r10.u32 - ctx.r11.u32) & 15) != 0) {
+    return false;
+  }
+  ctx.r10.u64 = ctx.r10.u32;
+  ctx.r11.u64 = ctx.r10.u64;
+  ctx.cr6.compare<uint32_t>(ctx.r11.u32, ctx.r10.u32, ctx.xer);
+  return true;
 }

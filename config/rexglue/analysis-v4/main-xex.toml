@@ -2079,3 +2079,11 @@ size = 0x10
 
 [functions."82FEF0E8"]
 size = 0x14
+
+# Skip the empty element walk of the title's array release (sub_8282EA80)
+# and go straight to its free (src/pinyon_shift_runtime_hooks.cpp).
+[[midasm_hook]]
+address = 0x82D19DE8
+name = "PinyonShiftArrayReleaseWalk"
+context = true
+jump_address_on_true = 0x82D19DF8
