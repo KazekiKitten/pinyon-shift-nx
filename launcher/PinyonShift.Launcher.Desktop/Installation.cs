@@ -3,6 +3,7 @@ using System.IO.Compression;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.Json;
+using PinyonShift.Launcher.Updates;
 
 namespace PinyonShift.Launcher.Desktop;
 
@@ -71,15 +72,22 @@ public sealed class Installation
         });
         var marker = Path.Combine(destination, ".pinyon-source-sha256");
         var installed = File.Exists(marker) ? (await File.ReadAllTextAsync(marker)).Trim() : "";
+        IReadOnlyList<string> entries;
+        using (var archive = ZipFile.OpenRead(payload)) entries = PayloadManifest.Entries(archive);
         if (!IsSourceRoot(destination) || !string.Equals(installed, hash, StringComparison.OrdinalIgnoreCase))
         {
             Directory.CreateDirectory(destination);
-            // .local (game files, the build's toolchain and saves) is never in the payload.
+            // Files an earlier release had and this one dropped. .local (game
+            // files, the build's toolchain and saves) is never in the payload.
+            PayloadManifest.RemoveStale(destination, entries);
             await Task.Run(() => ZipFile.ExtractToDirectory(payload, destination, overwriteFiles: true));
             if (!IsSourceRoot(destination))
                 throw new InvalidDataException("The source payload is incomplete. Download the launcher again.");
             await File.WriteAllTextAsync(marker, hash + "\n");
+            PayloadManifest.Write(destination, entries);
         }
+        else if (!File.Exists(Path.Combine(destination, PayloadManifest.FileName)))
+            PayloadManifest.Write(destination, entries);
         return new Installation(destination);
     }
 

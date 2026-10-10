@@ -116,6 +116,23 @@ if ((Get-PinyonVisualStudioRoot) -ne 'compatible-vs2022') { throw 'Supported too
             workflow,
         )
 
+    def test_launcher_updater_downloads_the_published_assets(self):
+        # FB-10.7: the launchers update from the assets this workflow attaches,
+        # by name, and the release names its repository and channel.
+        workflow = (ROOT / ".github/workflows/release.yml").read_text()
+        updater = (ROOT / "launcher/Shared/LauncherUpdate.cs").read_text(encoding="utf-8")
+        assets = dict(re.findall(r'public const string (\w+Asset) = "([^"]+)";', updater))
+        self.assertEqual(set(assets), {"WindowsAsset", "LinuxAsset", "MacAsset"})
+        for asset in assets.values():
+            self.assertIn(f".artifacts/{asset}", workflow)
+        release = json.loads((ROOT / "config/release.json").read_text(encoding="utf-8"))
+        self.assertRegex(release["repository"], r"^https://github\.com/[^/]+/[^/]+$")
+        self.assertIn(release["channel"], ("stable", "preview"))
+        # Both launchers compile the same updater.
+        for project in ("launcher/PinyonShift.Launcher/PinyonShift.Launcher.csproj",
+                        "launcher/PinyonShift.Launcher.Desktop/PinyonShift.Launcher.Desktop.csproj"):
+            self.assertIn(r'<Compile Include="..\Shared\LauncherUpdate.cs"', (ROOT / project).read_text(encoding="utf-8"))
+
     def test_preview_release_uses_dev_and_stable_keeps_main(self):
         workflow = (ROOT / ".github/workflows/release.yml").read_text()
         self.assertIn("if ($release.channel -eq 'preview') { 'dev' } else { 'main' }", workflow)

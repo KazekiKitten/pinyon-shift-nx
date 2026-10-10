@@ -329,7 +329,7 @@ is unverified.
 | FB-10.4 | **Shorter loading and transitions** (README mid term; PB owns measurement). | L | Pointer |
 | FB-10.5 | **Accessibility**: HUD and subtitle scale, colour filters, hold-to-toggle inputs (NP parking lot). | M | Not started |
 | FB-10.6 | **Discord rich presence** (NP parking lot): current event, car and area. | S | Not started |
-| FB-10.7 | **Update from inside the launcher**, keeping saves and settings (README next). | M | Not started |
+| FB-10.7 | **Update from inside the launcher**, keeping saves and settings (README next). | M | Done 2026-10-10: both launchers check GitHub releases for their channel, download the platform's asset, verify GitHub's SHA-256 digest, swap the launcher files (the .app bundle on macOS) and restart; the source folder drops files a release removed. Tested on Windows end to end, Linux (WSL) and macOS (signed bundle swap) at the file level |
 
 ### FB-11 Platforms (pointers)
 

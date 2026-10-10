@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Update from inside the launcher: **Update to <version>** downloads the
+  newer GitHub release, checks its SHA-256, replaces the launcher and
+  restarts, keeping saves, settings and game files. Works on Windows,
+  Linux and macOS and in portable installs; `PINYON_SHIFT_UPDATE_CHECK=0`
+  turns the check off.
 - Offer the optional immersive camera on F6 > DISPLAY (#419).
 - Start when the Windows user folder has an accent or other non-ASCII
   characters, such as C:\Users\Júnior; the game closed at once (#436).

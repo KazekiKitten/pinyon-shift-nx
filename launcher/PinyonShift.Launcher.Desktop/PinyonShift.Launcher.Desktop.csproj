@@ -26,6 +26,10 @@
     <DebugType>embedded</DebugType>
   </PropertyGroup>
   <ItemGroup>
+    <!-- The updater both launchers share (FB-10.7). -->
+    <Compile Include="..\Shared\LauncherUpdate.cs" Link="Shared\LauncherUpdate.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.3.22" />
     <PackageReference Include="Avalonia.Desktop" Version="11.3.22" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.22" />

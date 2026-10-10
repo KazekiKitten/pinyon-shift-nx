@@ -11,6 +11,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
+using PinyonShift.Launcher.Updates;
 
 namespace PinyonShift.Launcher;
 
@@ -92,6 +93,7 @@ public partial class MainWindow : Window
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         await InitializeSourceAsync();
+        ReportUpdateAndCleanUp();
         // Started by Windows after the restart that setup asked for: continue
         // with the same game source.
         var arguments = Environment.GetCommandLineArgs();
@@ -165,6 +167,7 @@ public partial class MainWindow : Window
             DetectExistingBuild();
             DetectPendingReport();
             UpdatePrimaryButton();
+            _ = CheckForUpdateAsync();
         }
         catch (PortableFolderException ex)
         {
@@ -913,6 +916,7 @@ public partial class MainWindow : Window
         // A matching ZIP hash does not mean its extracted files are still present.
         // Check only payload-owned files; .local contains game data, settings and saves.
         using var archive = ZipFile.OpenRead(payload);
+        var entries = PayloadManifest.Entries(archive);
         bool HasPayloadFiles() => archive.Entries.Where(entry => !string.IsNullOrEmpty(entry.Name))
             .All(entry => File.Exists(Path.Combine(destination, entry.FullName))
                 && new FileInfo(Path.Combine(destination, entry.FullName)).Length == entry.Length);
@@ -920,11 +924,17 @@ public partial class MainWindow : Window
                 StringComparison.OrdinalIgnoreCase))
         {
             Directory.CreateDirectory(destination);
+            // Files an earlier release had and this one dropped; never .local.
+            foreach (var stale in PayloadManifest.RemoveStale(destination, entries))
+                _portableNotes.Add($"Removed {stale}, which this release no longer has.");
             await Task.Run(() => ZipFile.ExtractToDirectory(payload, destination, overwriteFiles: true));
             if (!IsRoot(destination) || !HasPayloadFiles())
                 throw new InvalidDataException("The release source payload is incomplete. Extract a fresh launcher release and retry.");
             await File.WriteAllTextAsync(payloadMarker, payloadHash + Environment.NewLine);
+            PayloadManifest.Write(destination, entries);
         }
+        else if (!File.Exists(Path.Combine(destination, PayloadManifest.FileName)))
+            PayloadManifest.Write(destination, entries);
         if (!IsRoot(destination))
             throw new InvalidDataException("The release source payload is incomplete.");
         return destination;

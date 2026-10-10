@@ -34,7 +34,7 @@ Administrator permission is requested only when Visual Studio 2022 C++ Build Too
 
 ## Updating
 
-Download the new `PinyonShift-Launcher.zip` and run it. Saves and settings stay where they are. The first start after an update rebuilds the game, which takes a while.
+Choose **Update to <version>** in the launcher's footer when it appears. The launcher downloads the release from GitHub, checks its SHA-256, replaces itself and restarts. Saves, settings and game files stay where they are; choose your disc image to build the new version, which takes a while. Downloading the new `PinyonShift-Launcher.zip` and running it still works too.
 
 ## Use an extracted folder
 

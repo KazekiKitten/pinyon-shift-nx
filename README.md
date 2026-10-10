@@ -157,8 +157,8 @@ command line.
 
 In progress: title update v4 builds from your own update,
 and complete DLC support. Next:
-stability fixes, AMD and Intel qualification, Android frame pacing
-and in-launcher updates. The full list, with what's done, is in the
+stability fixes, AMD and Intel qualification and Android frame
+pacing. The full list, with what's done, is in the
 [roadmap](docs/ROADMAP.md).
 
 ## Project boundaries

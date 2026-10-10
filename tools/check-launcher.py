@@ -18,6 +18,7 @@ CHECK = r'''
 using System;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,6 +27,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using PinyonShift.Launcher;
+using PinyonShift.Launcher.Updates;
 
 class Check {
     static void Require(bool value, string message) {
@@ -130,7 +132,11 @@ class Check {
         // Portable installs: portable.txt beside the launcher keeps everything in its data folder.
         var portableType = typeof(MainWindow).Assembly.GetType("PinyonShift.Launcher.PortableMode")!;
         object Portable(string name, params object[] arguments) {
-            try { return portableType.GetMethod(name)!.Invoke(null, arguments); }
+            var method = portableType.GetMethod(name)!;
+            // Optional parameters left out take their defaults.
+            var padded = arguments.Concat(Enumerable.Repeat(Type.Missing,
+                method.GetParameters().Length - arguments.Length)).ToArray();
+            try { return method.Invoke(null, BindingFlags.OptionalParamBinding, null, padded, null); }
             catch (TargetInvocationException ex) { throw ex.InnerException!; }
         }
         var marker = Path.Combine(root, "portable.txt");
@@ -363,8 +369,84 @@ class Check {
         catch (InvalidDataException) { }
         Require(!File.Exists(Path.Combine(brokenRoot, "source", "0.1.1", ".pinyon-source-sha256")),
             "Incomplete ZIP marked as installed");
-        Console.WriteLine("Launcher folders, portable installs, preservation, graphics, DLC states, progress and layout passed.");
+        UpdateChecks(Path.Combine(root, "update checks"));
+        Console.WriteLine("Launcher folders, portable installs, preservation, graphics, DLC states, progress, layout and updates passed.");
         window.Close();
+    }
+
+    // FB-10.7: release selection, the file swap and stale source removal.
+    static void UpdateChecks(string root) {
+        string[] ordered = ["0.4.0", "0.4.1-preview.1", "0.4.1-preview.2", "0.4.1-preview.10", "0.4.1", "0.5.0", "1.0.0"];
+        for (var i = 0; i + 1 < ordered.Length; i++) {
+            Require(ReleaseVersion.TryParse(ordered[i], out var a) && ReleaseVersion.TryParse(ordered[i + 1], out var b)
+                && a.CompareTo(b) < 0 && b.CompareTo(a) > 0, $"Version order {ordered[i]} < {ordered[i + 1]}");
+        }
+        Require(ReleaseVersion.TryParse("v0.4.0", out var tagged) && tagged.ToString() == "0.4.0", "Tag not parsed");
+        Require(!ReleaseVersion.TryParse("0.4", out _) && !ReleaseVersion.TryParse("latest", out _), "Bad version parsed");
+        var hex = new string('a', 64);
+        string Asset(string url, string digest) =>
+            $"{{\"name\":\"PinyonShift-Launcher.zip\",\"size\":5,\"digest\":\"{digest}\",\"browser_download_url\":\"{url}\"}}";
+        string Release(string tag, bool pre, string asset, bool draft = false) =>
+            $"{{\"tag_name\":\"{tag}\",\"prerelease\":{(pre ? "true" : "false")},\"draft\":{(draft ? "true" : "false")},\"html_url\":\"https://github.com/arcanite24/pinyon-shift/releases/tag/{tag}\",\"assets\":[{asset}]}}";
+        var good = Asset("https://github.com/arcanite24/pinyon-shift/releases/download/x/PinyonShift-Launcher.zip", "sha256:" + hex);
+        var json = "[" + string.Join(",",
+            Release("v0.7.0", false, good, draft: true),
+            Release("v0.6.0-preview.1", true, good),
+            Release("v0.5.1", false, Asset("https://example.com/a.zip", "")),
+            Release("v0.5.2", false, Asset("http://example.com/a.zip", "sha256:" + hex)),
+            Release("v0.5.0", false, good),
+            Release("v0.3.0", false, good)) + "]";
+        using var feed = System.Text.Json.JsonDocument.Parse(json);
+        var stable = LauncherUpdate.Select(feed.RootElement, "0.4.0", "stable", LauncherUpdate.WindowsAsset);
+        Require(stable is { Version: "0.5.0", Sha256: var sha } && sha == hex, $"Stable picked {stable?.Version}");
+        Require(LauncherUpdate.Select(feed.RootElement, "0.4.0", "preview", LauncherUpdate.WindowsAsset)?.Version
+            == "0.6.0-preview.1", "Preview channel skipped the preview");
+        Require(LauncherUpdate.Select(feed.RootElement, "0.5.0", "stable", LauncherUpdate.WindowsAsset) is null,
+            "Offered an unverifiable or insecure release");
+        Require(LauncherUpdate.Select(feed.RootElement, "0.4.0", "stable", LauncherUpdate.LinuxAsset) is null,
+            "Offered another platform's asset");
+
+        var launcher = Path.Combine(root, "launcher");
+        var staged = Path.Combine(root, "staged");
+        Directory.CreateDirectory(launcher);
+        Directory.CreateDirectory(staged);
+        File.WriteAllText(Path.Combine(launcher, "PinyonShiftLauncher.exe"), "old launcher");
+        File.WriteAllText(Path.Combine(launcher, "pinyon-shift-source.zip"), "old payload");
+        File.WriteAllText(Path.Combine(launcher, "portable.txt"), "");
+        File.WriteAllText(Path.Combine(staged, "PinyonShiftLauncher.exe"), "new launcher");
+        File.WriteAllText(Path.Combine(staged, "pinyon-shift-source.zip"), "new payload");
+        var plan = LauncherUpdate.Plan(staged, launcher);
+        var broken = plan.Append((Path.Combine(staged, "missing"), Path.Combine(launcher, "missing"))).ToList();
+        try { LauncherUpdate.Swap(broken); throw new Exception("Swap with a missing file succeeded"); }
+        catch (FileNotFoundException) { }
+        Require(File.ReadAllText(Path.Combine(launcher, "PinyonShiftLauncher.exe")) == "old launcher"
+            && File.ReadAllText(Path.Combine(launcher, "pinyon-shift-source.zip")) == "old payload"
+            && File.ReadAllText(Path.Combine(staged, "PinyonShiftLauncher.exe")) == "new launcher",
+            "A failed swap was not rolled back");
+        LauncherUpdate.Swap(plan);
+        Require(File.ReadAllText(Path.Combine(launcher, "PinyonShiftLauncher.exe")) == "new launcher"
+            && File.ReadAllText(Path.Combine(launcher, "pinyon-shift-source.zip")) == "new payload"
+            && File.ReadAllText(Path.Combine(launcher, "PinyonShiftLauncher.exe.pinyon-old")) == "old launcher"
+            && File.Exists(Path.Combine(launcher, "portable.txt")), "Swap did not install the release");
+        Directory.CreateDirectory(Path.Combine(launcher, LauncherUpdate.StagingFolder));
+        LauncherUpdate.CleanUpAsync(launcher).GetAwaiter().GetResult();
+        Require(Directory.GetFileSystemEntries(launcher).Select(Path.GetFileName).Order(StringComparer.Ordinal).SequenceEqual(
+            ["PinyonShiftLauncher.exe", "pinyon-shift-source.zip", "portable.txt"]),
+            "Update leftovers remain: " + string.Join(", ", Directory.GetFileSystemEntries(launcher)));
+
+        var source = Path.Combine(root, "source");
+        string[] listed = ["kept.txt", "dropped/old.ps1", ".local/preview/user/ForzaProfile/ForzaProfile", "out/build/x", "../outside.txt"];
+        foreach (var file in listed.Append("unlisted.txt")) {
+            var path = Path.Combine(source, file);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, "x");
+        }
+        PayloadManifest.Write(source, listed);
+        var removed = PayloadManifest.RemoveStale(source, ["kept.txt"]);
+        Require(removed.SequenceEqual(["dropped/old.ps1"]) && File.Exists(Path.Combine(source, "kept.txt"))
+            && File.Exists(Path.Combine(source, ".local/preview/user/ForzaProfile/ForzaProfile"))
+            && File.Exists(Path.Combine(source, "out/build/x")) && File.Exists(Path.Combine(root, "outside.txt"))
+            && File.Exists(Path.Combine(source, "unlisted.txt")), "Stale source removal touched other files");
     }
 }
 '''

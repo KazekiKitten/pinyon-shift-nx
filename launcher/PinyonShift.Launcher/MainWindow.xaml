@@ -456,6 +456,11 @@
                     <Run x:Name="VersionRun" Text="Pinyon Shift"/><Run Text=" · Not affiliated with Microsoft or Playground Games"/>
                 </TextBlock>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="UpdateButton" Style="{StaticResource LinkButton}" Visibility="Collapsed"
+                            Click="UpdateButton_Click"
+                            AutomationProperties.HelpText="Download the newer release from GitHub and restart the launcher. Saves and settings are kept.">
+                        <TextBlock x:Name="UpdateButtonText" Text="Update" Foreground="{StaticResource AccentBrush}"/>
+                    </Button>
                     <Button x:Name="OpenStateFolderButton" Content="Saves" Style="{StaticResource LinkButton}"
                             Visibility="Collapsed" Click="OpenStateFolderButton_Click"
                             AutomationProperties.HelpText="Open the folder with your saves and settings."/>

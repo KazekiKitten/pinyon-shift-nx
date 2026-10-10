@@ -32,6 +32,24 @@ open **Profile → Language**, and use Left/Right to choose a language and regio
 Close and restart the game to apply it. This is available before the first race;
 the choice stays saved for the next launch.
 
+## Updating
+
+When a newer release is on GitHub, the launcher shows **Update to
+<version>** in its footer. It downloads that release's launcher archive,
+checks it against the SHA-256 GitHub publishes for it, replaces the
+launcher and its source payload in the launcher's folder, and starts
+again. Saves, settings, game files and the build tools stay in the install
+folder (or the portable `data` folder). The new version's source replaces
+the old one, and files a release dropped are removed; then choose the disc
+image to build the new version.
+
+Stable releases offer stable updates; preview releases also offer newer
+previews. A checkout updates with `git` and is not offered updates. The
+check is one request to the GitHub API at each start;
+`PINYON_SHIFT_UPDATE_CHECK=0` turns it off. If the launcher's folder cannot
+be written, it opens the release page instead. Downloading the new archive
+and running it, as before, still works.
+
 ## Verification and privacy
 
 The preview launcher is not code-signed yet, so Windows may identify it as an

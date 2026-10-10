@@ -137,6 +137,8 @@
             <TextBlock DockPanel.Dock="Left" x:Name="VersionText" Margin="58,0,0,0" VerticalAlignment="Center"
                        FontSize="12.5" Foreground="{StaticResource FaintBrush}"/>
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="0,0,50,0" VerticalAlignment="Center">
+                <Button x:Name="UpdateButton" Classes="link" IsVisible="False" Click="Update_Click"
+                        Foreground="{StaticResource AccentBrush}"/>
                 <Button Classes="link" Content="Saves" Click="Saves_Click"/>
                 <Button Classes="link" Content="Logs" Click="Logs_Click"/>
                 <Button Classes="link" Content="Report a problem" Click="Report_Click"/>

@@ -60,7 +60,7 @@ Next, in priority order:
   resume, and performance presets
 - [ ] Improve sustained Android frame pacing and thermals on supported
   devices; measure long sessions as well as startup performance
-- [ ] Update from inside the launcher while preserving saves and settings
+- [x] Update from inside the launcher while preserving saves and settings
 - [ ] Safely import saves from Xenia and Xbox 360, and transfer profiles
   between supported platforms
 - [ ] Support more disc regions

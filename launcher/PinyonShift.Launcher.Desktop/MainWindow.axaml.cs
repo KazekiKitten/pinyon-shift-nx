@@ -43,6 +43,7 @@ public partial class MainWindow : Window
             PrimaryButton.IsVisible = false;
             return;
         }
+        _ = StartUpdateCheckAsync();
         InstallText.Text = $"Installs to {_installation.Root}. The build needs about "
             + (Installation.IsMac ? "20" : "45") + " GB free and takes 20 to 60 minutes.";
         if (!Installation.HasAppleDeveloperTools())
