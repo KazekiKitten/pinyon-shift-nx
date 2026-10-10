@@ -30,7 +30,7 @@ Update the GPU driver and check that the GPU supports Vulkan 1.3. To reset the r
 
 ## Stutter or something missing the first time
 
-Vulkan prepares shaders during setup, and stores any new ones it meets during play, so a new effect can stutter once. If stutter repeats on every pass of the same route, or something stays missing after a relaunch, report it with the latest runtime log and performance CSV from `.local/preview/logs`.
+Vulkan prepares shaders during setup, and stores any new ones it meets during play, so a new effect can stutter once. If stutter repeats on every pass of the same route, or something stays missing after a relaunch, report it with the latest runtime log and performance CSV from `.local/preview/logs` (the launcher's **Logs** link opens it once the game has run).
 
 ## A resolution scale error at startup
 

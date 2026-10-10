@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- The launchers' Logs link opens the game's own logs (runtime.log)
+  once it has run, instead of the setup logs (#424).
 - Update from inside the launcher: **Update to <version>** downloads the
   newer GitHub release, checks its SHA-256, replaces the launcher and
   restarts, keeping saves, settings and game files. Works on Windows,

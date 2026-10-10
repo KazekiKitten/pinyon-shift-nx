@@ -1501,6 +1501,19 @@ public partial class MainWindow : Window
             });
             return;
         }
+        // Once the game has run, its own log (runtime.log, with the GPU and
+        // driver at the top) is what a report needs; before that, setup's.
+        var runtimeLog = Path.Combine(_stateRoot, "logs", "runtime.log");
+        if (File.Exists(runtimeLog))
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                UseShellExecute = true,
+                Arguments = $"/select,\"{runtimeLog}\""
+            });
+            return;
+        }
         var logs = Path.Combine(_repositoryRoot, ".local", "logs");
         Directory.CreateDirectory(logs);
         Process.Start(new ProcessStartInfo("explorer.exe", logs) { UseShellExecute = true });

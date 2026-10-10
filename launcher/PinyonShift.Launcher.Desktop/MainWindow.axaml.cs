@@ -356,6 +356,13 @@ public partial class MainWindow : Window
     private void Logs_Click(object? sender, RoutedEventArgs e)
     {
         if (_installation is null) return;
+        // The game's own logs (runtime.log) once it has run, else setup's.
+        var gameLogs = Path.Combine(_installation.StateRoot, "logs");
+        if (File.Exists(Path.Combine(gameLogs, "runtime.log")))
+        {
+            Installation.Open(gameLogs);
+            return;
+        }
         Directory.CreateDirectory(_installation.Logs);
         Installation.Open(_installation.Logs);
     }
