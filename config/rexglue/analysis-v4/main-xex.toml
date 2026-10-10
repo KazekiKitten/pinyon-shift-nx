@@ -140,6 +140,14 @@ jump_address_on_true = 0x82CE8B68
 address = 0x82CE8B68
 name = "PinyonShiftGammaRampPwlBuilt"
 context = true
+jump_address_on_true = 0x82CE8B6C
+
+# After SetPWLGamma (sub_829F1EF8), or its skip when the ramp and the
+# device's copy are unchanged: record both for the next frame's check.
+[[midasm_hook]]
+address = 0x82CE8B6C
+name = "PinyonShiftGammaRampPwlDeviceSet"
+context = true
 
 [[midasm_hook]]
 address = 0x82CE8B70

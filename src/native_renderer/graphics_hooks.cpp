@@ -45,6 +45,11 @@ REXCVAR_DEFINE_BOOL(pinyon_shift_reuse_gamma_ramp, true, "Pinyon Shift",
                     "ramp (up to 256 software pow calls) every frame after a fade, which "
                     "showed as hitching after races and at boot")
     .lifecycle(rex::cvar::Lifecycle::kHotReload);
+REXCVAR_DEFINE_BOOL(pinyon_shift_skip_unchanged_device_gamma, true, "Pinyon Shift",
+                    "Skip D3D's SetPWLGamma when the ramp and the device's copy are what its "
+                    "last call left: it converts and compares 1,536 bytes every frame, about "
+                    "30 % of the render thread, to find nothing changed")
+    .lifecycle(rex::cvar::Lifecycle::kHotReload);
 REXCVAR_DEFINE_BOOL(pinyon_shift_block_on_gpu_fence, true, "Pinyon Shift",
                     "Block the title's GPU fence polling until the command processor next "
                     "writes guest memory (bounded to 1 ms) instead of spinning")
@@ -362,14 +367,50 @@ void GammaRampBuilt(PPCContext& ctx, uint8_t* base, int path) {
   ramp.valid = true;
 }
 
+// The device call (sub_829F1EF8, D3D's SetPWLGamma; r3 the device, r5 the
+// ramp) converts the ramp through the display gamma table into 1,536 bytes,
+// compares them with the device's copy at +15408 and, only if they differ,
+// stores them and marks the gamma dirty. The display gamma is fixed
+// (VdGetCurrentDisplayGamma), so the conversion depends on the ramp alone:
+// with the ramp and the device's copy as the last call left them, the call
+// finds them equal and does nothing.
+constexpr uint32_t kDeviceGammaCopy = 15408;
+struct DeviceGamma {
+  bool valid = false;
+  uint32_t device = 0;
+  uint8_t ramp[1536];
+  uint8_t copy[1536];
+};
+thread_local DeviceGamma device_gamma;
+thread_local uint8_t device_gamma_pending_ramp[1536];
+
 }  // namespace
 
 bool PinyonShiftGammaRampPwlBegin(PPCContext& ctx, uint8_t* base) {
   return GammaRampBegin(ctx, base, 0);
 }
 
-void PinyonShiftGammaRampPwlBuilt(PPCContext& ctx, uint8_t* base) {
+// At the device call: keeps a newly built ramp, then skips the call when it
+// would change nothing.
+bool PinyonShiftGammaRampPwlBuilt(PPCContext& ctx, uint8_t* base) {
   GammaRampBuilt(ctx, base, 0);
+  const uint8_t* ramp = base + ctx.r5.u32;
+  std::memcpy(device_gamma_pending_ramp, ramp, sizeof(device_gamma_pending_ramp));
+  return REXCVAR_GET(pinyon_shift_skip_unchanged_device_gamma) && device_gamma.valid &&
+         device_gamma.device == ctx.r3.u32 &&
+         !std::memcmp(device_gamma.ramp, ramp, sizeof(device_gamma.ramp)) &&
+         !std::memcmp(device_gamma.copy, base + ctx.r3.u32 + kDeviceGammaCopy,
+                      sizeof(device_gamma.copy));
+}
+
+// After the device call (or its skip): the device's copy now matches the
+// ramp just passed. r24 still holds the builder's r3, whose +20 is the device.
+void PinyonShiftGammaRampPwlDeviceSet(PPCContext& ctx, uint8_t* base) {
+  const uint32_t device = rex::byte_swap(*reinterpret_cast<uint32_t*>(base + ctx.r24.u32 + 20));
+  device_gamma.device = device;
+  std::memcpy(device_gamma.ramp, device_gamma_pending_ramp, sizeof(device_gamma.ramp));
+  std::memcpy(device_gamma.copy, base + device + kDeviceGammaCopy, sizeof(device_gamma.copy));
+  device_gamma.valid = true;
 }
 
 bool PinyonShiftGammaRampLinearBegin(PPCContext& ctx, uint8_t* base) {
