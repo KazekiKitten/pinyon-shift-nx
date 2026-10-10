@@ -127,7 +127,7 @@ class GameStorageTests(unittest.TestCase):
                      'paths.update_data_root = state_root / "title-update-v4";',
                      'paths.cache_root = state_root / "cache";',
                      'paths.config_path = state_root / "config" / "pinyon_shift.toml";',
-                     'REXCVAR_SET(log_file, (state_root / "logs" / "runtime.log").string());'):
+                     'REXCVAR_SET(log_file, rex::path_to_utf8(state_root / "logs" / "runtime.log"));'):
             self.assertIn(line, app)
         diagnostics = read("src/pinyon_shift_diagnostics.cpp")
         self.assertIn('EnvironmentPath("PINYON_SHIFT_STATE_ROOT")', diagnostics)
