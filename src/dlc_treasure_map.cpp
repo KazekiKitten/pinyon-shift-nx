@@ -2,6 +2,7 @@
 #include "fh1_guest_address.h"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <utility>
@@ -65,6 +66,21 @@ constexpr uint32_t kAllRevealed = FH1_ADDR(0x828AF780u);
 // sub_828AF6F8(manager): the Treasure Map's reveal.
 constexpr uint32_t kRevealAll = FH1_ADDR(0x828AF6F8u);
 
+// Host pages found readable during the current check. IsHostReadable is a
+// system call, and the activity list's thousands of pointers share a few
+// pages; without this a check cost several milliseconds of the title's main
+// thread every 30 frames. Cleared at the start and end of each check.
+thread_local std::array<uintptr_t, 16> readable_pages{};
+
+bool HostPageReadable(const void* host, size_t page_size) {
+  const uintptr_t page = reinterpret_cast<uintptr_t>(host) / page_size + 1;
+  uintptr_t& slot = readable_pages[page % readable_pages.size()];
+  if (slot == page) return true;
+  if (!rex::memory::IsHostReadable(host)) return false;
+  slot = page;
+  return true;
+}
+
 bool Readable(uint32_t address, uint32_t size) {
   if (address == 0 || size == 0 || address + size - 1u < address) return false;
   auto* memory = rex::system::kernel_state()->memory();
@@ -78,7 +94,7 @@ bool Readable(uint32_t address, uint32_t size) {
   uint64_t cursor = address;
   while (cursor <= end) {
     auto* host = memory->TranslateVirtual(static_cast<uint32_t>(cursor));
-    if (!rex::memory::IsHostReadable(host)) {
+    if (!HostPageReadable(host, page_size)) {
       return false;
     }
     const size_t page_left = page_size - (reinterpret_cast<uintptr_t>(host) % page_size);
@@ -139,8 +155,12 @@ std::atomic<bool> g_queued{false};
 // dlc.treasure_map when it reveals and when it first finds the map owned.
 void ApplyTreasureMap() {
   static uint32_t logged_owned = 0;
+  static uint32_t owned_checks = 0;
   const uint32_t manager = ActivityManager();
   if (manager == 0 || !pinyon_shift::dlc::GameModeReady()) return;
+  // Owned stays owned (the profile saves it): look again only every 20th
+  // check, in case another profile is loaded into the same manager.
+  if (manager == logged_owned && ++owned_checks % 20 != 0) return;
   if ((pinyon_shift::mod::CallGuest(kCollectiblesLive, {0}) & 0xFF) == 0) return;
   // While free roam loads the list is still empty, and sub_828AF780 finds an
   // empty list all revealed.
@@ -190,7 +210,9 @@ void UpdateTreasureMap() {
   frames = 0;
   if (g_queued.exchange(true, std::memory_order_acq_rel)) return;
   pinyon_shift::mod::EnqueueHostGuestTask([] {
+    readable_pages.fill(0);
     ApplyTreasureMap();
+    readable_pages.fill(0);
     g_queued.store(false, std::memory_order_release);
   });
 }
