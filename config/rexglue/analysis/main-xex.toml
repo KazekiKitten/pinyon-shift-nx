@@ -776,6 +776,18 @@ name = "PinyonShiftGuardNullOutputHandle"
 registers = ["r31"]
 jump_address_on_true = 0x82F9F36C
 
+# #343: sub_82E48938 queues an item under its lock; with a pending head at
+# +76 it appends to the vector at +80 (begin, end, capacity) through
+# sub_82D842F8. The report wrote guest 0x2F inside that append: the vector's
+# pointers were not heap pointers. Skip the append (and leave the lock
+# normally) when they are not an ordered set of heap pointers; a live vector
+# is untouched.
+[[midasm_hook]]
+address = 0x82E48980
+name = "PinyonShiftGuardQueueAppend"
+registers = ["r31"]
+jump_address_on_true = 0x82E4898C
+
 # M5 persisted-profile diagnostics. These continuations are the first
 # title-owned decision points after the secure ForzaProfile/PlayerDatabase
 # reads complete. The hooks are read-only and emit events only when

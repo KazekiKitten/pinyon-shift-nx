@@ -7249,6 +7249,30 @@ bool PinyonShiftGuardNullOutputHandle(PPCRegister& r31) {
   return true;
 }
 
+// Returns true to skip sub_82E48938's vector append (#343), leaving its lock
+// through the normal path. The queue object at r31 was just read (+96, +76);
+// the vector at +80 holds begin, end and capacity.
+bool PinyonShiftGuardQueueAppend(PPCRegister& r31) {
+  const uint32_t vector = r31.u32 + 80u;
+  const uint32_t begin = LoadGuestU32(vector);
+  const uint32_t end = LoadGuestU32(vector + 4u);
+  const uint32_t capacity = LoadGuestU32(vector + 8u);
+  // Empty, or ordered heap pointers whose size is whole elements.
+  const bool empty = !begin && !end && !capacity;
+  const bool ordered = begin >= 0x10000u && begin <= end && end <= capacity &&
+                       !((end - begin) & 3u);
+  if (empty || ordered) return false;
+  static std::atomic<uint32_t> skipped{};
+  if (skipped.fetch_add(1, std::memory_order_relaxed) < 16) {
+    pinyon_shift::diagnostics::RecordEvent(
+        "object.queue_append.bad_vector",
+        {{"address", pinyon_shift::fh1::kTitleUpdateV4 ? "82F0A3B0" : "82E48980"},
+         {"queue", Hex32(r31.u32)}, {"begin", Hex32(begin)}, {"end", Hex32(end)},
+         {"capacity", Hex32(capacity)}});
+  }
+  return true;
+}
+
 void PinyonShiftTraceChildDispatchAfter(PPCRegister& r3, PPCRegister& r30) {
   if (!ChildDispatchTraceEnabled() || g_child_dispatch_snapshots.empty()) return;
   const auto before = std::move(g_child_dispatch_snapshots.back());
