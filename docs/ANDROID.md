@@ -33,7 +33,7 @@ Android builds trade some image quality for frame rate by default. Each is
 a row on the in-game SETTINGS > GRAPHICS page that applies while the game
 runs (SHADOWS, REFLECTION UPDATES, SINGLE-PASS SCENE; the last rebuilds the
 renderer between frames, about 80 ms), and the GRAPHICS PRESET row sets
-them together: QUALITY 30 (4x MSAA, shadows, 30 fps) or SMOOTH 60 (no MSAA,
+them together: QUALITY 30 (4x MSAA, shadows, 30 fps) or SMOOTH 60 (2x MSAA,
 no shadows, 60 fps), both single-pass with quarter-rate reflections. As
 settings in `config/pinyon_shift.toml`: FH1's three predicated tiles are
 drawn once (`fh1_untile_predicated_tiling`, same image), the reflection
