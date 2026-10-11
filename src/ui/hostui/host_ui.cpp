@@ -2,12 +2,14 @@
 
 #include <algorithm>
 #include <cmath>
+#include <fstream>
 #include <utility>
 
 #include <rex/input/input.h>
 #include <rex/input/input_system.h>
 #include <rex/kernel/xam/module.h>
 #include <rex/logging.h>
+#include <rex/filesystem.h>
 #include <rex/rex_app.h>
 #include <rex/ui/presenter.h>
 #include <rex/ui/ui_event.h>
@@ -91,6 +93,16 @@ std::unique_ptr<ImmediateTexture> LoadTexture(rex::ui::ImmediateDrawer& drawer,
                               image->rgba.data());
 }
 
+// Names the input an event handler is serving until it returns.
+class ScopedInputSource {
+ public:
+  ScopedInputSource(const char*& slot, const char* source) : slot_(slot) { slot_ = source; }
+  ~ScopedInputSource() { slot_ = "app"; }
+
+ private:
+  const char*& slot_;
+};
+
 }  // namespace
 
 HostUi::HostUi(rex::ReXApp& app, rex::ui::Presenter& presenter, rex::ui::ImmediateDrawer& drawer,
@@ -143,7 +155,7 @@ bool HostUi::LoadAssets() {
   const auto ui_root = game_data_root_ / "media" / "ui";
   auto fonts = Fh1Archive::Open(ui_root / "Fonts.zip");
   if (!fonts) {
-    REXLOG_ERROR("Host UI: cannot open {}", (ui_root / "Fonts.zip").string());
+    REXLOG_ERROR("Host UI: cannot open {}", rex::path_to_utf8(ui_root / "Fonts.zip"));
     assets_failed_ = true;
     return false;
   }
@@ -222,6 +234,8 @@ bool HostUi::Open(std::unique_ptr<MenuScreen> screen) {
   diagnostics::RecordEvent("hostui.open", {{"screen", screens_.back()->title()}});
   pad_.Reset();
   draining_ = false;
+  draw_skip_reported_ = false;
+  drawn_since_open_ = false;
   if (!registered_) {
     registered_ = true;
     SetGuestUiActive(true);
@@ -258,6 +272,7 @@ void HostUi::Close() {
   if (!registered_) {
     return;
   }
+  closed_via_ = input_source_;
   // Stay registered, drawing nothing, until the input is released.
   draining_ = true;
   drain_started_ = std::chrono::steady_clock::now();
@@ -279,7 +294,9 @@ void HostUi::FinishClose() {
   }
   // Unregistered: the drawer, the input listener and the guest input
   // capture are all released.
-  diagnostics::RecordEvent("hostui.closed");
+  diagnostics::RecordEvent("hostui.closed",
+                           {{"via", closed_via_}, {"drawn", drawn_since_open_ ? "1" : "0"}});
+  closed_via_ = "app";
   RequestPaint();
 }
 
@@ -322,6 +339,27 @@ void HostUi::SetGuestUiActive(bool active) {
 
 void HostUi::RequestPaint() { presenter_.RequestUIPaintFromUIThread(); }
 
+void HostUi::CaptureKey(int virtual_key) {
+  RunOnTopScreen([virtual_key](MenuScreen& screen) { screen.CaptureKey(virtual_key); });
+}
+
+void HostUi::RunOnTopScreen(const std::function<void(MenuScreen&)>& callback) {
+  applying_ = true;
+  callback(*screens_.back());
+  applying_ = false;
+  if (close_pending_) {
+    close_pending_ = false;
+    finish_pending_ = nullptr;
+    Close();
+    return;
+  }
+  if (const MenuScreen* finished = std::exchange(finish_pending_, nullptr)) {
+    RemoveScreen(finished);
+    return;
+  }
+  RequestPaint();
+}
+
 void HostUi::Apply(NavCommand command) {
   if (!is_open()) {
     return;
@@ -358,6 +396,19 @@ void HostUi::Apply(NavCommand command) {
 }
 
 void HostUi::PollPad() {
+  if (is_open() && screens_.back()->ticks()) {
+    // Polling runs inside Draw; tick after it, and keep painting so the
+    // screen keeps ticking while the game does not present.
+    window_.app_context().CallInUIThreadDeferred(
+        [alive = std::weak_ptr<bool>(alive_), this] {
+          if (alive.expired() || !is_open() || !screens_.back()->ticks()) {
+            return;
+          }
+          RunOnTopScreen([](MenuScreen& screen) { screen.Tick(); });
+        });
+    pad_.Reset();
+    return;
+  }
   if (!input_system_) {
     return;
   }
@@ -382,9 +433,11 @@ void HostUi::PollPad() {
         if (alive.expired()) {
           return;
         }
+        input_source_ = "pad";
         for (NavCommand command : commands) {
           Apply(command);
         }
+        input_source_ = "app";
       });
 }
 
@@ -392,7 +445,10 @@ HostUi::Canvas HostUi::ComputeCanvas(rex::ui::UIDrawContext& context) const {
   float x = 0.0f, y = 0.0f;
   float width = float(context.render_target_width());
   float height = float(context.render_target_height());
-  if (auto rect = presenter_.GetPaintedGuestOutputRectFromUIThread()) {
+  // An empty guest image falls back to the whole render target, so the menu
+  // never draws at zero size.
+  if (auto rect = presenter_.GetPaintedGuestOutputRectFromUIThread();
+      rect && rect->width && rect->height) {
     x = float(rect->x);
     y = float(rect->y);
     width = float(rect->width);
@@ -633,6 +689,7 @@ void HostUi::Draw(rex::ui::UIDrawContext& context) {
     }
   } else {
     DrawHud(context);
+    DrawRallyPace(context);
     DrawOverlay(context);
   }
   DrawToasts(context);
@@ -643,7 +700,69 @@ void HostUi::Draw(rex::ui::UIDrawContext& context) {
 
 bool HostUi::HasHud() const {
   return (hud_source_ && !hud_source_().empty()) ||
+         (rally_pace_source_ && !rally_pace_source_().icons.empty()) ||
          (overlay_source_ && !overlay_source_().empty());
+}
+
+void HostUi::DrawRallyPace(rex::ui::UIDrawContext& context) {
+  if (!rally_pace_source_) return;
+  const auto phrase = rally_pace_source_();
+  if (phrase.icons.empty()) {
+    if (!rally_pace_drawn_.icons.empty()) {
+      diagnostics::RecordEvent("dlc.rally.pace_hud", {{"icons", ""}, {"visible", "0"}});
+      rally_pace_drawn_ = {};
+    }
+    return;
+  }
+  if (!PrepareCanvas(context)) return;
+  if (!rally_pace_atlas_attempted_) {
+    rally_pace_atlas_attempted_ = true;
+    // The accepted atlas is 512x64 with five 64-pixel turn tiles. No owned
+    // pixels are shipped with the executable or extracted into the repository.
+    std::ifstream input(rally_pace_atlas_path_, std::ios::binary | std::ios::ate);
+    if (input && input.tellg() == 65588) {
+      std::vector<uint8_t> data(65588);
+      input.seekg(0); input.read(reinterpret_cast<char*>(data.data()), data.size());
+      auto image = input ? DecodeXds(data) : std::nullopt;
+      if (image && image->width == 512 && image->height == 64)
+        rally_pace_atlas_ = drawer_.CreateTexture(512, 64, ImmediateTextureFilter::kLinear,
+                                               false, image->rgba.data());
+    }
+    if (!rally_pace_atlas_) {
+      diagnostics::RecordEvent("dlc.rally.pace_hud_error", {{"error", "owned co-driver atlas unavailable"}});
+      return;
+    }
+  }
+  if (!rally_pace_atlas_) return;
+  // Leave the speedometer, minimap, race timer and central sight line clear.
+  constexpr float size = 64, pitch = 72, top = 76;
+  const size_t count = std::min(phrase.icons.size(), size_t(5));
+  const float left = (kTitleWidth - (float(count - 1) * pitch + size)) / 2;
+  drawer_.Begin(context, float(context.render_target_width()), float(context.render_target_height()));
+  std::string drawn_icons;
+  for (size_t i = 0; i < count; ++i) {
+    const auto& icon = phrase.icons[i];
+    int tile = -1;
+    for (const auto& [name, index] : {std::pair{"Easy", 0}, {"Medium", 1}, {"Hard", 2},
+                                     {"Square", 3}, {"Hairpin", 4}})
+      if (icon == std::string(name) + "Right" || icon == std::string(name) + "Left") tile = index;
+    if (tile < 0) continue;
+    UvRect uv{float(tile) / 8, 0, float(tile + 1) / 8, 1};
+    if (icon.ends_with("Left")) std::swap(uv.u0, uv.u1);
+    DrawRect(left + float(i) * pitch, top, size, size, kWhite, rally_pace_atlas_.get(), 0, uv);
+    if (i == phrase.active) DrawRect(left + float(i) * pitch + 10, top + size + 3, 44, 3, kWhite);
+    if (!drawn_icons.empty()) drawn_icons += ',';
+    drawn_icons += icon;
+  }
+  Flush(); drawer_.End();
+  if (phrase != rally_pace_drawn_ || canvas_.scale != rally_pace_drawn_scale_) {
+    diagnostics::RecordEvent("dlc.rally.pace_hud", {{"icons", drawn_icons}, {"visible", "1"},
+        {"active", phrase.active == size_t(-1) ? "none" : std::to_string(phrase.active)},
+        {"scale", std::to_string(canvas_.scale)},
+        {"width", std::to_string(context.render_target_width())},
+        {"height", std::to_string(context.render_target_height())}});
+    rally_pace_drawn_ = phrase; rally_pace_drawn_scale_ = canvas_.scale;
+  }
 }
 
 void HostUi::DrawOverlay(rex::ui::UIDrawContext& context) {
@@ -776,21 +895,38 @@ void HostUi::DrawToasts(rex::ui::UIDrawContext& context) {
 
 void HostUi::DrawMenu(rex::ui::UIDrawContext& context) {
   if (!PrepareCanvas(context)) {
+    if (!draw_skip_reported_) {
+      draw_skip_reported_ = true;
+      diagnostics::RecordEvent(
+          "hostui.draw_skipped",
+          {{"screen", screens_.back()->title()},
+           {"target", std::to_string(context.render_target_width()) + "x" +
+                          std::to_string(context.render_target_height())}});
+    }
     return;
   }
+  drawn_since_open_ = true;
   const MenuScreen& screen = *screens_.back();
 
   drawer_.Begin(context, float(context.render_target_width()),
                 float(context.render_target_height()));
-  // Dim the title behind the menu across the whole guest image.
+  // Dim the title behind the menu across the whole guest image, except for
+  // the screen's gap.
+  const auto [gap_top, gap_bottom] = screen.backdrop_gap();
+  const auto dim = [this, gap_top, gap_bottom](float width, float height) {
+    DrawGradient(0.0f, 0.0f, width, height * gap_top, kBackdropLeft, kBackdropRight);
+    if (gap_bottom < 1.0f) {
+      DrawGradient(0.0f, height * gap_bottom, width, height * (1.0f - gap_bottom),
+                   kBackdropLeft, kBackdropRight);
+    }
+  };
   if (auto rect = presenter_.GetPaintedGuestOutputRectFromUIThread()) {
     const Canvas saved = canvas_;
     canvas_ = Canvas{float(rect->x), float(rect->y), 1.0f};
-    DrawGradient(0.0f, 0.0f, float(rect->width), float(rect->height), kBackdropLeft,
-                 kBackdropRight);
+    dim(float(rect->width), float(rect->height));
     canvas_ = saved;
   } else {
-    DrawGradient(0.0f, 0.0f, kTitleWidth, kTitleHeight, kBackdropLeft, kBackdropRight);
+    dim(kTitleWidth, kTitleHeight);
   }
   const size_t content_batch = batches_.size() - 1;
   const size_t content_vertex = batches_.back().vertices.size();
@@ -888,6 +1024,13 @@ void HostUi::OnKeyDown(rex::ui::KeyEvent& e) {
     return;
   }
   e.set_handled(true);
+  const ScopedInputSource source(input_source_, "key");
+  if (screens_.back()->captures_keys()) {
+    if (!e.prev_state()) {
+      CaptureKey(int(key));
+    }
+    return;
+  }
   switch (key) {
     case VirtualKey::kUp:
     case VirtualKey::kNumpad8:
@@ -976,6 +1119,23 @@ void HostUi::OnMouseDown(rex::ui::MouseEvent& e) {
     return;
   }
   e.set_handled(true);
+  const ScopedInputSource source(input_source_, "mouse");
+  if (screens_.back()->captures_keys()) {
+    switch (e.button()) {
+      case rex::ui::MouseEvent::Button::kLeft:
+        CaptureKey(int(VirtualKey::kLButton));
+        break;
+      case rex::ui::MouseEvent::Button::kRight:
+        CaptureKey(int(VirtualKey::kRButton));
+        break;
+      case rex::ui::MouseEvent::Button::kMiddle:
+        CaptureKey(int(VirtualKey::kMButton));
+        break;
+      default:
+        break;
+    }
+    return;
+  }
   if (e.button() == rex::ui::MouseEvent::Button::kRight) {
     Apply(NavCommand::kBack);
     return;
@@ -1022,6 +1182,7 @@ void HostUi::OnMouseWheel(rex::ui::MouseEvent& e) {
     return;
   }
   e.set_handled(true);
+  const ScopedInputSource source(input_source_, "mouse");
   if (e.scroll_y() > 0) {
     Apply(NavCommand::kUp);
   } else if (e.scroll_y() < 0) {

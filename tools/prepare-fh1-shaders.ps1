@@ -3,6 +3,8 @@ param(
     [string]$StateRoot,
     [string]$GameRoot,
     [string]$BuildDirectory,
+    # Unsupported developer path; ordinary setup and launch always use Vulkan.
+    [switch]$LegacyD3D12,
     [switch]$JsonEvents
 )
 
@@ -82,22 +84,13 @@ try {
             if ($match.Success) { $settings[$name] = $match.Groups[1].Value.Trim().ToLowerInvariant() }
         }
     }
-    # Only Direct3D 12 ("d3d12", or "any", its first backend) loads prebuilt
-    # shader packs; Vulkan translates shaders as the game runs and keeps them,
-    # and prepare-fh1-vulkan.ps1 fills that storage once before the first
-    # start. Config schema 27 made Vulkan the default and moves earlier files
-    # to it, so a file without a schema 27 backend choice starts on Vulkan.
-    $backend = 'vulkan'
-    if (Test-Path -LiteralPath $config) {
-        $schemaMatch = [regex]::Match($text, '(?m)^\s*pinyon_shift_config_schema\s*=\s*([0-9]+)')
-        $backendMatch = [regex]::Match($text, '(?m)^\s*gpu_backend\s*=\s*"([^"]*)"')
-        if ($schemaMatch.Success -and [int]$schemaMatch.Groups[1].Value -ge 27 -and $backendMatch.Success) {
-            $backend = $backendMatch.Groups[1].Value.ToLowerInvariant()
-        }
-    }
-    if ($backend -eq 'vulkan') {
+    # Do not prepare legacy packs from a saved Direct3D 12 selection before
+    # the game's schema 28 migration replaces it with Vulkan.
+    if (-not $LegacyD3D12) {
         $stored = @(Get-ChildItem -LiteralPath (Join-Path $cache 'shaders/shareable') -Filter '*.vk.xpso' -File -ErrorAction SilentlyContinue)
-        # A preparation that failed for this build is not retried at every start.
+        # A preparation that failed, or was stopped, for this build is not retried
+        # at every start: the attempt is recorded before it runs (#389). The game
+        # fills the same storage while it plays.
         $skipped = Join-Path $cache 'fh1-vulkan-preparation-skipped.json'
         $executable = Get-Item -LiteralPath (Join-Path $BuildDirectory 'pinyon_shift.exe') -ErrorAction SilentlyContinue
         $build = if ($executable) { "$($executable.Length) $($executable.LastWriteTimeUtc.Ticks)" } else { 'none' }
@@ -106,11 +99,9 @@ try {
             Write-PinyonEvent shaders 100 'Vulkan shaders are prepared.' -JsonEvents:$JsonEvents
             return
         }
+        Write-AtomicJson $skipped ([ordered]@{ schema_version = 1; build = $build })
         & (Join-Path $PSScriptRoot 'prepare-fh1-vulkan.ps1') -StateRoot $StateRoot -GameRoot $GameRoot `
             -BuildDirectory $BuildDirectory -JsonEvents:$JsonEvents
-        if (-not @(Get-ChildItem -LiteralPath (Join-Path $cache 'shaders/shareable') -Filter '*.vk.xpso' -File -ErrorAction SilentlyContinue).Count) {
-            Write-AtomicJson $skipped ([ordered]@{ schema_version = 1; build = $build })
-        }
         return
     }
     # Not a key input: whether the other scales are prepared as well.

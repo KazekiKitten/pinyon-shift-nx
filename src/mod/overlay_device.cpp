@@ -5,6 +5,7 @@
 
 #include <rex/filesystem/entry.h>
 #include <rex/logging.h>
+#include <rex/filesystem.h>
 
 #include "pinyon_shift_diagnostics.h"
 
@@ -29,9 +30,21 @@ bool OverlayDevice::Initialize() {
     if ((*it)->Initialize()) {
       ++it;
     } else {
-      REXLOG_WARN("Mods: cannot read {}; its files are not used", (*it)->host_path().string());
+      REXLOG_WARN("Mods: cannot read {}; its files are not used", rex::path_to_utf8((*it)->host_path()));
       it = overlays_.erase(it);
     }
+  }
+  // Files a mod adds to the game's directories are listed with them, as if
+  // they were on the disc: the title enumerates directories (FilesToCache.xml
+  // names wildcards such as media\Audio\Cars\Engines\Soundbanks\Burbles\*.*),
+  // and the XE mod adds hundreds of files beside the disc's. Earlier mods
+  // first, as they win when opening.
+  size_t listed = 0;
+  for (const auto& overlay : overlays_) {
+    listed += base_->MergeTree(overlay->host_path());
+  }
+  if (listed) {
+    diagnostics::RecordEvent("mod.overlay.listed", {{"entries", std::to_string(listed)}});
   }
   return true;
 }
@@ -85,7 +98,7 @@ rex::filesystem::Entry* OverlayDevice::ResolvePath(std::string_view path) {
       // Only files replace; a mod's directories must not hide the game's.
       if (entry && !(entry->attributes() & rex::filesystem::kFileAttributeDirectory)) {
         diagnostics::RecordEvent("mod.file.override",
-                                 {{"path", path}, {"from", overlay->host_path().string()}});
+                                 {{"path", path}, {"from", rex::path_to_utf8(overlay->host_path())}});
         {
           std::lock_guard lock(g_overridden_mutex);
           g_overridden.insert(NormalizeGamePath(path));
@@ -94,7 +107,14 @@ rex::filesystem::Entry* OverlayDevice::ResolvePath(std::string_view path) {
       }
     }
   }
-  return base_->ResolvePath(path);
+  if (auto* entry = base_->ResolvePath(path)) return entry;
+  // New assets may introduce directories absent from the disc. VFS file
+  // opens resolve the parent first; keep existing base directories intact,
+  // but expose an overlay directory when it has no base counterpart.
+  for (const auto& overlay : overlays_) {
+    if (auto* entry = overlay->ResolvePath(path)) return entry;
+  }
+  return nullptr;
 }
 
 }  // namespace pinyon_shift::mod

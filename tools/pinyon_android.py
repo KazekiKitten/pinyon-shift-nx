@@ -116,6 +116,20 @@ def rexsdk_dir() -> Path:
     return ROOT / ".local" / "rexglue"
 
 
+def _pinned_tool(name: str) -> Path | None:
+    """CMake or Ninja from the Windows build's pinned toolchain
+    (config/release-toolchain.json, provisioned with the PC build)."""
+    if not WINDOWS:
+        return None
+    try:
+        entry = json.loads((ROOT / "config" / "release-toolchain.json").read_text(
+            encoding="utf-8"))[name]
+    except (OSError, KeyError, json.JSONDecodeError):
+        return None
+    path = ROOT / entry["install_path"] / entry["executable"]
+    return path if path.is_file() else None
+
+
 class Tools:
     def __init__(self) -> None:
         self.sdk = sdk_root()
@@ -138,10 +152,9 @@ class Tools:
         self.strip = self.llvm_bin / _exe("llvm-strip")
         self.libcxx = (self.ndk / "toolchains" / "llvm" / "prebuilt" / host / "sysroot" / "usr"
                        / "lib" / "aarch64-linux-android" / "libc++_shared.so")
-        local_cmake = (ROOT / ".local" / "toolchain" / "cmake-3.31.10-windows-x86_64" / "bin"
-                       / "cmake.exe")
-        self.cmake = Path(str(local_cmake if local_cmake.is_file() else shutil.which("cmake")))
-        self.ninja = self._ninja()
+        local_cmake = _pinned_tool("cmake")
+        self.cmake = local_cmake or (Path(shutil.which("cmake")) if shutil.which("cmake") else None)
+        self.ninja = _pinned_tool("ninja") or self._ninja()
 
     @staticmethod
     def _find(directory: Path | None, name: str) -> Path | None:
@@ -203,8 +216,16 @@ def share_with_app(tools: Tools, args: argparse.Namespace, *remote: str) -> None
         adb(tools, args, "shell", f"find '{path}' -user shell -exec chmod a+rwX {{}} +")
 
 
-def build_directory(configuration: str) -> Path:
-    return ROOT / "out" / "build" / f"android-arm64-{configuration.lower()}"
+def preset(args: argparse.Namespace) -> str:
+    """The CMake preset: the v4 title-update build (TITLE_UPDATE_V4_BACKLOG,
+    Release only, its own generated tree) or the base disc's."""
+    if getattr(args, "title_update_v4", False):
+        return "android-arm64-v4"
+    return f"android-arm64-{args.configuration.lower()}"
+
+
+def build_directory(args: argparse.Namespace) -> Path:
+    return ROOT / "out" / "build" / preset(args)
 
 
 def release_version() -> tuple[str, int]:
@@ -247,13 +268,15 @@ def build(args: argparse.Namespace) -> int:
     missing = tools.missing()
     if missing:
         raise AndroidError("missing " + ", ".join(missing) + " (pinyon.py android doctor --install)")
-    if not (ROOT / ".local" / "generated" / "default" / "sources.cmake").is_file():
+    generated = "generated-v4" if args.title_update_v4 else "generated"
+    if not (ROOT / ".local" / generated / "default" / "sources.cmake").is_file():
         raise AndroidError("the generated game code is missing; build the game on this PC "
-                           "first (the launcher or tools/build-preview.ps1)")
-    directory = build_directory(args.configuration)
+                           "first (the launcher, tools/build-preview.ps1 or, for v4, "
+                           "tools/build-v4.ps1)")
+    directory = build_directory(args)
     environment = dict(os.environ, ANDROID_NDK_HOME=str(tools.ndk))
     if not (directory / "CMakeCache.txt").is_file():
-        run([tools.cmake, "--preset", f"android-arm64-{args.configuration.lower()}",
+        run([tools.cmake, "--preset", preset(args),
              f"-DREXSDK_DIR={rexsdk_dir().as_posix()}",
              f"-DCMAKE_MAKE_PROGRAM={tools.ninja}", f"-DPYTHON_EXECUTABLE={sys.executable}",
              f"-DPython3_EXECUTABLE={sys.executable}"], cwd=ROOT, env=environment)
@@ -337,9 +360,31 @@ def _build_manifest(tools: Tools, version_name: str, libraries: list[Path]) -> d
     }
 
 
+# GPU drivers packaged as assets/drivers/<name>, which the activity installs
+# into state/drivers and android_gpu_driver "auto" picks by GPU: the binary
+# from .local/android/drivers/<name> (not in the repository), its notice from
+# android/drivers/<name>.
+BUNDLED_DRIVERS = ["turnip-gen8-v37"]
+
+
+def bundled_driver_files() -> list[tuple[Path, str]]:
+    files = []
+    for name in BUNDLED_DRIVERS:
+        binary = WORK / "drivers" / name
+        notice = ROOT / "android" / "drivers" / name
+        found = sorted(binary.glob("*")) if binary.is_dir() else []
+        if not any(path.suffix == ".so" for path in found):
+            print(f"warning: bundled driver {name} is missing from {binary}; not packaged")
+            continue
+        for path in found + sorted(notice.glob("*")):
+            if path.is_file():
+                files.append((path, f"assets/drivers/{name}/{path.name}"))
+    return files
+
+
 def package(args: argparse.Namespace, tools: Tools | None = None) -> int:
     tools = tools or Tools()
-    directory = build_directory(args.configuration)
+    directory = build_directory(args)
     libraries = []
     for name in NATIVE_LIBRARIES + ADRENOTOOLS_HOOKS:
         found = list(directory.glob(f"**/{name}"))
@@ -408,6 +453,8 @@ def package(args: argparse.Namespace, tools: Tools | None = None) -> int:
         apk.write(staging / "pinyon_shift_build.json", "assets/pinyon_shift_build.json")
         for library in stripped:
             apk.write(library, f"lib/{CONFIG['abi']}/{library.name}")
+        for path, name in bundled_driver_files():
+            apk.write(path, name)
 
     aligned = staging / "aligned.apk"
     run([tools.zipalign, "-P", "16", "-f", "4", unsigned, aligned])
@@ -466,6 +513,64 @@ def push_driver(args: argparse.Namespace) -> int:
     adb(tools, args, "push", f"{staging}{os.sep}.", remote, stdout=subprocess.DEVNULL)
     share_with_app(tools, args, f"{DEVICE_FILES}/state/drivers")
     print(f"driver {name}: run with --android_gpu_driver={name}")
+    return 0
+
+
+def migrate(args: argparse.Namespace) -> int:
+    """Brings a device's game and state from an install under an earlier
+    package name (com.pinyonshift.fh1) into this one's folder, which Android
+    keeps apart. The state (saves, settings, drivers) is copied and the
+    earlier copy left as it was; the extracted game (7.2 GB) is moved, as it
+    is rebuilt from the disc with push-data. Nothing already in this
+    package's state is overwritten."""
+    tools = Tools()
+    serial = ["-s", args.serial] if args.serial else []
+
+    def shell(command: str) -> str:
+        return subprocess.run([str(tools.adb)] + serial + ["shell", command],
+                              capture_output=True, text=True).stdout.strip()
+
+    sources = [name for name in CONFIG.get("previous_packages", [])
+               if shell(f"[ -d /sdcard/Android/data/{name}/files/state ] && echo yes") == "yes"]
+    if not sources:
+        print("no earlier install's files on the device")
+        return 0
+    old = f"/sdcard/Android/data/{sources[0]}/files"
+    adb(tools, args, "shell", "am", "force-stop", PACKAGE)
+    for name in sources:
+        adb(tools, args, "shell", "am", "force-stop", name)
+    adb(tools, args, "shell", "mkdir", "-p", f"{DEVICE_FILES}/state", f"{DEVICE_FILES}/game")
+    # cp -n: the new install's own files win; logs are not carried over.
+    for entry in shell(f"ls '{old}/state'").split():
+        if entry == "logs":
+            continue
+        adb(tools, args, "shell", "cp", "-R", "-n", f"{old}/state/{entry}", f"{DEVICE_FILES}/state/")
+    if shell(f"[ -d '{old}/game/base' ] && echo yes") == "yes":
+        if shell(f"[ -e '{DEVICE_FILES}/game/base' ] && echo yes") == "yes":
+            print(f"game files already in {DEVICE_FILES}/game/base; the earlier copy is left")
+        else:
+            adb(tools, args, "shell", "mv", f"{old}/game/base", f"{DEVICE_FILES}/game/base")
+    share_with_app(tools, args, f"{DEVICE_FILES}/game", f"{DEVICE_FILES}/state")
+    print(f"migrated {old} into {DEVICE_FILES}; uninstall {sources[0]} once the game "
+          "shows your save (its state stays until then)")
+    return 0
+
+
+def push_title_update(args: argparse.Namespace) -> int:
+    """The verified v4 title update (tools/verify-fh1-title-update.py
+    --install <state>) into the device state's title-update-v4, which the v4
+    build mounts as update:."""
+    tools = Tools()
+    source = (args.state_root / "title-update-v4").resolve()
+    names = ["default.xexp", "SpeechFacade_default.xexp", "XMediaFacade_default.xexp", "media.zip"]
+    if not all((source / name).is_file() for name in names):
+        raise AndroidError(f"no verified title update in {source}; install it with "
+                           "tools/verify-fh1-title-update.py --install")
+    remote = f"{DEVICE_FILES}/state/title-update-v4"
+    adb(tools, args, "shell", "mkdir", "-p", remote)
+    adb(tools, args, "push", "--sync", *(str(source / name) for name in names), remote,
+        stdout=subprocess.DEVNULL)
+    share_with_app(tools, args, remote)
     return 0
 
 
@@ -639,9 +744,13 @@ def add_parser(commands) -> None:
                         help="answer yes to the Android SDK licenses sdkmanager shows")
     parser = command("build", build, "cross-compile the game and package the APK")
     parser.add_argument("--jobs", type=int)
+    parser.add_argument("--title-update-v4", action="store_true",
+                        help="the v4 title-update build (tools/build-v4.ps1 generates its code)")
     parser.add_argument("--debuggable", action="store_true",
                         help="let adb attach (thread dumps with debuggerd, run-as)")
     parser = command("package", package, "package already built libraries into the APK")
+    parser.add_argument("--title-update-v4", action="store_true",
+                        help="package the v4 title-update build")
     parser.add_argument("--debuggable", action="store_true",
                         help="let adb attach (thread dumps with debuggerd, run-as)")
     command("install", install, "install the APK on the device")
@@ -651,6 +760,12 @@ def add_parser(commands) -> None:
                      "copy a custom Vulkan driver package (Mesa Turnip) to the device")
     parser.add_argument("driver", type=Path, help="an adrenotools driver .zip or folder")
     parser.add_argument("--name", help="the folder name on the device (default: the file's)")
+    parser = command("push-title-update", push_title_update,
+                     "copy the verified v4 title update to the device")
+    parser.add_argument("--state-root", type=Path, required=True,
+                        help="the state root it was installed into")
+    command("migrate", migrate,
+            "bring an earlier package name's game and saves into this install")
     parser = command("run", run_game, "start the game on the device")
     parser.add_argument("--null-gpu", action="store_true", help="no renderer (gpu_backend=null)")
     parser.add_argument("--route", type=Path, help="a render-test route to run")

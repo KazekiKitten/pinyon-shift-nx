@@ -60,15 +60,18 @@ $release = Get-Content (Join-Path $root 'config/release.json') -Raw | ConvertFro
 $fileVersion = ($release.version -split '-', 2)[0] + '.0'
 & dotnet publish (Join-Path $root 'launcher/PinyonShift.Launcher/PinyonShift.Launcher.csproj') `
     -c $Configuration -r win-x64 --self-contained true -o $publish `
+    "-p:BaseOutputPath=$(Join-Path $artifacts 'build')/" `
     "-p:Version=$($release.version)" "-p:FileVersion=$fileVersion"
 if ($LASTEXITCODE -ne 0) { throw 'Launcher publish failed.' }
 
 $include = @(
     'CMakeLists.txt', 'CMakePresets.json', 'LICENSE', 'README.md', 'THIRD_PARTY_NOTICES.md',
     'cmake', 'config/gamecontrollerdb.txt', 'config/release.json', 'config/release-toolchain.json', 'config/supported-dumps.json',
+    'config/supported-extracted-ms-2505.json', 'tools/verify-extracted-game.ps1', 'docs/EXTRACTED_GAME_INPUT.md',
+    'config/supported-dlc.json', 'tools/manage-fh1-dlc.py', 'tools/manage-dlc.ps1', 'tools/prepare-fh1-rally.py', 'tools/patch-fh1-archive.py',
     'config/rexglue', 'include', 'mods_src', 'src', 'tests/config', 'tests/native_renderer',
-    'tests/save', 'tests/ui',
-    'tools/fh1_archive_extract.cpp', 'tools/fh1_texture_import.cpp', 'tools/thread_sampler.cpp',
+    'tests/save', 'tests/ui', 'tests/dlc', 'tests/mod',
+    'tools/fh1_archive_extract.cpp', 'tools/fh1_texture_import.cpp', 'tools/thread_sampler.cpp', 'tools/vram_balloon.cpp',
     'tools/extract-fh1-shader-corpus.py', 'tools/build-fh1-gpu-prewarm.py',
     'tools/produce-fh1-artifacts.ps1', 'tools/prepare-fh1-shaders.ps1', 'tools/prepare-fh1-vulkan.ps1',
     'config/render-tests',
@@ -76,12 +79,21 @@ $include = @(
     'tools/launch-preview.ps1', 'tools/prepare-rexglue.ps1',
     'tools/build-mod-patches.py', 'tools/build-mod-archives.py', 'tools/install-sample-mod.py',
     'tools/pinyon.py', 'tools/pinyon_android.py', 'tools/build-android.ps1',
+    # pinyon.py's other commands and the launchers' content panels: the XE mod,
+    # asset export (#446) and custom radio stations (#445).
+    'tools/pinyon_xe.py', 'tools/manage-xe.ps1', 'tools/pinyon_assets.py', 'tools/fh1_audio_decode.cpp',
+    'tools/pinyon_radio.py', 'tools/manage-radio.ps1', 'tools/build-fh1-radio.py',
+    # Linux, the Steam Deck and macOS (docs/LINUX.md, docs/MACOS.md).
+    'tools/pinyon_setup.py', 'tools/pinyon_steam.py', 'tools/pinyon_deck.py', 'config/steam',
     'config/android-toolchain.json', 'android',
     'tools/fh1-profile.py', 'tools/fh1-strings.py', 'tools/inspect-fh1-ui.py',
     'tools/native-shader-pack.py',
     'tools/provision-toolchain.ps1', 'tools/release-common.ps1',
     'tools/host-config.ps1', 'tools/set-graphics-experiment.ps1', 'tools/setup-preview.ps1',
-    'tools/verify-codegen-log.ps1', 'tools/verify-game.ps1'
+    'tools/verify-codegen-log.ps1', 'tools/verify-game.ps1',
+    # The optional v4 title update (docs/TITLE_UPDATE_V4_BACKLOG.md TU-2).
+    'config/supported-title-updates.json', 'tools/verify-fh1-title-update.py', 'tools/title-update-profile.py',
+    'tools/manage-title-update.ps1', 'tools/build-v4.ps1', 'tools/verify-codegen-log.py'
 )
 foreach ($relative in $include) {
     $source = Join-Path $root $relative

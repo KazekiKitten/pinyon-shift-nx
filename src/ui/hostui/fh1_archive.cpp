@@ -171,7 +171,9 @@ std::optional<Fh1Archive> Fh1Archive::Open(const std::filesystem::path& path) {
     member.size = Read32(header + 24);
     member.header_offset = Read32(header + 42);
     std::string_view name(reinterpret_cast<const char*>(header + kCentralHeaderSize), name_size);
-    archive.members_.insert_or_assign(Lowercase(name), member);
+    if (archive.members_.insert_or_assign(Lowercase(name), member).second) {
+      archive.names_.emplace_back(name);
+    }
     at += kCentralHeaderSize + variable_size;
   }
   return archive;

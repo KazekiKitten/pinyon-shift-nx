@@ -11,14 +11,29 @@ environment the game reads and starts it, then reports how it exited:
                    [--render-test-script FILE --render-test-output DIR]
                    [-- game arguments...]
 
-On Windows the D3D12 shader pack is prepared first through
+On Windows Vulkan shader storage is prepared first through
 tools/prepare-fh1-shaders.ps1 (skip it with --skip-shader-preparation); on
 Linux the game runs on Vulkan and translates shaders itself, so there is
 nothing to prepare. A crash on Windows is bundled by
 tools/create-crash-report.ps1; elsewhere the exit code is reported.
 
+`setup` builds the game from the player's disc on Linux and macOS (LX-3);
+see tools/pinyon_setup.py. `shortcuts` adds it to Steam and the desktop menu
+on Linux (LX-5.10); see tools/pinyon_steam.py.
+
+`xe` installs the Forza Horizon XE mod from the player's own downloads
+(XE-1); see tools/pinyon_xe.py.
+
+`assets` exports the player's own game files to standard formats (#446):
+WAV, DDS/PNG, JSON/CSV and SQLite dumps; see tools/pinyon_assets.py.
+
+`radio` manages custom radio stations built from the player's music, with
+their names and logos (#445); see tools/pinyon_radio.py.
+
 `android` builds, installs and runs the game on an Android device from this
-PC (AP-6.1); see tools/pinyon_android.py.
+PC (AP-6.1); see tools/pinyon_android.py. `deck` copies a Linux build and the
+game to a Steam Deck and runs it there over SSH (LX-2.1); see
+tools/pinyon_deck.py.
 """
 
 from __future__ import annotations
@@ -35,6 +50,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import pinyon_android  # noqa: E402
+import pinyon_assets  # noqa: E402
+import pinyon_deck  # noqa: E402
+import pinyon_radio  # noqa: E402
+import pinyon_setup  # noqa: E402
+import pinyon_steam  # noqa: E402
+import pinyon_xe  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 WINDOWS = os.name == "nt"
@@ -47,7 +68,8 @@ class LaunchError(RuntimeError):
 
 
 def default_build_directory(configuration: str) -> Path:
-    system = "win" if WINDOWS else platform.system().lower()
+    system = {"Windows": "win", "Darwin": "macos"}.get(platform.system(),
+                                                       platform.system().lower())
     machine = platform.machine().lower()
     arch = "arm64" if machine in ("arm64", "aarch64") else "amd64"
     return ROOT / "out" / "build" / f"{system}-{arch}-{configuration.lower()}"
@@ -77,9 +99,8 @@ def prepare_state(state: Path) -> None:
 
 def build_mods(state: Path, game: Path, build: Path) -> None:
     """Mods' database patches (NP-10.2) and archive members and merges
-    (NP-10.1, NP-10.2), rebuilt from the player's files before each start."""
-    if not (state / "mods").is_dir():
-        return
+    (NP-10.1, NP-10.2), rebuilt from the player's files before each start.
+    The first step also installs the built-in optional mods."""
     patches = [sys.executable, str(ROOT / "tools" / "build-mod-patches.py"), str(state),
                "--game-root", str(game)]
     if subprocess.run(patches, stdout=subprocess.DEVNULL).returncode:
@@ -93,15 +114,36 @@ def build_mods(state: Path, game: Path, build: Path) -> None:
         raise LaunchError("could not build the mods' archive members")
 
 
+RALLY_CONTENT = "user/0000000000000000/4D5309C9/00000002/6F6992766050D818245ADD408031E280FB5F4E634D"
+
+
+def prepare_rally(state: Path, game: Path, build: Path) -> bool:
+    """Verify owned Rally and its generated cache before play, as
+    launch-preview.ps1 does. True when the Rally entry is ready."""
+    if not (state / RALLY_CONTENT).is_dir():
+        return False
+    extractor = build / ("pinyon_shift_fh1_archive_extract" + (".exe" if WINDOWS else ""))
+    completed = subprocess.run([sys.executable, str(ROOT / "tools" / "prepare-fh1-rally.py"),
+                                "--state-root", str(state), "--game-root", str(game),
+                                "--extractor", str(extractor)], capture_output=True, text=True)
+    if completed.returncode:
+        raise LaunchError("could not verify and prepare Rally; restore or re-import the "
+                          "verified Rally package. Saved cars with Rally parts need it")
+    try:
+        return json.loads(completed.stdout).get("entry_ready") is True
+    except json.JSONDecodeError:
+        return False
+
+
 def prepare_shaders(state: Path, game: Path, build: Path) -> None:
     shell = powershell()
     if shell is None:
-        raise LaunchError("PowerShell is needed to prepare the D3D12 shader pack "
+        raise LaunchError("PowerShell is needed to prepare Vulkan shader storage "
                           "(or pass --skip-shader-preparation)")
     command = [shell, "-NoProfile", "-File", str(ROOT / "tools" / "prepare-fh1-shaders.ps1"),
                "-StateRoot", str(state), "-GameRoot", str(game), "-BuildDirectory", str(build)]
     if subprocess.run(command, stdout=subprocess.DEVNULL).returncode:
-        raise LaunchError("could not prepare the shader pack")
+        raise LaunchError("could not prepare Vulkan shader storage")
 
 
 def crash_report(state: Path, executable: Path, started: datetime, pid: int,
@@ -135,11 +177,15 @@ def launch(args: argparse.Namespace) -> dict:
     if WINDOWS and not args.skip_shader_preparation and not args.render_test_script:
         prepare_shaders(state, game, build)
     build_mods(state, game, build)
+    rally_ready = not args.render_test_script and prepare_rally(state, game, build)
 
     environment = dict(os.environ)
     environment.update({"PINYON_SHIFT_STATE_ROOT": str(state),
                         "PINYON_SHIFT_GAME_ROOT": str(game),
                         "REX_D3D12_ALLOW_VARIABLE_REFRESH_RATE_AND_TEARING": "false"})
+    environment.pop("PINYON_SHIFT_RALLY_PREPARED", None)
+    if rally_ready:
+        environment["PINYON_SHIFT_RALLY_PREPARED"] = "1"
     arguments = list(args.game_arguments)
     if args.hidden:
         environment["REX_WINDOW_HIDDEN"] = "1"
@@ -149,7 +195,8 @@ def launch(args: argparse.Namespace) -> dict:
         if args.render_test_output:
             environment["PINYON_SHIFT_FH1_RENDER_TEST_OUTPUT"] = str(
                 args.render_test_output.resolve())
-        arguments.append("--pinyon_shift_skip_opening_movies=true")
+        if not args.include_opening_movies:
+            arguments.append("--pinyon_shift_skip_opening_movies=true")
     started = datetime.now(timezone.utc)
     process = subprocess.Popen([str(executable)] + arguments, cwd=str(build), env=environment)
     try:
@@ -183,13 +230,33 @@ def main(argv: list[str] | None = None) -> int:
     start.add_argument("--skip-shader-preparation", action="store_true")
     start.add_argument("--render-test-script", type=Path)
     start.add_argument("--render-test-output", type=Path)
+    start.add_argument("--include-opening-movies", action="store_true",
+                       help="play the opening movies in a render test")
     start.add_argument("--timeout", type=float, help="seconds before the game is stopped")
     start.add_argument("--json", action="store_true", help="print the result as JSON")
     start.add_argument("game_arguments", nargs="*", help="after --, passed to the game")
     pinyon_android.add_parser(commands)
+    pinyon_assets.add_parser(commands)
+    pinyon_deck.add_parser(commands)
+    pinyon_radio.add_parser(commands)
+    pinyon_setup.add_parser(commands)
+    pinyon_steam.add_parser(commands)
+    pinyon_xe.add_parser(commands)
     args = parser.parse_args(argv)
+    if args.command == "setup":
+        return pinyon_setup.main(args)
+    if args.command == "shortcuts":
+        return pinyon_steam.main(args)
+    if args.command == "assets":
+        return pinyon_assets.main(args)
+    if args.command == "radio":
+        return pinyon_radio.main(args)
     if args.command == "android":
         return pinyon_android.main(args)
+    if args.command == "deck":
+        return pinyon_deck.main(args)
+    if args.command == "xe":
+        return pinyon_xe.main(args)
     try:
         result = launch(args)
     except LaunchError as error:

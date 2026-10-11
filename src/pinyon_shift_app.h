@@ -18,6 +18,9 @@ class SaveBackups;
 namespace pinyon_shift::hostui {
 class HostUi;
 }
+namespace rex::ui::vulkan {
+class VulkanDevice;
+}
 
 class PinyonShiftApp final : public rex::ReXApp {
  public:
@@ -36,6 +39,9 @@ class PinyonShiftApp final : public rex::ReXApp {
   void OnConfigureFonts(ImFontAtlas* atlas) override;
   void OnConfigureStyle(ImGuiStyle& imgui_style, rex::ui::Style& ui_style) override;
   void OnPreSetup(rex::RuntimeConfig& config) override;
+  // A failed graphics start explains itself and exits 1308 rather than
+  // returning 1, which the launcher reported as a crash (#402, #404).
+  bool SetupPresentation() override;
   void OnPostLoadXexImage() override;
   void OnPostSetup() override;
   void OnPreLaunchModule() override;
@@ -62,6 +68,13 @@ class PinyonShiftApp final : public rex::ReXApp {
   bool EnsureHostUi();
   // NP-4.4 Hor+: the title's aspect for the window's (pinyon_shift_hor_plus).
   void UpdateHorPlus();
+  // Under Hor+, present frames without the gameplay view 16:9 letterboxed.
+  void ApplyMapView(bool open);
+  bool map_view_open_ = false;
+  // LS-1.5: on the launch that created the config, raise LOW-SPEC 60 to
+  // PERFORMANCE 120 on a capable machine.
+  void ApplyFirstRunHardwareDefaults(const rex::ui::vulkan::VulkanDevice& device);
+  bool config_created_ = false;
 
   // Recomputes Hor+ when the window changes size.
   class ResizeListener final : public rex::ui::WindowListener {

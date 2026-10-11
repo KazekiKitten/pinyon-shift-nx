@@ -8,8 +8,11 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
+using PinyonShift.Launcher.Updates;
 
 namespace PinyonShift.Launcher;
 
@@ -17,7 +20,7 @@ public partial class MainWindow : Window
 {
     private readonly ObservableCollection<RouteStep> _steps =
     [
-        new("VERIFY", "Verify disc", "", "1"),
+        new("VERIFY", "Verify game", "", "1"),
         new("TOOLS", "Get build tools", "", "2"),
         new("EXTRACT", "Extract game", "", "3"),
         new("BUILD", "Build", "", "4"),
@@ -25,7 +28,7 @@ public partial class MainWindow : Window
     ];
 
     // The content area shows one of these at a time.
-    private enum View { Setup, Ready, Log, Crash, Graphics }
+    private enum View { Setup, Ready, Log, Crash, Graphics, Dlc, Android, Radio }
 
     private CancellationTokenSource? _cancellation;
     private string? _repositoryRoot;
@@ -42,6 +45,10 @@ public partial class MainWindow : Window
     private readonly List<string> _portableNotes = [];
     private View _panel = View.Setup;
     private View _panelBeforeGraphics = View.Setup;
+    private View _panelBeforeDlc = View.Ready;
+    private TitleUpdateStatus? _titleUpdate;
+    private XeStatus? _xe;
+    private string _headlineBeforeDlc = "Ready to drive";
 
     private static readonly string InstallRootPreference = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -78,13 +85,57 @@ public partial class MainWindow : Window
         };
         Closing += (_, _) =>
         {
+            _androidShare?.Dispose();
             _cancellation?.Cancel();
             _sessionLog?.Dispose();
         };
     }
 
     private async void MainWindow_Loaded(object sender, RoutedEventArgs e)
-        => await InitializeSourceAsync();
+    {
+        await InitializeSourceAsync();
+        ReportUpdateAndCleanUp();
+        // Started by Windows after the restart that setup asked for: continue
+        // with the same game source.
+        var arguments = Environment.GetCommandLineArgs();
+        var resume = Array.IndexOf(arguments, ResumeSetupArgument);
+        if (resume > 0 && resume + 1 < arguments.Length && _gameExecutable is null &&
+            (File.Exists(arguments[resume + 1]) || Directory.Exists(arguments[resume + 1])))
+        {
+            SelectDiscImage(arguments[resume + 1]);
+            OwnershipCheckBox.IsChecked = true;
+            AppendLog("Continuing setup after the restart.");
+            PrimaryButton_Click(PrimaryButton, new RoutedEventArgs());
+        }
+    }
+
+    // W-4 (#393): a Build Tools install that needs a restart before the
+    // build environment works. The launcher restarts Windows when the player
+    // asks, and Windows starts it again once, after sign-in, to continue.
+    private const string ResumeSetupArgument = "--resume-setup";
+    private bool _restartRequired;
+    private string? _lastFailureKind;
+
+    private void RestartAndResumeSetup()
+    {
+        if (MessageBox.Show(this,
+                "Windows will restart now to finish installing the Microsoft C++ Build Tools. Save your work " +
+                "in other apps first.\n\n" + (_portableRoot is null
+                    ? "Pinyon Shift opens again after you sign in and continues setup."
+                    : "Open Pinyon Shift again after you sign in and choose Build to continue."),
+                "Restart required", MessageBoxButton.OKCancel, MessageBoxImage.Information) != MessageBoxResult.OK)
+            return;
+        var launcher = Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "PinyonShiftLauncher.exe");
+        // A portable install leaves nothing outside its folder, so it is not
+        // started again by Windows.
+        if (_portableRoot is null)
+        using (var runOnce = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\RunOnce"))
+            runOnce.SetValue("PinyonShiftResumeSetup",
+                $"\"{launcher}\" {ResumeSetupArgument} \"{IsoPathTextBox.Text}\"");
+        AppendLog("Restarting Windows; setup continues after sign-in.");
+        Process.Start(new ProcessStartInfo("shutdown.exe", "/r /t 5 /d p:4:2") { UseShellExecute = false, CreateNoWindow = true });
+        Close();
+    }
 
     private async Task InitializeSourceAsync(string? installRoot = null)
     {
@@ -117,6 +168,7 @@ public partial class MainWindow : Window
             DetectExistingBuild();
             DetectPendingReport();
             UpdatePrimaryButton();
+            _ = CheckForUpdateAsync();
         }
         catch (PortableFolderException ex)
         {
@@ -183,6 +235,19 @@ public partial class MainWindow : Window
         UpdatePrimaryButton();
     }
 
+    private void BrowseFolderButton_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFolderDialog
+        {
+            Title = "Choose your extracted Forza Horizon game folder",
+            Multiselect = false,
+            AddToRecent = _portableRoot is null
+        };
+        if (dialog.ShowDialog(this) == true)
+            SelectDiscImage(dialog.FolderName);
+        UpdatePrimaryButton();
+    }
+
     private void SelectDiscImage(string path)
     {
         IsoPathTextBox.Text = path;
@@ -193,7 +258,7 @@ public partial class MainWindow : Window
         UpdatePrimaryButton();
     }
 
-    // Dragging a disc image anywhere onto the window selects it.
+    // Dragging a disc image or extracted folder selects the game source.
     private bool CanAcceptDrop(DragEventArgs e, out string? path)
     {
         path = null;
@@ -201,7 +266,7 @@ public partial class MainWindow : Window
             !e.Data.GetDataPresent(DataFormats.FileDrop)) return false;
         if (e.Data.GetData(DataFormats.FileDrop) is not string[] { Length: 1 } files) return false;
         path = files[0];
-        return File.Exists(path);
+        return File.Exists(path) || Directory.Exists(path);
     }
 
     private void Window_DragOver(object sender, DragEventArgs e)
@@ -230,6 +295,11 @@ public partial class MainWindow : Window
 
     private async void PrimaryButton_Click(object sender, RoutedEventArgs e)
     {
+        if (_restartRequired)
+        {
+            RestartAndResumeSetup();
+            return;
+        }
         if (_pendingReport is not null)
         {
             ReportCrash();
@@ -248,6 +318,14 @@ public partial class MainWindow : Window
             SetFailure("Portable folder path is too long", pathTooLong);
             return;
         }
+        if (_portableRoot is null && _installRoot is not null &&
+            PortableMode.PathLengthProblem(_installRoot, "install") is { } installTooLong)
+        {
+            SetFailure("Install folder path is too long", installTooLong);
+            return;
+        }
+        if (!ConfirmGraphicsDriverBeforeBuild())
+            return;
 
         _busy = true;
         ChooseInstallRootButton.IsEnabled = false;
@@ -255,6 +333,7 @@ public partial class MainWindow : Window
         AndroidButton.IsEnabled = false;
         _cancellation = new CancellationTokenSource();
         BrowseButton.IsEnabled = false;
+        BrowseFolderButton.IsEnabled = false;
         OwnershipCheckBox.IsEnabled = false;
         PrimaryButton.IsEnabled = false;
         SetPrimaryText("Building…");
@@ -287,7 +366,7 @@ public partial class MainWindow : Window
             startInfo.ArgumentList.Add("Bypass");
             startInfo.ArgumentList.Add("-File");
             startInfo.ArgumentList.Add(script);
-            startInfo.ArgumentList.Add("-IsoPath");
+            startInfo.ArgumentList.Add(Directory.Exists(IsoPathTextBox.Text) ? "-ExtractedPath" : "-IsoPath");
             startInfo.ArgumentList.Add(IsoPathTextBox.Text);
             startInfo.ArgumentList.Add("-JsonEvents");
 
@@ -322,12 +401,19 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             SetFailure("Setup stopped", ex.Message);
+            if (_lastFailureKind == "reboot-required")
+            {
+                _restartRequired = true;
+                HeadlineText.Text = "Restart required";
+                SetPrimaryText("Restart now");
+            }
         }
         finally
         {
             _busy = false;
             GraphicsSettingsButton.IsEnabled = true;
             BrowseButton.IsEnabled = true;
+            BrowseFolderButton.IsEnabled = true;
             OwnershipCheckBox.IsEnabled = true;
             UpdatePrimaryButton();
         }
@@ -351,8 +437,10 @@ public partial class MainWindow : Window
                 PropertyNameCaseInsensitive = true
             });
             if (message is null) return;
+            // Shader preparation runs as the game starts, after the build: it belongs
+            // to the Play step, so a prepared game never appears to rebuild (#389).
             var stage = string.Equals(message.Stage, "shaders", StringComparison.OrdinalIgnoreCase)
-                ? "build" : message.Stage;
+                ? "play" : message.Stage;
             var index = Array.FindIndex(RouteStep.StageOrder, x =>
                 string.Equals(x, stage, StringComparison.OrdinalIgnoreCase));
             if (message.Stage == "shaders")
@@ -396,6 +484,7 @@ public partial class MainWindow : Window
         string reportName = "setup-error.json", string what = "Setup")
     {
         var fallback = $"{what} stopped before completing (exit code {exitCode}). The details above contain the cause.";
+        _lastFailureKind = null;
         if (_repositoryRoot is null) return fallback;
         var path = Path.Combine(_repositoryRoot, ".local", "logs", reportName);
         SetupFailure? failure;
@@ -410,6 +499,7 @@ public partial class MainWindow : Window
         }
         if (failure is null) return fallback;
 
+        _lastFailureKind = failure.ErrorKind;
         var excerpt = new List<string>();
         if (failure.ErrorExcerpt is { ValueKind: JsonValueKind.Array } lines)
             excerpt.AddRange(lines.EnumerateArray().Select(x => x.ValueKind == JsonValueKind.String ? x.GetString() ?? "" : x.ToString()));
@@ -449,25 +539,6 @@ public partial class MainWindow : Window
             ProgressMessageText.Text = message;
     }
 
-    // What the next start uses, read straight from the settings file.
-    private string ConfiguredGraphicsApi()
-    {
-        if (_stateRoot is null) return "vulkan";
-        var config = Path.Combine(_stateRoot, "config", "pinyon_shift.toml");
-        if (!File.Exists(config)) return "vulkan";
-        try
-        {
-            var text = File.ReadAllText(config);
-            var schema = Regex.Match(text, @"(?m)^\s*pinyon_shift_config_schema\s*=\s*([0-9]+)");
-            var backend = Regex.Match(text, @"(?m)^\s*gpu_backend\s*=\s*""([^""]*)""");
-            // Config schema 27 moves earlier files to Vulkan when the game starts;
-            // "any" is the first backend, Direct3D 12.
-            if (!schema.Success || int.Parse(schema.Groups[1].Value) < 27 || !backend.Success) return "vulkan";
-            return string.Equals(backend.Groups[1].Value, "vulkan", StringComparison.OrdinalIgnoreCase) ? "vulkan" : "d3d12";
-        }
-        catch (IOException) { return "vulkan"; }
-    }
-
     private int ConfiguredResolutionScale()
     {
         if (_stateRoot is null) return 1;
@@ -486,7 +557,7 @@ public partial class MainWindow : Window
     private void UpdateSummary()
     {
         var scale = ConfiguredResolutionScale();
-        SetSubhead($"{(ConfiguredGraphicsApi() == "vulkan" ? "Vulkan" : "Direct3D 12")} · " +
+        SetSubhead("Vulkan · " +
                    $"{scale}× ({1280 * scale} × {720 * scale}) · F6 opens settings in game");
     }
 
@@ -525,16 +596,6 @@ public partial class MainWindow : Window
             }
             _gameExecutable = candidate;
             SetComplete();
-            // Only Direct3D 12 loads prepared shader packs.
-            if (_stateRoot is not null && ConfiguredGraphicsApi() == "d3d12" &&
-                !File.Exists(Path.Combine(_stateRoot, "cache", "fh1-artifacts.json")))
-            {
-                _steps[3].SetState(StepState.Waiting, WaitingBrush, ActiveBrush, CompleteBrush, FailedBrush);
-                _steps[4].SetState(StepState.Waiting, WaitingBrush, ActiveBrush, CompleteBrush, FailedBrush);
-                HeadlineText.Text = "Prepare graphics";
-                SetSubhead("Direct3D 12 prepares its shaders once for this PC before the first start.");
-                SetPrimaryText("Prepare and play");
-            }
         }
     }
 
@@ -576,6 +637,35 @@ public partial class MainWindow : Window
                 "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", launcher,
                 "-Configuration", "Release", "-StateRoot", _stateRoot, "-Json", "-JsonEvents"
             }) startInfo.ArgumentList.Add(argument);
+            // The optional v4 title update runs its own build; base stays the default.
+            TitleUpdateStatus? titleUpdate = null;
+            if (File.Exists(Path.Combine(_repositoryRoot, "tools", "manage-title-update.ps1")))
+            {
+                try { titleUpdate = await RunTitleUpdateToolAsync("status"); }
+                catch (Exception ex) { AppendLog($"Title update status unavailable, starting the base disc: {ex.Message}"); }
+            }
+            // XE is made for the base disc; it wins over a chosen v4.
+            XeStatus? xe = null;
+            if (File.Exists(Path.Combine(_repositoryRoot, "tools", "manage-xe.ps1")))
+            {
+                try { xe = await RunXeToolAsync("status"); }
+                catch (Exception ex) { AppendLog($"XE mod status unavailable: {ex.Message}"); }
+            }
+            if (xe is { Enabled: true })
+                AppendLog(titleUpdate is { Use: true }
+                    ? "Starting the XE mod on the base disc; title update v4 is not used while XE is on."
+                    : "Starting the XE mod. It plays its own save; your base save is untouched.");
+            if (titleUpdate is { Use: true } && xe is not { Enabled: true })
+            {
+                if (!titleUpdate.Built)
+                {
+                    SetProgress(0, "Building the FH1 v4 title update. This takes a while the first time.");
+                    AppendLog("Building the FH1 v4 title update from your disc and your verified update.");
+                    await RunStreamingToolAsync("build-v4.ps1", ["-StateRoot", _stateRoot], _cancellation.Token);
+                }
+                AppendLog("Starting the FH1 v4 title update. Your profile was backed up before its first v4 save.");
+                startInfo.ArgumentList.Add("-TitleUpdateV4");
+            }
 
             using var watcher = new Process { StartInfo = startInfo };
             var output = new System.Text.StringBuilder();
@@ -607,6 +697,24 @@ public partial class MainWindow : Window
             {
                 AppendLog("The game closed normally.");
                 SetComplete();
+                return;
+            }
+
+            if (string.Equals(result?.Result, "saved-content-unavailable", StringComparison.OrdinalIgnoreCase))
+            {
+                SetFailure("Restore your saved car's DLC",
+                    "Re-enable its DLC in the DLC panel, or import the missing content again, then retry. " +
+                    "Your saved car and purchased parts have been preserved.");
+                return;
+            }
+
+            if (string.Equals(result?.Result, "graphics-unavailable", StringComparison.OrdinalIgnoreCase))
+            {
+                SetFailure("Update the graphics driver",
+                    "The game could not start the graphics device. It needs a GPU whose driver supports " +
+                    "Vulkan 1.3; install the newest driver from AMD, Intel or NVIDIA, then retry. " +
+                    "Older integrated graphics, such as Intel HD Graphics before the 6th generation, " +
+                    "cannot run the game.");
                 return;
             }
 
@@ -710,6 +818,15 @@ public partial class MainWindow : Window
                 WaitingBrush, ActiveBrush, CompleteBrush, FailedBrush);
         HeadlineText.Text = "The game crashed";
         SetSubhead("");
+        // Exit 1309: the GPU device was lost (src/pinyon_shift_app.cpp,
+        // OnHostGpuLoss). Usually a driver reset on weak graphics, which the
+        // player can act on; the report still helps when it is not.
+        if (string.Equals(report.ExitCodeHex, "0x0000051D", StringComparison.OrdinalIgnoreCase))
+        {
+            HeadlineText.Text = "The graphics driver stopped responding";
+            SetSubhead("Install the newest graphics driver. On integrated or older graphics, choose " +
+                "Low-spec 60 or a lower resolution scale in Settings, then play again.");
+        }
         CrashIdRun.Text = report.CrashId;
         ShowPanel(View.Crash);
         ReportProblemButton.Visibility = Visibility.Collapsed;
@@ -737,12 +854,14 @@ public partial class MainWindow : Window
     private async Task<string> ResolveRepositoryRootAsync(string? selectedInstallRoot = null)
     {
         static bool IsRoot(string path) => File.Exists(Path.Combine(path, "config", "supported-dumps.json"))
-            && File.Exists(Path.Combine(path, "tools", "setup-preview.ps1"));
+            && File.Exists(Path.Combine(path, "tools", "setup-preview.ps1"))
+            && File.Exists(Path.Combine(path, "CMakeLists.txt"))
+            && File.Exists(Path.Combine(path, "src", "main.cpp"));
 
         var directory = AppContext.BaseDirectory;
         for (var i = 0; i < 8; i++)
         {
-            if (IsRoot(directory))
+            if (IsRoot(directory) && !File.Exists(Path.Combine(directory, ".pinyon-source-sha256")))
             {
                 _canChooseInstallRoot = false;
                 _portableRoot = null;
@@ -783,6 +902,7 @@ public partial class MainWindow : Window
                     ? (await File.ReadAllTextAsync(InstallRootPreference)).Trim() : null);
             if (string.IsNullOrWhiteSpace(installRoot))
                 installRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PinyonShift");
+            _installRoot = Path.GetFullPath(installRoot);
         }
         var destination = Path.Combine(Path.GetFullPath(installRoot), "source", version);
         var payloadHash = await Task.Run(async () =>
@@ -794,13 +914,28 @@ public partial class MainWindow : Window
         var installedHash = File.Exists(payloadMarker)
             ? (await File.ReadAllTextAsync(payloadMarker)).Trim()
             : string.Empty;
-        if (!IsRoot(destination) || !string.Equals(installedHash, payloadHash,
+        // A matching ZIP hash does not mean its extracted files are still present.
+        // Check only payload-owned files; .local contains game data, settings and saves.
+        using var archive = ZipFile.OpenRead(payload);
+        var entries = PayloadManifest.Entries(archive);
+        bool HasPayloadFiles() => archive.Entries.Where(entry => !string.IsNullOrEmpty(entry.Name))
+            .All(entry => File.Exists(Path.Combine(destination, entry.FullName))
+                && new FileInfo(Path.Combine(destination, entry.FullName)).Length == entry.Length);
+        if (!IsRoot(destination) || !HasPayloadFiles() || !string.Equals(installedHash, payloadHash,
                 StringComparison.OrdinalIgnoreCase))
         {
             Directory.CreateDirectory(destination);
+            // Files an earlier release had and this one dropped; never .local.
+            foreach (var stale in PayloadManifest.RemoveStale(destination, entries))
+                _portableNotes.Add($"Removed {stale}, which this release no longer has.");
             await Task.Run(() => ZipFile.ExtractToDirectory(payload, destination, overwriteFiles: true));
+            if (!IsRoot(destination) || !HasPayloadFiles())
+                throw new InvalidDataException("The release source payload is incomplete. Extract a fresh launcher release and retry.");
             await File.WriteAllTextAsync(payloadMarker, payloadHash + Environment.NewLine);
+            PayloadManifest.Write(destination, entries);
         }
+        else if (!File.Exists(Path.Combine(destination, PayloadManifest.FileName)))
+            PayloadManifest.Write(destination, entries);
         if (!IsRoot(destination))
             throw new InvalidDataException("The release source payload is incomplete.");
         return destination;
@@ -828,11 +963,31 @@ public partial class MainWindow : Window
 
     private void ShowPanel(View panel)
     {
+        // The DLC, radio and Android panels take the headline while open.
+        var wasSide = _panel is View.Dlc or View.Android or View.Radio;
+        if (panel is View.Dlc or View.Android or View.Radio && panel != _panel)
+        {
+            if (!wasSide) _headlineBeforeDlc = HeadlineText.Text;
+            HeadlineText.Text = panel switch
+            {
+                View.Dlc => "Downloadable content",
+                View.Radio => "Custom radio",
+                _ => "Android"
+            };
+        }
+        else if (wasSide && panel is not (View.Dlc or View.Android or View.Radio)) HeadlineText.Text = _headlineBeforeDlc;
+        // The local network share serves only while its panel is open.
+        if (_panel == View.Android && panel != View.Android && _androidShare is not null) StopAndroidShare();
         _panel = panel;
+        SubheadText.Visibility = panel is View.Dlc or View.Android or View.Radio || string.IsNullOrEmpty(SubheadText.Text)
+            ? Visibility.Collapsed : Visibility.Visible;
         SetupPanel.Visibility = panel == View.Setup ? Visibility.Visible : Visibility.Collapsed;
         LogPanel.Visibility = panel == View.Log ? Visibility.Visible : Visibility.Collapsed;
         CrashPanel.Visibility = panel == View.Crash ? Visibility.Visible : Visibility.Collapsed;
         GraphicsPanel.Visibility = panel == View.Graphics ? Visibility.Visible : Visibility.Collapsed;
+        DlcPanel.Visibility = panel == View.Dlc ? Visibility.Visible : Visibility.Collapsed;
+        AndroidPanel.Visibility = panel == View.Android ? Visibility.Visible : Visibility.Collapsed;
+        RadioPanel.Visibility = panel == View.Radio ? Visibility.Visible : Visibility.Collapsed;
         // The route only tells something while there is setup left to do.
         RouteList.Visibility = panel is View.Setup or View.Log ? Visibility.Visible : Visibility.Collapsed;
         if (panel == View.Ready) UpdateSummary();
@@ -890,6 +1045,7 @@ public partial class MainWindow : Window
     {
         _gameExecutable = null;
         _pendingReport = null;
+        _restartRequired = false;
         foreach (var step in _steps)
             step.SetState(StepState.Waiting, WaitingBrush, ActiveBrush, CompleteBrush, FailedBrush);
         SetPrimaryText("Verify and build");
@@ -901,30 +1057,303 @@ public partial class MainWindow : Window
     private void UpdatePrimaryButton()
     {
         ChooseInstallRootButton.IsEnabled = !_busy && _canChooseInstallRoot &&
-            GraphicsPanel.Visibility != Visibility.Visible;
-        PrimaryButton.IsEnabled = !_busy && (_pendingReport is not null || _gameExecutable is not null ||
-            (_repositoryRoot is not null && File.Exists(IsoPathTextBox.Text) && OwnershipCheckBox.IsChecked == true));
+            _panel is not (View.Graphics or View.Dlc or View.Android or View.Radio);
+        PrimaryButton.IsEnabled = !_busy && _panel is not (View.Dlc or View.Android or View.Radio) && (_pendingReport is not null || _gameExecutable is not null ||
+            (_repositoryRoot is not null && (File.Exists(IsoPathTextBox.Text) || Directory.Exists(IsoPathTextBox.Text)) && OwnershipCheckBox.IsChecked == true));
         // The Android package is made from the game this PC built.
         AndroidButton.Visibility = _gameExecutable is not null && _pendingReport is null
             ? Visibility.Visible : Visibility.Collapsed;
-        AndroidButton.IsEnabled = !_busy;
+        AndroidButton.IsEnabled = !_busy && _panel is not (View.Dlc or View.Radio);
+        DlcButton.Visibility = _gameExecutable is not null && _pendingReport is null
+            ? Visibility.Visible : Visibility.Collapsed;
+        DlcButton.IsEnabled = !_busy;
+        RadioButton.Visibility = DlcButton.Visibility;
+        RadioButton.IsEnabled = !_busy;
+        GraphicsSettingsButton.IsEnabled = !_busy && _panel is not (View.Dlc or View.Radio);
     }
+
+    // ---- Android (ONE_CLICK_SETUP_BACKLOG A-1 to A-5) -----------------------
+
+    private AndroidShare? _androidShare;
+    private string? _adbDevice;
+
+    private string? AndroidApk => _repositoryRoot is null ? null
+        : Path.Combine(_repositoryRoot, ".local", "android", "pinyon-shift.apk");
+
+    private sealed record AndroidApkRecord(
+        [property: JsonPropertyName("title_update_v4")] bool TitleUpdateV4,
+        [property: JsonPropertyName("built_utc")] DateTime? BuiltUtc);
+
+    private AndroidApkRecord? ReadAndroidApkRecord()
+    {
+        if (_repositoryRoot is null) return null;
+        var path = Path.Combine(_repositoryRoot, ".local", "android", "pinyon-shift.json");
+        try { return File.Exists(path) ? JsonSerializer.Deserialize<AndroidApkRecord>(File.ReadAllText(path)) : null; }
+        catch (Exception ex) when (ex is IOException or JsonException) { return null; }
+    }
+
+    // Whether the player plays the v4 title update on the PC, so the Android
+    // package is built from it and the update is copied to the device.
+    private bool WantsTitleUpdateV4 => _titleUpdate is { Use: true, Built: true };
 
     private async void AndroidButton_Click(object sender, RoutedEventArgs e)
     {
         if (_busy || _repositoryRoot is null || _gameExecutable is null) return;
-        var script = Path.Combine(_repositoryRoot, "tools", "build-android.ps1");
-        if (!File.Exists(script))
+        if (_panel is not (View.Android or View.Dlc or View.Radio)) _panelBeforeDlc = _panel;
+        ShowPanel(View.Android);
+        RefreshAndroidPanel();
+        try { _titleUpdate = await RunTitleUpdateToolAsync("status"); } catch (Exception) { }
+        RefreshAndroidPanel();
+        await DetectAdbDeviceAsync();
+    }
+
+    private void RefreshAndroidPanel()
+    {
+        var apk = AndroidApk;
+        var built = apk is not null && File.Exists(apk);
+        var record = ReadAndroidApkRecord();
+        var unavailable = _repositoryRoot is null ||
+                          !File.Exists(Path.Combine(_repositoryRoot, "tools", "build-android.ps1"));
+        if (built)
         {
-            SetFailure("Android build unavailable", "This release does not include the Android build workflow.");
-            SetPrimaryText("Play");
+            var info = new FileInfo(apk!);
+            AndroidApkText.Text = $"{apk}\n{info.Length / (1024.0 * 1024.0):0} MB, built {info.LastWriteTime:g}" +
+                (record?.TitleUpdateV4 == true ? ", title update v4." : ".") +
+                (WantsTitleUpdateV4 != (record?.TitleUpdateV4 == true)
+                    ? WantsTitleUpdateV4
+                        ? " You play v4 on this PC now: build again for a v4 package."
+                        : " You play the base disc on this PC now: build again for a base package."
+                    : string.Empty);
+        }
+        else
+        {
+            AndroidApkText.Text = unavailable
+                ? "This release does not include the Android build."
+                : "Not built yet. The first build takes 20 to 60 minutes and about 15 GB of disk" +
+                  (WantsTitleUpdateV4 ? "; it is made from title update v4, as you play on this PC." : ".");
+        }
+        AndroidBuildButton.Content = built ? "Build again" : "Build APK";
+        AndroidBuildButton.IsEnabled = !_busy && !unavailable;
+        AndroidShowButton.IsEnabled = built;
+        AndroidSaveButton.IsEnabled = built;
+        AndroidShareButton.IsEnabled = !_busy && built;
+        AndroidShareButton.Content = _androidShare is null ? "Share on Wi-Fi" : "Stop sharing";
+        AndroidUsbButton.IsEnabled = !_busy && built;
+    }
+
+    private void CloseAndroidButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy) return;
+        StopAndroidShare();
+        ShowPanel(_panelBeforeDlc);
+        UpdatePrimaryButton();
+    }
+
+    private void AndroidShowButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (AndroidApk is { } apk && File.Exists(apk))
+            Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{apk}\"") { UseShellExecute = true });
+    }
+
+    private async void AndroidSaveButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (AndroidApk is not { } apk || !File.Exists(apk)) return;
+        var dialog = new SaveFileDialog
+        {
+            Title = "Save a copy of the Android package",
+            FileName = "PinyonShift.apk",
+            Filter = "Android package|*.apk",
+            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) is { } home
+                ? Path.Combine(home, "Downloads") : null
+        };
+        if (dialog.ShowDialog(this) != true) return;
+        try
+        {
+            await Task.Run(() => File.Copy(apk, dialog.FileName, overwrite: true));
+            AndroidStatusText.Text = $"Saved {dialog.FileName}. Copy it to the device and open it there to install.";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            AndroidStatusText.Text = $"The copy failed: {ex.Message}";
+        }
+    }
+
+    private void AndroidShareButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_androidShare is not null)
+        {
+            StopAndroidShare();
+            AndroidStatusText.Text = "Sharing stopped.";
             return;
         }
+        if (AndroidApk is not { } apk || !File.Exists(apk) || _repositoryRoot is null || _stateRoot is null) return;
+        var addresses = AndroidShare.LocalAddresses();
+        if (addresses.Count == 0)
+        {
+            AndroidStatusText.Text = "This PC is not on a local network. Connect it to the same Wi-Fi or router as the device.";
+            return;
+        }
+        var record = ReadAndroidApkRecord();
+        IReadOnlyList<ShareGroup> groups;
+        try { groups = AndroidShareGroups(record?.TitleUpdateV4 == true); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            AndroidStatusText.Text = $"The game files cannot be read: {ex.Message}";
+            return;
+        }
+        var share = new AndroidShare(apk, groups, new
+        {
+            title_update_v4 = record?.TitleUpdateV4 == true,
+            club = record?.TitleUpdateV4 == true && _titleUpdate?.Club == true
+        });
+        share.Activity += message => Dispatcher.BeginInvoke(() =>
+        {
+            AndroidStatusText.Text = message;
+            AppendLog(message);
+        });
+        try { share.Start(); }
+        catch (Exception ex) when (ex is System.Net.Sockets.SocketException or UnauthorizedAccessException)
+        {
+            share.Dispose();
+            AndroidStatusText.Text = $"Sharing could not start: {ex.Message}";
+            return;
+        }
+        _androidShare = share;
+        var url = share.PageUrl(addresses[0]);
+        AndroidQrImage.Source = QrCode.Encode(url).ToBitmap();
+        AndroidQrPanel.Visibility = Visibility.Visible;
+        AndroidCodeText.Inlines.Clear();
+        AndroidCodeText.Inlines.Add(new System.Windows.Documents.Run("Pairing code  "));
+        AndroidCodeText.Inlines.Add(new System.Windows.Documents.Run(share.Code[..3] + " " + share.Code[3..])
+        { FontSize = 26, FontFamily = new FontFamily("Bahnschrift SemiBold"), Foreground = ActiveBrush });
+        AndroidCodeText.Inlines.Add(new System.Windows.Documents.LineBreak());
+        AndroidCodeText.Inlines.Add(new System.Windows.Documents.Run(
+            $"Without the camera, open {url} in the device's browser." +
+            (addresses.Count > 1 ? $" This PC is also at {string.Join(", ", addresses.Skip(1))}." : string.Empty) +
+            $" On the device, the app finds this PC by itself, or enter {addresses[0]}.")
+        { FontSize = 12, Foreground = (Brush)FindResource("MutedBrush") });
+        AndroidCodeText.Visibility = Visibility.Visible;
+        var total = groups.Sum(group => group.Bytes);
+        AndroidStatusText.Text = $"Sharing: {string.Join(", ", groups.Select(group => group.Label))} " +
+            $"({total / (1024.0 * 1024 * 1024):0.0} GB). Windows may ask to allow the launcher on private networks: allow it.";
+        AppendLog($"Sharing the Android package and game files at {url}.");
+        RefreshAndroidPanel();
+    }
+
+    private void StopAndroidShare()
+    {
+        _androidShare?.Dispose();
+        _androidShare = null;
+        AndroidQrPanel.Visibility = Visibility.Collapsed;
+        AndroidQrImage.Source = null;
+        AndroidCodeText.Visibility = Visibility.Collapsed;
+        RefreshAndroidPanel();
+    }
+
+    // What the device can copy: the extracted game, and from the PC's state
+    // the v4 update (for a v4 package), imported DLC, the Rally overlay and,
+    // only when chosen on the device, the save the PC plays.
+    private IReadOnlyList<ShareGroup> AndroidShareGroups(bool titleUpdateV4)
+    {
+        var groups = new List<ShareGroup>();
+        IReadOnlyList<ShareFile> Tree(string source, string destination, Func<string, bool>? include = null)
+        {
+            if (!Directory.Exists(source)) return [];
+            return Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories)
+                .Select(path => (path, relative: Path.GetRelativePath(source, path).Replace('\\', '/')))
+                .Where(entry => include?.Invoke(entry.relative) ?? true)
+                .Select(entry => new ShareFile(entry.path, destination + "/" + entry.relative, new FileInfo(entry.path).Length))
+                .ToList();
+        }
+        var game = Path.Combine(_repositoryRoot!, ".local", "game", "base");
+        if (!File.Exists(Path.Combine(game, "default.xex")))
+            throw new IOException($"The extracted game is not at {game}. Build and play on this PC first.");
+        groups.Add(new ShareGroup("game", "game files", true, Tree(game, "game/base")));
+        var state = _stateRoot!;
+        if (titleUpdateV4)
+        {
+            var update = Tree(Path.Combine(state, "title-update-v4"), "state/title-update-v4",
+                name => !name.Contains('/'));
+            if (update.Count > 0) groups.Add(new ShareGroup("title_update_v4", "title update v4", true, update));
+        }
+        var dlc = Tree(Path.Combine(state, "user", "0000000000000000", "4D5309C9"), "state/user/0000000000000000/4D5309C9")
+            .Concat(Tree(Path.Combine(state, "dlc"), "state/dlc",
+                name => name.EndsWith(".json", StringComparison.OrdinalIgnoreCase) && !name.Contains('/')))
+            .ToList();
+        if (dlc.Count > 0) groups.Add(new ShareGroup("dlc", "DLC", true, dlc));
+        var rally = Tree(Path.Combine(state, "cache", "rally_adapter"), "state/cache/rally_adapter");
+        if (rally.Count > 0) groups.Add(new ShareGroup("rally", "Rally", true, rally));
+        // The PC plays from user-modded while cheats or mods are on: offer the
+        // tree written last.
+        static bool IsSave(string name) => !name.StartsWith("0000000000000000/", StringComparison.Ordinal);
+        var save = new[] { "user", "user-modded" }
+            .Select(tree => Tree(Path.Combine(state, tree), "state/user", IsSave))
+            .Where(files => files.Count > 0)
+            .OrderByDescending(files => files.Max(file => File.GetLastWriteTimeUtc(file.Source)))
+            .FirstOrDefault();
+        if (save is not null) groups.Add(new ShareGroup("save", "this PC's save", false, save));
+        return groups;
+    }
+
+    private static string? FindAdb(string? repositoryRoot)
+    {
+        var roots = new List<string?>
+        {
+            Environment.GetEnvironmentVariable("ANDROID_HOME"),
+            Environment.GetEnvironmentVariable("ANDROID_SDK_ROOT"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Android", "Sdk"),
+            repositoryRoot is null ? null : Path.Combine(repositoryRoot, ".local", "toolchain", "android-sdk")
+        };
+        return roots.Where(root => !string.IsNullOrWhiteSpace(root))
+            .Select(root => Path.Combine(root!, "platform-tools", "adb.exe"))
+            .FirstOrDefault(File.Exists);
+    }
+
+    // A device with USB debugging on, for developers (A-5); the button stays
+    // hidden otherwise.
+    private async Task DetectAdbDeviceAsync()
+    {
+        _adbDevice = null;
+        AndroidUsbButton.Visibility = Visibility.Collapsed;
+        if (FindAdb(_repositoryRoot) is not { } adb) return;
+        try
+        {
+            var output = await Task.Run(() =>
+            {
+                using var process = Process.Start(new ProcessStartInfo(adb, "devices")
+                {
+                    UseShellExecute = false, RedirectStandardOutput = true, CreateNoWindow = true
+                })!;
+                var text = process.StandardOutput.ReadToEnd();
+                if (!process.WaitForExit(10000)) process.Kill();
+                return text;
+            });
+            _adbDevice = output.Split('\n').Skip(1)
+                .Select(line => line.Trim().Split('\t'))
+                .Where(parts => parts.Length == 2 && parts[1] == "device")
+                .Select(parts => parts[0]).FirstOrDefault();
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException) { }
+        if (_adbDevice is not null && _panel == View.Android)
+        {
+            AndroidUsbButton.Visibility = Visibility.Visible;
+            AutomationProperties.SetHelpText(AndroidUsbButton,
+                $"Install the app and copy the game to {_adbDevice} over USB with adb.");
+        }
+    }
+
+    private async void AndroidBuildButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy || _repositoryRoot is null || _gameExecutable is null) return;
+        var script = Path.Combine(_repositoryRoot, "tools", "build-android.ps1");
+        if (!File.Exists(script)) return;
+        var v4 = WantsTitleUpdateV4;
         // The player sees what will be downloaded and accepts the Android SDK license
         // before sdkmanager is answered for them.
         var answer = MessageBox.Show(this,
-            "Build an Android package (APK) of the game from this PC's build, for your own device. " +
-            "The first build takes 20 to 60 minutes and about 10 GB of disk.\n\n" +
+            "Build an Android package (APK) of the game from this PC's build, for your own device" +
+            (v4 ? ", with title update v4 as you play it here" : string.Empty) + ". " +
+            "The first build takes 20 to 60 minutes and about 15 GB of disk.\n\n" +
             "If this PC has no Android SDK or JDK, the launcher downloads Google's Android SDK command-line " +
             "tools and the Eclipse Temurin JDK 17 into the install folder, then installs the Android NDK, " +
             "build tools and platform. Those packages are covered by the Android Software Development Kit " +
@@ -932,7 +1361,47 @@ public partial class MainWindow : Window
             "Accept the Android SDK license and build?",
             "Build Android APK", MessageBoxButton.YesNo, MessageBoxImage.Question);
         if (answer != MessageBoxResult.Yes) return;
+        StopAndroidShare();
+        var arguments = new List<string> { "-AcceptAndroidLicenses" };
+        if (v4) arguments.Add("-TitleUpdateV4");
+        var succeeded = await RunAndroidScriptAsync(script, arguments, "Building for Android",
+            "The first build takes 20 to 60 minutes. You can leave it running.", "The Android build");
+        if (!succeeded) return;
+        if (AndroidApk is not { } apk || !File.Exists(apk))
+        {
+            SetFailure("Android build stopped", "The Android build completed without producing pinyon-shift.apk.");
+            SetPrimaryText("Play");
+            return;
+        }
+        AppendLog($"Android package: {apk}");
+        HeadlineText.Text = "Android package ready";
+        ShowPanel(View.Android);
+        RefreshAndroidPanel();
+        AndroidStatusText.Text = "Ready. Share on Wi-Fi to install it on the device, or save a copy.";
+    }
 
+    private async void AndroidUsbButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy || _repositoryRoot is null || _stateRoot is null || _adbDevice is null) return;
+        var script = Path.Combine(_repositoryRoot, "tools", "install-android-usb.ps1");
+        if (!File.Exists(script)) return;
+        StopAndroidShare();
+        var arguments = new List<string> { "-Serial", _adbDevice, "-StateRoot", _stateRoot };
+        if (ReadAndroidApkRecord()?.TitleUpdateV4 == true) arguments.Add("-TitleUpdateV4");
+        if (!await RunAndroidScriptAsync(script, arguments, "Installing over USB",
+                "The game files are about 7 GB; an interrupted copy resumes.", "The USB installation"))
+            return;
+        HeadlineText.Text = "Installed on the device";
+        ShowPanel(View.Android);
+        RefreshAndroidPanel();
+        AndroidStatusText.Text = $"Installed on {_adbDevice}. Start Pinyon Shift from the device's app list.";
+    }
+
+    // Runs an Android script with the launcher's progress events and its
+    // failure report (.local/logs/android-error.json); true when it succeeded.
+    private async Task<bool> RunAndroidScriptAsync(string script, IEnumerable<string> arguments, string headline,
+        string subhead, string what)
+    {
         _busy = true;
         ChooseInstallRootButton.IsEnabled = false;
         GraphicsSettingsButton.IsEnabled = false;
@@ -941,11 +1410,10 @@ public partial class MainWindow : Window
         _cancellation?.Dispose();
         _cancellation = new CancellationTokenSource();
         ShowPanel(View.Log);
-        SetProgress(0, "Starting the Android build.");
-        HeadlineText.Text = "Building for Android";
-        SetSubhead("The first build takes 20 to 60 minutes. You can leave it running.");
-        AppendLog("Starting the Android build.");
-
+        SetProgress(0, $"Starting: {headline.ToLowerInvariant()}.");
+        HeadlineText.Text = headline;
+        SetSubhead(subhead);
+        AppendLog($"{headline}.");
         var startedUtc = DateTime.UtcNow;
         _setupFailurePrinted = false;
         try
@@ -959,8 +1427,8 @@ public partial class MainWindow : Window
                 RedirectStandardError = true,
                 CreateNoWindow = true
             };
-            foreach (var argument in new[] { "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script,
-                         "-AcceptAndroidLicenses", "-JsonEvents" })
+            foreach (var argument in new[] { "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script }
+                         .Concat(arguments).Append("-JsonEvents"))
                 startInfo.ArgumentList.Add(argument);
 
             using var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
@@ -970,7 +1438,7 @@ public partial class MainWindow : Window
                 if (!string.IsNullOrWhiteSpace(args.Data)) AppendLog(args.Data);
             });
             if (!process.Start())
-                throw new InvalidOperationException("Windows could not start the Android build.");
+                throw new InvalidOperationException($"Windows could not start {what.ToLowerInvariant()}.");
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
             using var registration = _cancellation.Token.Register(() =>
@@ -980,25 +1448,17 @@ public partial class MainWindow : Window
             await process.WaitForExitAsync(_cancellation.Token);
             if (process.ExitCode != 0)
                 throw new InvalidOperationException(DescribeSetupFailure(process.ExitCode, startedUtc,
-                    "android-error.json", "The Android build"));
-
-            var apk = Path.Combine(_repositoryRoot, ".local", "android", "pinyon-shift.apk");
-            if (!File.Exists(apk))
-                throw new InvalidOperationException("The Android build completed without producing pinyon-shift.apk.");
-            SetProgress(100, "Android package ready.");
-            HeadlineText.Text = "Android package ready";
-            SetSubhead("Install it on your own device: copy the APK over, or with USB debugging run " +
-                "\"python tools\\pinyon.py android install\" and \"android push-data\" in the install folder.");
-            AppendLog($"Android package: {apk}");
-            Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{apk}\"") { UseShellExecute = true });
+                    "android-error.json", what));
+            SetProgress(100, $"{what} finished.");
+            return true;
         }
         catch (OperationCanceledException)
         {
-            SetFailure("Android build cancelled", "Start it again to resume where it stopped.");
+            SetFailure($"{what} cancelled", "Start it again to resume where it stopped.");
         }
         catch (Exception ex)
         {
-            SetFailure("Android build stopped", ex.Message);
+            SetFailure($"{what} stopped", ex.Message);
         }
         finally
         {
@@ -1008,6 +1468,7 @@ public partial class MainWindow : Window
             SetPrimaryText("Play");
             UpdatePrimaryButton();
         }
+        return false;
     }
 
     private void AppendLog(string line)
@@ -1049,6 +1510,19 @@ public partial class MainWindow : Window
             });
             return;
         }
+        // Once the game has run, its own log (runtime.log, with the GPU and
+        // driver at the top) is what a report needs; before that, setup's.
+        var runtimeLog = Path.Combine(_stateRoot, "logs", "runtime.log");
+        if (File.Exists(runtimeLog))
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                UseShellExecute = true,
+                Arguments = $"/select,\"{runtimeLog}\""
+            });
+            return;
+        }
         var logs = Path.Combine(_repositoryRoot, ".local", "logs");
         Directory.CreateDirectory(logs);
         Process.Start(new ProcessStartInfo("explorer.exe", logs) { UseShellExecute = true });
@@ -1079,6 +1553,9 @@ public partial class MainWindow : Window
         Process.Start(new ProcessStartInfo(
             "https://github.com/arcanite24/pinyon-shift/issues/new?template=bug.yml")
         { UseShellExecute = true });
+
+    private static void OpenUrl(string url) =>
+        Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
 
     private void ProjectButton_Click(object sender, RoutedEventArgs e) =>
         Process.Start(new ProcessStartInfo("https://github.com/arcanite24/pinyon-shift") { UseShellExecute = true });
@@ -1119,6 +1596,721 @@ public partial class MainWindow : Window
         {
             GraphicsStatusText.Text = $"Settings could not be loaded: {ex.Message}";
         }
+        await ShowHardwareCheckAsync();
+    }
+
+    private string? _installRoot;
+
+    // A build takes 20 to 60 minutes, and the game cannot start without a
+    // Vulkan 1.3 driver, so a missing or old driver is raised before it, with
+    // the vendor's driver page (#393). The player may build anyway.
+    private bool ConfirmGraphicsDriverBeforeBuild()
+    {
+        try { _hardware ??= HardwareCheck.Probe(DisplayRefresh(_graphicsSettings?.Monitor ?? 0)); }
+        catch (Exception) { return true; }
+        if (HardwareCheck.Recommend(_hardware).Warning is not { } warning)
+            return true;
+        var answer = MessageBox.Show(this,
+            $"{warning}\n\nThe build takes 20 to 60 minutes and the game will not start without a Vulkan 1.3 " +
+            "driver.\n\nYes: build anyway. No: open the driver download page. Cancel: do nothing.",
+            "Graphics driver", MessageBoxButton.YesNoCancel, MessageBoxImage.Warning);
+        if (answer == MessageBoxResult.No)
+            OpenUrl(HardwareCheck.DriverPage(_hardware.Gpu));
+        return answer == MessageBoxResult.Yes;
+    }
+
+    // LS-1.7: the GPU, its memory and Vulkan version, the CPU and the display,
+    // once per launcher run, with the in-game preset that suits them.
+    private HardwareInfo? _hardware;
+    private Recommendation? _recommendation;
+
+    private async Task ShowHardwareCheckAsync()
+    {
+        try
+        {
+            var refresh = DisplayRefresh(_graphicsSettings?.Monitor ?? 0);
+            _hardware ??= await Task.Run(() => HardwareCheck.Probe(refresh));
+            _recommendation = HardwareCheck.Recommend(_hardware);
+            HardwareText.Text = HardwareCheck.Describe(_hardware);
+            UpdateRecommendationText();
+        }
+        catch (Exception ex)
+        {
+            HardwareText.Text = $"The hardware check failed: {ex.Message}";
+            RecommendationText.Text = string.Empty;
+            UseRecommendedButton.IsEnabled = false;
+        }
+    }
+
+    private void UpdateRecommendationText()
+    {
+        if (_recommendation is not { } recommendation) return;
+        var inUse = string.Equals(_graphicsSettings?.GamePreset, recommendation.Preset, StringComparison.Ordinal);
+        RecommendationText.Text = $"Recommended: {recommendation.Label}. {recommendation.Reason}" +
+            (inUse ? " In use." : string.Empty) +
+            (recommendation.Warning is { } warning ? $" {warning}" : string.Empty);
+        UseRecommendedButton.Content = $"Use {recommendation.Label}";
+        UseRecommendedButton.IsEnabled = !inUse && !_busy;
+        AutomationProperties.SetHelpText(UseRecommendedButton,
+            $"Set the in-game graphics preset to {recommendation.Label}.");
+    }
+
+    private async void UseRecommendedButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_recommendation is not { } recommendation) return;
+        if (await ChangeGraphicsSettingsAsync("Apply", $"{recommendation.Label} saved. Applies at the next start.",
+                gamePreset: recommendation.Preset))
+        {
+            UpdateRecommendationText();
+        }
+    }
+
+    private async void DlcButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy || _repositoryRoot is null || _stateRoot is null) return;
+        if (_panel is not (View.Dlc or View.Android or View.Radio)) _panelBeforeDlc = _panel;
+        ShowPanel(View.Dlc);
+        await ChangeDlcAsync("list", success: "Changes apply the next time you start the game.");
+        await RefreshTitleUpdateAsync();
+        await RefreshXeAsync();
+    }
+
+    private async Task RefreshTitleUpdateAsync(string? message = null)
+    {
+        try { ApplyTitleUpdate(await RunTitleUpdateToolAsync("status"), message); }
+        catch (Exception ex) { TitleUpdateStatusText.Text = ex.Message; }
+    }
+
+    private void ApplyTitleUpdate(TitleUpdateStatus status, string? message = null)
+    {
+        _titleUpdate = status;
+        TitleUpdateToggleButton.IsEnabled = status.Installed;
+        TitleUpdateClubCheckBox.IsEnabled = status.Installed;
+        TitleUpdateClubCheckBox.IsChecked = status.Club;
+        TitleUpdateToggleButton.Content = status.Use ? "Use base disc" : "Use v4";
+        AutomationProperties.SetName(TitleUpdateToggleButton,
+            status.Use ? "Use the base disc instead of title update v4" : "Use title update v4");
+        TitleUpdateStatusText.Text = message ?? (!status.Installed
+            ? "Not installed. Import your own update; it is checked against your disc."
+            : status.Use
+                ? "On. v4 saves cannot go back to the base disc; your profile is backed up first."
+                : "Verified and off. The game runs the base disc.");
+    }
+
+    private async void ImportTitleUpdateButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy) return;
+        var file = new OpenFileDialog { Title = "Choose your FH1 title update package or ZIP", Filter = "Title updates and ZIPs|*.*" };
+        string? source = null;
+        if (file.ShowDialog(this) == true) source = file.FileName;
+        else
+        {
+            var folder = new OpenFolderDialog { Title = "Or choose the folder with your FH1 title update" };
+            if (folder.ShowDialog(this) == true) source = folder.FolderName;
+        }
+        if (source is null) return;
+        await ChangeTitleUpdateAsync("import", source, "Title update verified against your disc. Choose Use v4 to play it.");
+    }
+
+    private async void TitleUpdateClubCheckBox_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy || _titleUpdate is null) return;
+        var on = TitleUpdateClubCheckBox.IsChecked == true;
+        await ChangeTitleUpdateAsync(on ? "club-on" : "club-off", null,
+            on ? "1000 Club runs offline the next time you start v4." : "1000 Club needs the Forza server again (offline play is off).");
+    }
+
+    private async void TitleUpdateToggleButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy || _titleUpdate is null) return;
+        if (!_titleUpdate.Use)
+        {
+            var answer = MessageBox.Show(this,
+                "Title update v4 runs the original Rally and 1000 Club code.\n\n" +
+                "Saves it writes cannot be loaded by the base disc. Your current profile is backed up " +
+                "before the first v4 start, and you can restore it when you switch back.\n\nUse v4?",
+                "FH1 title update v4", MessageBoxButton.YesNo, MessageBoxImage.Information);
+            if (answer == MessageBoxResult.Yes)
+                await ChangeTitleUpdateAsync("enable", null, "v4 is on. It is built the next time you start, if needed.");
+            return;
+        }
+        await ChangeTitleUpdateAsync("disable", null, "The base disc is on.");
+        if (_titleUpdate is { } status && status.Profiles.ContainsValue("v4"))
+        {
+            if (status.PreV4Backups.Count == 0)
+            {
+                TitleUpdateStatusText.Text = "The base disc is on, but your profile was saved by v4 and no pre-v4 backup exists. The base disc cannot load it.";
+                return;
+            }
+            var restore = MessageBox.Show(this,
+                "Your profile was saved by v4, which the base disc cannot load.\n\n" +
+                "Restore the profile backed up before v4? Your v4 saves are kept in the backups folder.",
+                "FH1 title update v4", MessageBoxButton.YesNo, MessageBoxImage.Question);
+            if (restore == MessageBoxResult.Yes)
+                await ChangeTitleUpdateAsync("restore", null, "Restored the profile from before v4. Your v4 saves are kept in backups.");
+        }
+    }
+
+    private async Task ChangeTitleUpdateAsync(string action, string? source, string success)
+    {
+        _busy = true;
+        TitleUpdateControls.IsEnabled = false;
+        UpdatePrimaryButton();
+        TitleUpdateStatusText.Text = action == "import" ? "Verifying the title update against your disc…" : "Updating…";
+        try { ApplyTitleUpdate(await RunTitleUpdateToolAsync(action, source), success); }
+        catch (Exception ex)
+        {
+            await RefreshTitleUpdateAsync(ex.Message);
+            AppendLog($"Title update: {ex.Message}");
+        }
+        finally
+        {
+            _busy = false;
+            TitleUpdateControls.IsEnabled = true;
+            UpdatePrimaryButton();
+        }
+    }
+
+    private async Task<TitleUpdateStatus> RunTitleUpdateToolAsync(string action, string? source = null)
+    {
+        if (_repositoryRoot is null || _stateRoot is null)
+            throw new InvalidOperationException("Release source is not ready.");
+        var start = new ProcessStartInfo
+        {
+            FileName = PowerShellExecutable(), WorkingDirectory = _repositoryRoot,
+            UseShellExecute = false, CreateNoWindow = true,
+            RedirectStandardOutput = true, RedirectStandardError = true
+        };
+        foreach (var argument in new[] { "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+            Path.Combine(_repositoryRoot, "tools", "manage-title-update.ps1"), "-Action", action, "-StateRoot", _stateRoot })
+            start.ArgumentList.Add(argument);
+        if (source is not null) { start.ArgumentList.Add("-InputPath"); start.ArgumentList.Add(source); }
+        using var process = Process.Start(start) ?? throw new InvalidOperationException("Windows could not start title-update management.");
+        var output = process.StandardOutput.ReadToEndAsync();
+        var error = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        var stdout = (await output).Trim();
+        var stderr = (await error).Trim();
+        if (process.ExitCode != 0)
+            throw new InvalidOperationException(string.IsNullOrWhiteSpace(stderr) ? "Title-update management stopped." : stderr);
+        var json = stdout[(stdout.LastIndexOf('\n') + 1)..];
+        return JsonSerializer.Deserialize<TitleUpdateStatus>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+            ?? throw new InvalidDataException("Title-update management returned an invalid result.");
+    }
+
+    private async Task RunStreamingToolAsync(string script, string[] arguments, CancellationToken cancellation)
+    {
+        if (_repositoryRoot is null) throw new InvalidOperationException("Release source is not ready.");
+        var start = new ProcessStartInfo
+        {
+            FileName = PowerShellExecutable(), WorkingDirectory = _repositoryRoot,
+            UseShellExecute = false, CreateNoWindow = true,
+            RedirectStandardOutput = true, RedirectStandardError = true
+        };
+        foreach (var argument in new[] { "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+            Path.Combine(_repositoryRoot, "tools", script) }.Concat(arguments))
+            start.ArgumentList.Add(argument);
+        using var process = new Process { StartInfo = start };
+        process.OutputDataReceived += (_, args) => { if (args.Data is not null) Dispatcher.Invoke(() => AppendLog(args.Data)); };
+        process.ErrorDataReceived += (_, args) => { if (args.Data is not null) Dispatcher.Invoke(() => AppendLog(args.Data)); };
+        if (!process.Start()) throw new InvalidOperationException($"Windows could not start {script}.");
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+        using var registration = cancellation.Register(() =>
+        {
+            try { if (!process.HasExited) process.Kill(entireProcessTree: true); } catch { }
+        });
+        await process.WaitForExitAsync(cancellation);
+        if (process.ExitCode != 0) throw new InvalidOperationException($"{script} failed. See the log above.");
+    }
+
+    private async Task RefreshXeAsync(string? message = null)
+    {
+        try { ApplyXe(await RunXeToolAsync("status"), message); }
+        catch (Exception ex) { XeStatusText.Text = ex.Message; }
+    }
+
+    private void ApplyXe(XeStatus status, string? message = null)
+    {
+        _xe = status;
+        XeToggleButton.IsEnabled = status.Installed;
+        XeToggleButton.Content = status.Enabled ? "Turn off" : "Use XE";
+        XeInstallButton.Content = status.Installed ? "Reinstall" : "Install XE";
+        AutomationProperties.SetName(XeToggleButton, status.Enabled ? "Play without the XE mod" : "Play with the XE mod");
+        XeStatusText.Text = message ?? (!status.Installed
+            ? "Not installed. Download from ModDB opens both downloads in your browser and installs them when they finish; Install XE takes archives you already have."
+            : status.Enabled
+                ? $"XE {status.Version} is on. It plays its own new save and hides Horizon Rally; your base save is kept."
+                : $"XE {status.Version} is installed and off. The game runs as on the disc.");
+    }
+
+    private async void InstallXeButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy) return;
+        var picker = new OpenFileDialog
+        {
+            Title = "Choose the XE 1.0 download and the 1.01 hotfix",
+            Filter = "XE mod archives (*.7z)|*.7z|All files|*.*",
+            Multiselect = true
+        };
+        if (picker.ShowDialog(this) != true) return;
+        await ChangeXeAsync("install", picker.FileNames,
+            "XE is installed and on. Its first start creates a new save.");
+    }
+
+    // ModDB disallows automated downloads, so the player's browser fetches both
+    // archives and the tool installs them from Downloads when they finish (#426).
+    private async void DownloadXeButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy) return;
+        await ChangeXeAsync("download", [],
+            "XE is installed and on. Its first start creates a new save.");
+    }
+
+    private async void XeToggleButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy || _xe is null) return;
+        if (_xe.Enabled)
+        {
+            await ChangeXeAsync("disable", [], "XE is off. Your base save is used again.");
+            return;
+        }
+        var answer = MessageBox.Show(this,
+            "The XE mod adds cars and replaces the game's database.\n\n" +
+            "It plays its own new save, so your current save is kept as it is, and it hides the " +
+            "Horizon Rally expansion while it is on. Title update v4 is not used with XE.\n\nUse XE?",
+            "Forza Horizon XE mod", MessageBoxButton.YesNo, MessageBoxImage.Information);
+        if (answer == MessageBoxResult.Yes)
+            await ChangeXeAsync("enable", [], "XE is on. It starts with a new save.");
+    }
+
+    private async Task ChangeXeAsync(string action, string[] archives, string success)
+    {
+        _busy = true;
+        XeControls.IsEnabled = false;
+        UpdatePrimaryButton();
+        XeStatusText.Text = action switch
+        {
+            "install" => "Checking and extracting the XE archives. This takes a few minutes…",
+            "download" => "Download both files on the ModDB pages that opened (XE by Teancum, 3.7 GB). " +
+                          "Installing starts by itself when they finish in your Downloads folder…",
+            _ => "Updating…"
+        };
+        try { ApplyXe(await RunXeToolAsync(action, archives), success); }
+        catch (Exception ex)
+        {
+            await RefreshXeAsync(ex.Message);
+            AppendLog($"XE mod: {ex.Message}");
+        }
+        finally
+        {
+            _busy = false;
+            XeControls.IsEnabled = true;
+            UpdatePrimaryButton();
+        }
+    }
+
+    private async Task<XeStatus> RunXeToolAsync(string action, string[]? archives = null)
+    {
+        if (_repositoryRoot is null || _stateRoot is null)
+            throw new InvalidOperationException("Release source is not ready.");
+        var start = new ProcessStartInfo
+        {
+            FileName = PowerShellExecutable(), WorkingDirectory = _repositoryRoot,
+            UseShellExecute = false, CreateNoWindow = true,
+            RedirectStandardOutput = true, RedirectStandardError = true
+        };
+        foreach (var argument in new[] { "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+            Path.Combine(_repositoryRoot, "tools", "manage-xe.ps1"), "-Action", action, "-StateRoot", _stateRoot })
+            start.ArgumentList.Add(argument);
+        foreach (var archive in archives ?? []) start.ArgumentList.Add(archive);
+        using var process = Process.Start(start) ?? throw new InvalidOperationException("Windows could not start XE management.");
+        var output = process.StandardOutput.ReadToEndAsync();
+        var error = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        var stdout = (await output).Trim();
+        var stderr = (await error).Trim();
+        var json = stdout[(stdout.LastIndexOf('\n') + 1)..];
+        var status = json.StartsWith('{')
+            ? JsonSerializer.Deserialize<XeStatus>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+            : null;
+        if (process.ExitCode != 0 || status is null)
+            throw new InvalidOperationException(status?.Error ?? (string.IsNullOrWhiteSpace(stderr) ? "XE management stopped." : stderr));
+        // install reports what it did; read the full status afterwards.
+        return action == "install" ? await RunXeToolAsync("status") : status;
+    }
+
+    // ---- Custom radio stations (#445) ----------------------------------------
+
+    private async void RadioButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy || _repositoryRoot is null || _stateRoot is null) return;
+        if (_panel is not (View.Dlc or View.Android or View.Radio)) _panelBeforeDlc = _panel;
+        ShowPanel(View.Radio);
+        await ChangeRadioAsync("list");
+    }
+
+    private void CloseRadioButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy) return;
+        ShowPanel(_panelBeforeDlc);
+        UpdatePrimaryButton();
+    }
+
+    private async void RadioNew_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy) return;
+        await ChangeRadioAsync("create", value: "My Station",
+            success: "Station added. Rename it, add a music folder or songs, then build stations.");
+    }
+
+    private async void RadioName_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is not TextBox { Tag: RadioStation station } box) return;
+        var name = box.Text.Trim();
+        if (_busy || name.Length == 0 || name == station.Name)
+        {
+            box.Text = station.Name;
+            return;
+        }
+        await ChangeRadioAsync("rename", station.Slot, name, success: $"Renamed to {name}.");
+    }
+
+    private void RadioName_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter && sender is TextBox) Keyboard.ClearFocus();
+        else if (e.Key == Key.Escape && sender is TextBox { Tag: RadioStation station } box)
+        {
+            box.Text = station.Name;
+            Keyboard.ClearFocus();
+        }
+    }
+
+    private async void RadioKeepStock_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy || sender is not CheckBox { Tag: RadioStation station } box) return;
+        var keep = box.IsChecked == true;
+        await ChangeRadioAsync("mode", station.Slot, keep ? "add" : "replace",
+            success: keep ? "Your songs join the station's own." : "Only your songs play on this station.");
+    }
+
+    private async void RadioAddFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy || (sender as Button)?.Tag is not RadioStation station) return;
+        var picker = new OpenFolderDialog { Title = $"Choose music folders for {station.Name}", Multiselect = true };
+        if (picker.ShowDialog(this) == true)
+            await ChangeRadioAsync("add", station.Slot, paths: picker.FolderNames, success: "Music added.");
+    }
+
+    private async void RadioAddFiles_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy || (sender as Button)?.Tag is not RadioStation station) return;
+        var picker = new OpenFileDialog
+        {
+            Title = $"Choose songs for {station.Name}", Multiselect = true,
+            Filter = "Music|*.mp3;*.wav;*.flac;*.ogg;*.m4a;*.aac;*.opus;*.wma|All files|*.*"
+        };
+        if (picker.ShowDialog(this) == true)
+            await ChangeRadioAsync("add", station.Slot, paths: picker.FileNames, success: "Songs added.");
+    }
+
+    private async void RadioClear_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy || (sender as Button)?.Tag is not RadioStation station || station.Sources.Count == 0) return;
+        await ChangeRadioAsync("remove", station.Slot, paths: [.. station.Sources],
+            success: "Music cleared. Your files were not touched.");
+    }
+
+    private async void RadioLogo_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy || (sender as Button)?.Tag is not RadioStation station) return;
+        if (station.Logo is not null)
+        {
+            var answer = MessageBox.Show(this, "Choose a new logo? Choose No to go back to the station's own logo.",
+                "Station logo", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+            if (answer == MessageBoxResult.Cancel) return;
+            if (answer == MessageBoxResult.No)
+            {
+                await ChangeRadioAsync("clear-logo", station.Slot, success: "The station's own logo is back.");
+                return;
+            }
+        }
+        var picker = new OpenFileDialog { Title = $"Choose a PNG logo for {station.Name}", Filter = "PNG images|*.png" };
+        if (picker.ShowDialog(this) == true)
+            await ChangeRadioAsync("logo", station.Slot, paths: [picker.FileName],
+                success: "Logo set. It is fitted into 210 by 100 pixels.");
+    }
+
+    private async void RadioDelete_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy || (sender as Button)?.Tag is not RadioStation station) return;
+        var answer = MessageBox.Show(this, $"Delete {station.Name}? {station.Replaces} plays as on the disc again " +
+            "after you build stations. Your music files are not touched.",
+            "Delete station", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (answer == MessageBoxResult.Yes)
+            await ChangeRadioAsync("delete", station.Slot, success: "Station deleted. Build stations to apply.");
+    }
+
+    private async void RadioFfmpeg_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy) return;
+        var picker = new OpenFileDialog { Title = "Choose ffmpeg.exe", Filter = "FFmpeg|ffmpeg.exe|Programs|*.exe" };
+        if (picker.ShowDialog(this) == true)
+            await ChangeRadioAsync("ffmpeg", paths: [picker.FileName], success: "FFmpeg found. Build stations when ready.");
+    }
+
+    private async void RadioBuild_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy) return;
+        await ChangeRadioAsync("build", success: "Stations built. They play from the next start.");
+    }
+
+    private async Task ChangeRadioAsync(string action, string slot = "", string value = "",
+        IEnumerable<string>? paths = null, string? success = null)
+    {
+        _busy = true;
+        RadioControls.IsEnabled = false;
+        RadioList.IsEnabled = false;
+        UpdatePrimaryButton();
+        RadioStatusText.Text = action switch
+        {
+            "build" => "Encoding your music and building the stations. Long playlists take a few minutes…",
+            "list" => "Reading stations…",
+            _ => "Updating…"
+        };
+        try
+        {
+            var result = await RunRadioToolAsync(action, slot, value, paths);
+            // build reports what it wrote; read the stations afterwards.
+            if (action == "build") result = await RunRadioToolAsync("list");
+            ApplyRadio(result, success);
+        }
+        catch (Exception ex)
+        {
+            try { ApplyRadio(await RunRadioToolAsync("list"), ex.Message); }
+            catch { RadioStatusText.Text = ex.Message; }
+            AppendLog($"Radio: {ex.Message}");
+        }
+        finally
+        {
+            _busy = false;
+            RadioControls.IsEnabled = true;
+            RadioList.IsEnabled = true;
+            UpdatePrimaryButton();
+        }
+    }
+
+    private void ApplyRadio(RadioStatus status, string? message)
+    {
+        RadioList.ItemsSource = status.Stations;
+        RadioEmptyText.Visibility = status.Stations.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        RadioNewButton.IsEnabled = status.FreeSlots.Count > 0;
+        RadioFfmpegButton.Visibility = status.Ffmpeg is null ? Visibility.Visible : Visibility.Collapsed;
+        RadioStatusText.Text = message ?? (status.Ffmpeg is null && status.Stations.Count > 0
+            ? "Building stations needs FFmpeg to encode the music. Install it (winget install Gyan.FFmpeg) or locate ffmpeg.exe."
+            : status.OutOfDate
+                ? "Changes are not built yet. Choose Build stations."
+                : status.Stations.Count == 0 ? "" : "Built and on. The stations play from the next start.");
+    }
+
+    private async Task<RadioStatus> RunRadioToolAsync(string action, string slot = "", string value = "",
+        IEnumerable<string>? paths = null)
+    {
+        if (_repositoryRoot is null || _stateRoot is null)
+            throw new InvalidOperationException("Release source is not ready.");
+        var start = new ProcessStartInfo
+        {
+            FileName = PowerShellExecutable(), WorkingDirectory = _repositoryRoot,
+            UseShellExecute = false, CreateNoWindow = true,
+            RedirectStandardOutput = true, RedirectStandardError = true
+        };
+        foreach (var argument in new[] { "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+            Path.Combine(_repositoryRoot, "tools", "manage-radio.ps1"), "-Action", action, "-StateRoot", _stateRoot })
+            start.ArgumentList.Add(argument);
+        if (slot.Length > 0) { start.ArgumentList.Add("-Slot"); start.ArgumentList.Add(slot); }
+        if (value.Length > 0) { start.ArgumentList.Add("-Value"); start.ArgumentList.Add(value); }
+        foreach (var path in paths ?? []) start.ArgumentList.Add(path);
+        using var process = Process.Start(start) ?? throw new InvalidOperationException("Windows could not start radio management.");
+        var output = process.StandardOutput.ReadToEndAsync();
+        var error = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        var stdout = (await output).Trim();
+        var stderr = (await error).Trim();
+        var json = stdout[(stdout.LastIndexOf('\n') + 1)..];
+        var status = json.StartsWith('{')
+            ? JsonSerializer.Deserialize<RadioStatus>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+            : null;
+        if (process.ExitCode != 0 || status is null || status.Error is not null)
+            throw new InvalidOperationException(status?.Error ?? (string.IsNullOrWhiteSpace(stderr) ? "Radio management stopped." : stderr));
+        return status;
+    }
+
+    public sealed class RadioStatus
+    {
+        public List<RadioStation> Stations { get; set; } = [];
+        [JsonPropertyName("free_slots")] public List<string> FreeSlots { get; set; } = [];
+        public string? Ffmpeg { get; set; }
+        [JsonPropertyName("out_of_date")] public bool OutOfDate { get; set; }
+        public string? Error { get; set; }
+    }
+
+    public sealed class RadioStation
+    {
+        public string Slot { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string Mode { get; set; } = "replace";
+        public List<string> Sources { get; set; } = [];
+        public string? Logo { get; set; }
+        public int Tracks { get; set; }
+        public List<string> Missing { get; set; } = [];
+        public string Replaces { get; set; } = "";
+        public bool KeepStock => Mode == "add";
+        public string LogoText => Logo is null ? "Logo" : "Change logo";
+        public string StatusText =>
+            $"Instead of {Replaces} · {Tracks} {(Tracks == 1 ? "song" : "songs")}" +
+            (Missing.Count > 0 ? $" · {Missing.Count} missing" : "") +
+            (Logo is null ? "" : " · own logo");
+    }
+
+    public sealed class XeStatus
+    {
+        public bool Installed { get; set; }
+        public bool Enabled { get; set; }
+        public string? Version { get; set; }
+        public string? Error { get; set; }
+    }
+
+    public sealed class TitleUpdateStatus
+    {
+        public bool Installed { get; set; }
+        public bool Use { get; set; }
+        public bool Built { get; set; }
+        public bool Club { get; set; }
+        public Dictionary<string, string> Profiles { get; set; } = [];
+        [JsonPropertyName("pre_v4_backups")] public List<string> PreV4Backups { get; set; } = [];
+    }
+
+    private async void ImportDlcButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy) return;
+        var picker = new OpenFileDialog { Title = "Choose your FH1 DLC package or ZIP", Filter = "DLC packages and ZIPs|*.*" };
+        if (picker.ShowDialog(this) == true)
+            await ChangeDlcAsync("import", picker.FileName, success: "Import verified. Enable individual packages when ready to test them.");
+    }
+
+    private async void ImportDlcFolderButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy) return;
+        var picker = new OpenFolderDialog { Title = "Choose your FH1 DLC folder" };
+        if (picker.ShowDialog(this) == true)
+            await ChangeDlcAsync("import", picker.FolderName, success: "Import verified. Enable individual packages when ready to test them.");
+    }
+
+    private async void ToggleDlcButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy || (sender as Button)?.Tag is not DlcPackage package) return;
+        await ChangeDlcAsync(package.Enabled ? "disable" : "enable", packageId: package.PackageId,
+            success: "Updated. Applies at the next start; saves were not changed.");
+    }
+
+    private void CloseDlcButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy) return;
+        ShowPanel(_panelBeforeDlc);
+        UpdatePrimaryButton();
+    }
+
+    private async Task ChangeDlcAsync(string action, string? source = null, string? packageId = null, string success = "")
+    {
+        _busy = true;
+        DlcControls.IsEnabled = false;
+        DlcList.IsEnabled = false;
+        UpdatePrimaryButton();
+        DlcStatusText.Text = action == "import" ? "Verifying and importing packages…" :
+            action == "enable" && packageId == "6F6992766050D818245ADD408031E280FB5F4E634D"
+                ? "Verifying Rally and preparing its assets…" : "Reading content…";
+        try
+        {
+            ApplyDlcResult(await RunDlcToolAsync(action, source, packageId));
+            DlcStatusText.Text = success;
+        }
+        catch (Exception ex)
+        {
+            // A batch may have completed some package transactions before an
+            // I/O failure. Refresh so the list always reflects disk state.
+            try { ApplyDlcResult(await RunDlcToolAsync("list")); } catch { }
+            DlcStatusText.Text = ex.Message;
+            AppendLog($"DLC: {ex.Message}");
+        }
+        finally
+        {
+            _busy = false;
+            DlcControls.IsEnabled = true;
+            DlcList.IsEnabled = true;
+            UpdatePrimaryButton();
+        }
+    }
+
+    private async Task<DlcResult> RunDlcToolAsync(string action, string? source = null, string? packageId = null)
+    {
+        if (_repositoryRoot is null || _stateRoot is null)
+            throw new InvalidOperationException("Release source is not ready.");
+        var start = new ProcessStartInfo
+        {
+            FileName = PowerShellExecutable(), WorkingDirectory = _repositoryRoot,
+            UseShellExecute = false, CreateNoWindow = true,
+            RedirectStandardOutput = true, RedirectStandardError = true
+        };
+        foreach (var argument in new[] { "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+            Path.Combine(_repositoryRoot, "tools", "manage-dlc.ps1"), "-Action", action, "-StateRoot", _stateRoot })
+            start.ArgumentList.Add(argument);
+        if (source is not null) { start.ArgumentList.Add("-InputPath"); start.ArgumentList.Add(source); }
+        if (packageId is not null) { start.ArgumentList.Add("-PackageId"); start.ArgumentList.Add(packageId); }
+        using var process = Process.Start(start) ?? throw new InvalidOperationException("Windows could not start DLC management.");
+        var output = process.StandardOutput.ReadToEndAsync();
+        var error = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        var stdout = await output;
+        var stderr = await error;
+        if (process.ExitCode != 0)
+            throw new InvalidOperationException(string.IsNullOrWhiteSpace(stderr) ? "DLC management stopped." : stderr.Trim());
+        return JsonSerializer.Deserialize<DlcResult>(stdout.Trim(), new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+            ?? throw new InvalidDataException("DLC management returned an invalid result.");
+    }
+
+    private void ApplyDlcResult(DlcResult result)
+    {
+        DlcList.ItemsSource = result.Packages;
+        DlcEmptyText.Visibility = result.Packages.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    public sealed class DlcResult
+    {
+        public List<DlcPackage> Packages { get; set; } = [];
+    }
+
+    public sealed class DlcPackage
+    {
+        [JsonPropertyName("package_id")] public string PackageId { get; set; } = "";
+        [JsonPropertyName("display_name")] public string DisplayName { get; set; } = "";
+        public bool Enabled { get; set; }
+        public string Status { get; set; } = "";
+        [JsonPropertyName("rally_assets_cached")] public bool RallyAssetsCached { get; set; }
+        public bool CanToggle => Status == "gameplay_unverified" ||
+            (Enabled && (Status == "missing" || Status == "metadata_invalid"));
+        public string ToggleText => Enabled ? "Disable" : "Enable";
+        public string ToggleAccessibleName => $"{ToggleText} {DisplayName}";
+        public string StatusText => Status switch
+        {
+            "missing" => "Content or header missing. Import the original package again.",
+            "metadata_invalid" => "Import record damaged. Import the original package again to repair it.",
+            "conflict" => "Both enabled and disabled copies exist. Check the content folder.",
+            "unmanaged" => "Content imported outside the launcher. Management unavailable.",
+            _ when Enabled && PackageId == "6F6992766050D818245ADD408031E280FB5F4E634D" =>
+                RallyAssetsCached ? "Enabled · Assets cached · Gameplay unverified" :
+                    "Enabled · Assets not prepared · Gameplay unverified",
+            _ => $"{(Enabled ? "Enabled" : "Disabled")} · Gameplay unverified"
+        };
     }
 
     private void CloseGraphicsButton_Click(object sender, RoutedEventArgs e)
@@ -1132,7 +2324,7 @@ public partial class MainWindow : Window
     private async void SaveGraphicsButton_Click(object sender, RoutedEventArgs e)
     {
         if (!await ChangeGraphicsSettingsAsync("Apply", "Saved. Applies at the next start.")) return;
-        // Direct3D 12 may now need its shader packs.
+        // Refresh the displayed resolution after saving.
         if (_gameExecutable is not null && !_busy) DetectExistingBuild();
         CloseGraphicsButton_Click(sender, e);
     }
@@ -1150,13 +2342,14 @@ public partial class MainWindow : Window
     private async void RestoreGraphicsButton_Click(object sender, RoutedEventArgs e) =>
         await ChangeGraphicsSettingsAsync("Restore", "Backup restored. Applies at the next start.");
 
-    private async Task<bool> ChangeGraphicsSettingsAsync(string action, string success, bool revealBackup = false)
+    private async Task<bool> ChangeGraphicsSettingsAsync(string action, string success, bool revealBackup = false,
+        string? gamePreset = null)
     {
         SetGraphicsControlsEnabled(false);
         GraphicsStatusText.Text = action == "Apply" ? "Saving…" : "Updating…";
         try
         {
-            var result = await RunGraphicsSettingsToolAsync(action);
+            var result = await RunGraphicsSettingsToolAsync(action, gamePreset);
             ApplyGraphicsResult(result);
             GraphicsStatusText.Text = success;
             if (revealBackup && !string.IsNullOrWhiteSpace(result.BackupPath) && File.Exists(result.BackupPath))
@@ -1181,7 +2374,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task<GraphicsResult> RunGraphicsSettingsToolAsync(string action)
+    private async Task<GraphicsResult> RunGraphicsSettingsToolAsync(string action, string? gamePreset = null)
     {
         if (_repositoryRoot is null || _stateRoot is null)
             throw new InvalidOperationException("Release source is not ready.");
@@ -1203,11 +2396,17 @@ public partial class MainWindow : Window
             // Only the choices in this panel: the rest is set in game and must
             // not be overwritten.
             "-ResolutionScale", SelectedTag(ResolutionComboBox),
-            "-GraphicsApi", SelectedTag(GraphicsApiComboBox),
+            "-GraphicsApi", "vulkan",
             "-OutputScaling", SelectedTag(OutputScalingComboBox),
             "-TreasureMap", TreasureMapCheckBox.IsChecked == true ? "true" : "false",
             "-Json"
         }) startInfo.ArgumentList.Add(argument);
+        // An in-game preset applies over the panel's choices (LS-1.7).
+        if (gamePreset is not null)
+        {
+            startInfo.ArgumentList.Add("-GamePreset");
+            startInfo.ArgumentList.Add(gamePreset);
+        }
         using var process = Process.Start(startInfo) ??
             throw new InvalidOperationException("Windows could not start the graphics settings tool.");
         var outputTask = process.StandardOutput.ReadToEndAsync();
@@ -1231,12 +2430,11 @@ public partial class MainWindow : Window
     {
         _graphicsSettings = result.Settings;
         SelectTag(ResolutionComboBox, result.Settings.ResolutionScale.ToString());
-        SelectTag(GraphicsApiComboBox, string.IsNullOrWhiteSpace(result.Settings.GraphicsApi)
-            ? "vulkan" : result.Settings.GraphicsApi);
         SelectTag(OutputScalingComboBox, string.IsNullOrWhiteSpace(result.Settings.OutputScaling)
             ? "bilinear" : result.Settings.OutputScaling);
         TreasureMapCheckBox.IsChecked = result.Settings.TreasureMap;
         UpdateResolutionLine();
+        UpdateRecommendationText();
     }
 
     private GraphicsSettings? _graphicsSettings;
@@ -1290,7 +2488,7 @@ public partial class MainWindow : Window
 
     // The display mode of the game's monitor: 0 and 1 are the primary, 2 on
     // the other displays in Windows' order.
-    private static (int Width, int Height)? DisplaySize(int monitor)
+    private static DevMode? DisplayMode(int monitor)
     {
         string? deviceName = null;
         if (monitor > 1)
@@ -1305,8 +2503,14 @@ public partial class MainWindow : Window
             if (monitor - 2 < others.Count) deviceName = others[monitor - 2];
         }
         var mode = new DevMode { dmSize = (short)System.Runtime.InteropServices.Marshal.SizeOf<DevMode>() };
-        return EnumDisplaySettings(deviceName, -1, ref mode) ? (mode.dmPelsWidth, mode.dmPelsHeight) : null;
+        return EnumDisplaySettings(deviceName, -1, ref mode) ? mode : null;
     }
+
+    private static (int Width, int Height)? DisplaySize(int monitor) =>
+        DisplayMode(monitor) is { } mode ? (mode.dmPelsWidth, mode.dmPelsHeight) : null;
+
+    // Its refresh rate, or 0 if unknown.
+    private static int DisplayRefresh(int monitor) => DisplayMode(monitor)?.dmDisplayFrequency ?? 0;
 
     [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
     private static extern bool EnumDisplaySettings(string? deviceName, int modeNum, ref DevMode devMode);
@@ -1378,12 +2582,12 @@ public partial class MainWindow : Window
     private void SetGraphicsControlsEnabled(bool enabled)
     {
         ResolutionComboBox.IsEnabled = enabled;
-        GraphicsApiComboBox.IsEnabled = enabled;
         OutputScalingComboBox.IsEnabled = enabled;
         TreasureMapCheckBox.IsEnabled = enabled;
         SaveGraphicsButton.IsEnabled = enabled;
         ResetGraphicsButton.IsEnabled = enabled;
         RestoreGraphicsButton.IsEnabled = enabled;
+        if (!enabled) UseRecommendedButton.IsEnabled = false;
     }
 
     private sealed record ProgressMessage(string? Stage, int Percent, string? Message);
@@ -1393,7 +2597,8 @@ public partial class MainWindow : Window
         [property: JsonPropertyName("exit_code")] JsonElement? ExitCode,
         [property: JsonPropertyName("build_log")] string? BuildLog,
         [property: JsonPropertyName("error_excerpt")] JsonElement? ErrorExcerpt,
-        [property: JsonPropertyName("hint")] string? Hint);
+        [property: JsonPropertyName("hint")] string? Hint,
+        [property: JsonPropertyName("error_kind")] string? ErrorKind = null);
     private sealed record LaunchResult(
         [property: JsonPropertyName("result")] string? Result,
         [property: JsonPropertyName("crash_id")] string? CrashId,
@@ -1415,6 +2620,7 @@ public partial class MainWindow : Window
         [property: JsonPropertyName("disable_motion_blur")] bool DisableMotionBlur,
         [property: JsonPropertyName("disable_depth_of_field")] bool DisableDepthOfField,
         [property: JsonPropertyName("preset")] string Preset,
+        [property: JsonPropertyName("game_preset")] string? GamePreset,
         [property: JsonPropertyName("resolution_scale")] int ResolutionScale,
         [property: JsonPropertyName("graphics_api")] string? GraphicsApi,
         [property: JsonPropertyName("output_scaling")] string? OutputScaling,

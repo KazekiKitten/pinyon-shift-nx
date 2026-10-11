@@ -22,6 +22,27 @@ class GraphicsSettingsTests(unittest.TestCase):
         self.assertEqual(completed.returncode, 0, completed.stderr)
         return json.loads(completed.stdout)
 
+    def test_game_presets_apply_over_the_panel_choices_and_are_recognised(self):
+        # LS-1.7: the launcher applies the recommended in-game preset, and the
+        # defaults of a new config read as LOW-SPEC 60.
+        with tempfile.TemporaryDirectory(prefix="pinyon-settings-") as temporary:
+            state = pathlib.Path(temporary)
+            self.assertEqual(self.run_tool(state, "-Action", "Get")["settings"]["game_preset"],
+                             "low_spec_60")
+            result = self.run_tool(state, "-Action", "Apply", "-ResolutionScale", "3",
+                                   "-OutputScaling", "cas", "-GamePreset", "performance_120")
+            text = (state / "config/pinyon_shift.toml").read_text(encoding="utf-8")
+            self.assertEqual(result["settings"]["game_preset"], "performance_120")
+            for line in ("draw_resolution_scale_x = 1", 'present_effect = "fsr"',
+                         "fh1_msaa_single_sample = true", "host_present_fps_limit = 0",
+                         "pinyon_shift_fh1_render_fps_limit = 120"):
+                self.assertIn(line, text)
+            result = self.run_tool(state, "-Action", "Apply", "-GamePreset", "balanced_40")
+            self.assertEqual(result["settings"]["game_preset"], "balanced_40")
+            self.assertEqual(result["settings"]["fh1_render_fps_limit"], 40)
+            result = self.run_tool(state, "-Action", "Apply", "-RenderFps", "30")
+            self.assertEqual(result["settings"]["game_preset"], "custom")
+
     def test_apply_migrates_schema_and_restore_recovers_previous_file(self):
         with tempfile.TemporaryDirectory(prefix="pinyon-settings-") as temporary:
             state = pathlib.Path(temporary)
@@ -40,7 +61,7 @@ class GraphicsSettingsTests(unittest.TestCase):
             )
             updated = config.read_text(encoding="utf-8")
             self.assertEqual(result["settings"]["anisotropy"], 16)
-            self.assertIn("pinyon_shift_config_schema = 27", updated)
+            self.assertIn("pinyon_shift_config_schema = 29", updated)
             self.assertIn('gpu_backend = "vulkan"', updated)
             self.assertIn("gpu_record_thread = true", updated)
             self.assertNotIn("fh1_renderer", updated)
@@ -60,6 +81,17 @@ class GraphicsSettingsTests(unittest.TestCase):
             self.run_tool(state, "-Action", "Restore")
             self.assertEqual(config.read_text(encoding="utf-8"), original)
 
+    def test_bloom_defaults_off_and_explicit_choice_survives_scale_save(self):
+        with tempfile.TemporaryDirectory(prefix="pinyon-settings-") as temporary:
+            state = pathlib.Path(temporary)
+            self.assertTrue(self.run_tool(state, "-Action", "Get")["settings"]["disable_bloom"])
+            result = self.run_tool(state, "-Action", "Apply", "-DisableBloom", "false")
+            self.assertFalse(result["settings"]["disable_bloom"])
+            result = self.run_tool(state, "-Action", "Apply", "-ResolutionScale", "2")
+            self.assertFalse(result["settings"]["disable_bloom"])
+            text = (state / "config/pinyon_shift.toml").read_text(encoding="utf-8")
+            self.assertIn("disable_bloom = false", text)
+
     def test_saving_the_scale_keeps_in_game_settings(self):
         # The launcher only saves the resolution scale; everything else is
         # set in game and must survive.
@@ -71,13 +103,14 @@ class GraphicsSettingsTests(unittest.TestCase):
                 "pinyon_shift_config_schema = 25\nanisotropic_override = 5\n"
                 "swap_post_effect = \"fxaa\"\nvsync = false\n"
                 "pinyon_shift_fh1_render_fps_limit = 30\nhost_present_fps_limit = 120\n"
-                "disable_motion_blur = true\n",
+                "disable_motion_blur = true\nfh1_msaa_single_sample = false\n",
                 encoding="utf-8")
             result = self.run_tool(state, "-Action", "Apply", "-ResolutionScale", "3")
             updated = config.read_text(encoding="utf-8")
             for line in ("anisotropic_override = 5", 'swap_post_effect = "fxaa"', "vsync = false",
                          "pinyon_shift_fh1_render_fps_limit = 30",
                          "host_present_fps_limit = 120", "disable_motion_blur = true",
+                         "fh1_msaa_single_sample = false",
                          "draw_resolution_scale_x = 3", "draw_resolution_scale_y = 3"):
                 self.assertIn(line, updated)
             self.assertEqual(result["settings"]["resolution_scale"], 3)
@@ -92,7 +125,7 @@ class GraphicsSettingsTests(unittest.TestCase):
                               encoding="utf-8")
             result = self.run_tool(state, "-Action", "Apply", "-ResolutionScale", "1")
             text = config.read_text(encoding="utf-8")
-            self.assertIn("pinyon_shift_config_schema = 27", text)
+            self.assertIn("pinyon_shift_config_schema = 29", text)
             self.assertIn("clear_memory_page_state = false", text)
             self.assertFalse(result["settings"]["clear_memory_page_state"])
             # Once on schema 26, a player who turns it back on keeps it.
@@ -101,7 +134,7 @@ class GraphicsSettingsTests(unittest.TestCase):
             self.run_tool(state, "-Action", "Apply", "-ResolutionScale", "1")
             self.assertIn("clear_memory_page_state = true", config.read_text(encoding="utf-8"))
 
-    def test_apply_moves_earlier_schemas_to_vulkan_once(self):
+    def test_apply_migrates_legacy_backend_selections_to_vulkan(self):
         with tempfile.TemporaryDirectory(prefix="pinyon-settings-") as temporary:
             state = pathlib.Path(temporary)
             config = state / "config/pinyon_shift.toml"
@@ -113,33 +146,35 @@ class GraphicsSettingsTests(unittest.TestCase):
             text = config.read_text(encoding="utf-8")
             self.assertIn('gpu_backend = "vulkan"', text)
             self.assertIn("gpu_record_thread = true", text)
-            # A player who then picks Direct3D 12 keeps it.
+            # Schema 28 also migrates a saved schema 27 Direct3D 12 choice.
             config.write_text('pinyon_shift_config_schema = 27\ngpu_backend = "d3d12"\n'
                               "gpu_record_thread = false\n", encoding="utf-8")
             self.run_tool(state, "-Action", "Apply", "-ResolutionScale", "1")
             text = config.read_text(encoding="utf-8")
-            self.assertIn('gpu_backend = "d3d12"', text)
-            self.assertIn("gpu_record_thread = false", text)
+            self.assertIn('gpu_backend = "vulkan"', text)
+            self.assertIn("gpu_record_thread = true", text)
 
-    def test_graphics_api_choice_sets_backend_and_record_thread(self):
+    def test_player_settings_reject_legacy_api_without_changing_config(self):
         with tempfile.TemporaryDirectory(prefix="pinyon-settings-") as temporary:
             state = pathlib.Path(temporary)
             config = state / "config/pinyon_shift.toml"
             config.parent.mkdir(parents=True)
-            config.write_text("pinyon_shift_config_schema = 27\nanisotropic_override = 5\n",
+            config.write_text("pinyon_shift_config_schema = 28\nanisotropic_override = 5\n",
                               encoding="utf-8")
             self.assertEqual(self.run_tool(state, "-Action", "Get")["settings"]["graphics_api"],
                              "vulkan")
-            result = self.run_tool(state, "-Action", "Apply", "-GraphicsApi", "d3d12")
-            text = config.read_text(encoding="utf-8")
-            self.assertIn('gpu_backend = "d3d12"', text)
-            self.assertIn("gpu_record_thread = false", text)
-            self.assertIn("anisotropic_override = 5", text)
-            self.assertEqual(result["settings"]["graphics_api"], "d3d12")
+            original = config.read_bytes()
+            rejected = subprocess.run(
+                [POWERSHELL, "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                 "-File", str(TOOL), "-StateRoot", str(state), "-Action", "Apply",
+                 "-GraphicsApi", "d3d12"], capture_output=True, text=True)
+            self.assertNotEqual(rejected.returncode, 0)
+            self.assertEqual(config.read_bytes(), original)
             result = self.run_tool(state, "-Action", "Apply", "-GraphicsApi", "vulkan")
             text = config.read_text(encoding="utf-8")
             self.assertIn('gpu_backend = "vulkan"', text)
             self.assertIn("gpu_record_thread = true", text)
+            self.assertIn("anisotropic_override = 5", text)
             self.assertEqual(result["settings"]["graphics_api"], "vulkan")
 
     def test_output_scaling_sets_present_effect_and_reports_the_window(self):
@@ -172,6 +207,24 @@ class GraphicsSettingsTests(unittest.TestCase):
             self.assertIn("pinyon_shift_dlc_treasure_map = false", config.read_text(encoding="utf-8"))
             self.assertFalse(result["settings"]["treasure_map"])
 
+    def test_post_effect_defaults_and_explicit_choices(self):
+        with tempfile.TemporaryDirectory(prefix="pinyon-settings-") as temporary:
+            state = pathlib.Path(temporary)
+            for action in ("Get", "Apply"):
+                settings = self.run_tool(state, "-Action", action)["settings"]
+                self.assertTrue(settings["disable_motion_blur"])
+                self.assertTrue(settings["disable_depth_of_field"])
+            config = state / "config/pinyon_shift.toml"
+            config.write_text("pinyon_shift_config_schema = 27\n", encoding="utf-8")
+            settings = self.run_tool(state, "-Action", "Get")["settings"]
+            self.assertTrue(settings["disable_motion_blur"])
+            self.assertTrue(settings["disable_depth_of_field"])
+            self.run_tool(state, "-Action", "Apply", "-DisableMotionBlur", "false",
+                          "-DisableDepthOfField", "false")
+            settings = self.run_tool(state, "-Action", "Apply", "-ResolutionScale", "2")["settings"]
+            self.assertFalse(settings["disable_motion_blur"])
+            self.assertFalse(settings["disable_depth_of_field"])
+
     def test_reset_writes_supported_defaults_and_preserves_backup(self):
         with tempfile.TemporaryDirectory(prefix="pinyon-settings-") as temporary:
             state = pathlib.Path(temporary)
@@ -181,8 +234,8 @@ class GraphicsSettingsTests(unittest.TestCase):
             result = self.run_tool(state, "-Action", "Reset")
             text = config.read_text(encoding="utf-8")
             self.assertIn("swap_post_effect = \"none\"", text)
-            self.assertIn("disable_motion_blur = false", text)
-            self.assertIn("disable_depth_of_field = false", text)
+            self.assertIn("disable_motion_blur = true", text)
+            self.assertIn("disable_depth_of_field = true", text)
             self.assertIn("draw_resolution_scale_x = 1", text)
             self.assertIn("xma_relaxed_padding_admission = false", text)
             self.assertNotIn('occlusion_query', text)
@@ -191,9 +244,9 @@ class GraphicsSettingsTests(unittest.TestCase):
             self.assertIn('clear_memory_page_state = false', text)
             self.assertIn('host_present_fps_limit = 0', text)
             self.assertIn('host_present_sleep_spin = true', text)
-            self.assertIn('pinyon_shift_fh1_render_fps_limit = 0', text)
+            self.assertIn('pinyon_shift_fh1_render_fps_limit = 60', text)
             self.assertIn('pinyon_shift_fh1_source_presentation = true', text)
-            self.assertIn("pinyon_shift_config_schema = 27", text)
+            self.assertIn("pinyon_shift_config_schema = 29", text)
             self.assertIn('gpu_backend = "vulkan"', text)
             self.assertIn("gpu_record_thread = true", text)
             self.assertNotIn("fh1_renderer", text)
@@ -221,7 +274,7 @@ class GraphicsSettingsTests(unittest.TestCase):
             self.assertNotIn("pinyon_shift_native_renderer =", text)
             self.assertNotIn("pinyon_shift_native_renderer_sky_horizon_suppression", text)
             self.assertNotIn("pinyon_shift_fh1_native_v4", text)
-            self.assertIn("pinyon_shift_fh1_render_fps_limit = 0", text)
+            self.assertIn("pinyon_shift_fh1_render_fps_limit = 60", text)
 
     def test_apply_removes_retired_renderer_settings(self):
         # Schema 24 retires the renderer choice and the Xenos-era and
@@ -262,7 +315,7 @@ class GraphicsSettingsTests(unittest.TestCase):
             )
             result = self.run_tool(state, "-Action", "Apply")
             text = config.read_text(encoding="utf-8")
-            self.assertIn("pinyon_shift_config_schema = 27", text)
+            self.assertIn("pinyon_shift_config_schema = 29", text)
             self.assertIn("custom_value = 77", text)
             for line in retired:
                 self.assertNotIn(line.split(" =")[0] + " =", text)
@@ -281,6 +334,36 @@ class GraphicsSettingsTests(unittest.TestCase):
             )
             self.assertNotEqual(completed.returncode, 0)
             self.assertFalse((pathlib.Path(temporary) / "config/pinyon_shift.toml").exists())
+
+    def test_apply_turns_depth_of_field_off_once_from_schema_27(self):
+        # #356, #375: 0.4.0 wrote disable_depth_of_field = false by default.
+        with tempfile.TemporaryDirectory(prefix="pinyon-settings-") as temporary:
+            state = pathlib.Path(temporary)
+            config = state / "config/pinyon_shift.toml"
+            config.parent.mkdir(parents=True)
+            config.write_text("pinyon_shift_config_schema = 27\ndisable_depth_of_field = false\n",
+                              encoding="utf-8")
+            result = self.run_tool(state, "-Action", "Apply", "-ResolutionScale", "1")
+            self.assertIn("disable_depth_of_field = true", config.read_text(encoding="utf-8"))
+            self.assertTrue(result["settings"]["disable_depth_of_field"])
+            # On schema 28 a player who turns it back on keeps it.
+            self.run_tool(state, "-Action", "Apply", "-DisableDepthOfField", "false")
+            self.run_tool(state, "-Action", "Apply", "-ResolutionScale", "1")
+            self.assertIn("disable_depth_of_field = false", config.read_text(encoding="utf-8"))
+
+    def test_a_config_without_a_schema_is_read_and_repaired(self):
+        # The old F4 overlay save dropped the schema line (#345, #364).
+        with tempfile.TemporaryDirectory(prefix="pinyon-settings-") as temporary:
+            state = pathlib.Path(temporary)
+            config = state / "config/pinyon_shift.toml"
+            config.parent.mkdir(parents=True)
+            config.write_text("# Auto-generated cvar configuration\nanisotropic_override = 5\n",
+                              encoding="utf-8")
+            self.assertEqual(self.run_tool(state, "-Action", "Get")["settings"]["anisotropy"], 16)
+            self.run_tool(state, "-Action", "Apply", "-ResolutionScale", "1")
+            text = config.read_text(encoding="utf-8")
+            self.assertIn("pinyon_shift_config_schema = 29", text)
+            self.assertIn("anisotropic_override = 5", text)
 
     def test_get_accepts_schema_25(self):
         with tempfile.TemporaryDirectory(prefix="pinyon-settings-") as temporary:

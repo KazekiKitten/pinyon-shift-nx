@@ -138,10 +138,10 @@ function Get-PinyonVisualStudioRoot {
     $root = $null
     if (Test-Path -LiteralPath $vswhere -PathType Leaf) {
         $root = & $vswhere -latest -products * -requires $config.visual_studio.required_component `
-            -property installationPath | Select-Object -First 1
+            -version "[$($config.visual_studio.minimum_version),)" -property installationPath | Select-Object -First 1
     }
     if ([string]::IsNullOrWhiteSpace($root) -and -not $AllowMissing) {
-        throw 'Microsoft C++ Build Tools were not found.'
+        throw "Microsoft C++ Build Tools $($config.visual_studio.minimum_version) or newer were not found. Run tools/provision-toolchain.ps1 to install compatible Visual Studio 2022 Build Tools."
     }
     $root
 }
@@ -197,7 +197,8 @@ function Invoke-PinyonLoggedCommand {
         [Parameter(Mandatory)] [string]$FilePath,
         [Parameter(Mandatory)] [AllowEmptyCollection()] [string[]]$Arguments,
         [Parameter(Mandatory)] [string]$LogPath,
-        [switch]$Append
+        [switch]$Append,
+        [switch]$Utf8Output
     )
     # Windows PowerShell turns redirected native stderr into ErrorRecord
     # objects. Keep streaming them as plain text and decide success from the
@@ -207,7 +208,9 @@ function Invoke-PinyonLoggedCommand {
     if ($parent) { [void](New-Item -ItemType Directory -Force -Path $parent) }
     $writer = [IO.StreamWriter]::new($LogPath, [bool]$Append, [Text.UTF8Encoding]::new($false))
     $writer.AutoFlush = $true
+    $savedOutputEncoding = [Console]::OutputEncoding
     try {
+        if ($Utf8Output) { [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false) }
         $writer.WriteLine("> $(Format-PinyonCommandLine -FilePath $FilePath -Arguments $Arguments)")
         if ($null -eq (Get-Command -Name $FilePath -ErrorAction SilentlyContinue)) {
             # With stderr merged, a missing program would only be a log line
@@ -234,7 +237,10 @@ function Invoke-PinyonLoggedCommand {
         $code = $LASTEXITCODE
         $writer.WriteLine("> exit code $code")
     }
-    finally { $writer.Dispose() }
+    finally {
+        $writer.Dispose()
+        if ($Utf8Output) { [Console]::OutputEncoding = $savedOutputEncoding }
+    }
     $global:LASTEXITCODE = $code
 }
 
@@ -368,9 +374,9 @@ function Get-PinyonCommandFailureDetail {
 
 function Read-PinyonLogLines {
     param([Parameter(Mandatory)] [string]$LogPath)
-    if (-not (Test-Path -LiteralPath $LogPath -PathType Leaf)) { return [string[]]@() }
-    try { [string[]]@(Get-Content -LiteralPath $LogPath -ErrorAction Stop) }
-    catch { [string[]]@() }
+    if (-not (Test-Path -LiteralPath $LogPath -PathType Leaf)) { return ,([string[]]@()) }
+    try { ,([string[]]@(Get-Content -LiteralPath $LogPath -ErrorAction Stop)) }
+    catch { ,([string[]]@()) }
 }
 
 # An exception describing a failed native step, with the facts
@@ -522,15 +528,157 @@ function Format-PinyonFailureRecord {
     [string[]]$lines.ToArray()
 }
 
+function Assert-PinyonBuildCapabilities {
+    param([Parameter(Mandatory)] [string]$LlvmRoot)
+    $compiler = Join-Path $LlvmRoot 'bin/clang++.exe'
+    if (-not (Test-Path -LiteralPath $compiler -PathType Leaf)) {
+        throw 'The pinned LLVM compiler is missing. Run tools/provision-toolchain.ps1 first.'
+    }
+    $directory = Join-Path ([IO.Path]::GetTempPath()) ('pinyon-capabilities-' + [Guid]::NewGuid().ToString('N'))
+    [void](New-Item -ItemType Directory -Path $directory)
+    $resolvedDirectory = (Resolve-Path -LiteralPath $directory).Path
+    $previousPreference = $ErrorActionPreference
+    try {
+        foreach ($probe in @(
+            @{ Name = 'C++23 standard library'; Source = '#include <bit>
+static_assert(std::byteswap(0x01020304u) == 0x04030201u);';
+               Hint = 'Update the Visual Studio 2022 C++ Build Tools. The selected C++ library must provide std::byteswap.' },
+            @{ Name = 'Windows SDK headers'; Source = '#include <windows.h>
+#include <d3d12.h>
+static_assert(sizeof(D3D12_FEATURE_DATA_D3D12_OPTIONS8) > 0);
+constexpr auto feature = D3D12_FEATURE_D3D12_OPTIONS8;';
+               Hint = 'Install an updated Windows SDK through the Visual Studio Installer, then rerun setup. The selected d3d12.h must provide D3D12_OPTIONS8.' },
+            # Headers alone are not enough (#379): CMake's first test program
+            # links kernel32.lib and the other SDK import libraries from LIB.
+            @{ Name = 'Windows SDK libraries'; Link = $true; Source = '#include <windows.h>
+int main() { return GetTickCount() == 0 && GetDesktopWindow() == nullptr; }';
+               Hint = 'Install or repair the Windows 10/11 SDK (including its x64 desktop libraries) through the Visual Studio Installer, then rerun setup. The linker could not find the SDK import libraries such as kernel32.lib.' }
+        )) {
+            $source = Join-Path $directory 'probe.cpp'
+            [IO.File]::WriteAllText($source, $probe.Source)
+            $arguments = if ($probe.ContainsKey('Link')) {
+                @('-std=c++23', '-fuse-ld=lld-link', $source, '-o', (Join-Path $directory 'probe.exe'),
+                  '-lkernel32', '-luser32', '-lgdi32', '-lshell32', '-lole32', '-luuid', '-ladvapi32')
+            } else {
+                @('-std=c++23', '-fsyntax-only', $source)
+            }
+            $ErrorActionPreference = 'Continue'
+            $output = @(& $compiler @arguments 2>&1 | ForEach-Object { $_.ToString() })
+            $exitCode = $LASTEXITCODE
+            $ErrorActionPreference = $previousPreference
+            if ($exitCode -ne 0) {
+                $failure = [Exception]::new("The selected $($probe.Name) failed its build capability check. $($probe.Hint)")
+                $failure.Data['step'] = "Check $($probe.Name)"
+                $failure.Data['exit_code'] = $exitCode
+                $failure.Data['command'] = "`"$compiler`" " + (($arguments | ForEach-Object { "`"$_`"" }) -join ' ')
+                $failure.Data['error_kind'] = 'toolchain-capability'
+                $failure.Data['error_excerpt'] = [string[]]$output
+                $failure.Data['hint'] = $probe.Hint
+                throw $failure
+            }
+        }
+    }
+    finally {
+        $ErrorActionPreference = $previousPreference
+        # Delete only the freshly created, resolved probe directory.
+        if ((Resolve-Path -LiteralPath $directory).Path -ne $resolvedDirectory) {
+            throw 'The build capability probe directory changed unexpectedly.'
+        }
+        Remove-Item -LiteralPath $resolvedDirectory -Recurse -Force
+    }
+}
+
+# Free space before a long build (#393): the install drive holds the
+# toolchains, extracted game and build; the system drive the build temp and,
+# when they are missing, the Microsoft C++ Build Tools. Figures are in
+# config/release-toolchain.json (disk_space_gb).
+function Assert-PinyonFreeSpace {
+    param(
+        [Parameter(Mandatory)] [string]$Root,
+        [switch]$FirstBuild,
+        [switch]$BuildToolsMissing,
+        # The Android build: the SDK packages, JDK and its own build tree.
+        [switch]$Android
+    )
+    $space = (Get-PinyonReleaseToolchain).disk_space_gb
+    $needs = [ordered]@{}
+    $install = [IO.Path]::GetPathRoot([IO.Path]::GetFullPath($Root)).ToUpperInvariant()
+    $system = ([Environment]::GetFolderPath('Windows') | ForEach-Object { [IO.Path]::GetPathRoot($_) }).ToUpperInvariant()
+    $needs[$install] = [double]$(if ($Android) { $space.android } elseif ($FirstBuild) { $space.first_build } else { $space.rebuild })
+    $systemNeed = [double]$space.system_drive + $(if ($BuildToolsMissing) { [double]$space.build_tools } else { 0 })
+    if ($needs.Contains($system)) { $needs[$system] += $systemNeed } else { $needs[$system] = $systemNeed }
+    $short = foreach ($drive in $needs.Keys) {
+        try { $free = [IO.DriveInfo]::new($drive).AvailableFreeSpace / 1GB } catch { continue }
+        if ($free -lt $needs[$drive]) {
+            "$($drive.TrimEnd('')) has $([Math]::Round($free, 1)) GB free and needs $($needs[$drive]) GB"
+        }
+    }
+    if (@($short).Count -gt 0) {
+        $hint = "Free up space ($(@($short) -join '; ')), then start setup again. " +
+            'The install drive holds the build; the Windows drive holds the build tools and temporary files.'
+        $failure = [Exception]::new("Not enough free disk space for the build. $hint")
+        $failure.Data['step'] = 'Check free disk space'
+        $failure.Data['error_kind'] = 'disk-space'
+        $failure.Data['hint'] = $hint
+        throw $failure
+    }
+}
+
+# Reachability of the hosts the remaining downloads need, checked once before
+# the first download so a proxy, firewall or offline PC is named up front
+# instead of failing one tool at a time (#393).
+function Assert-PinyonDownloadHosts {
+    param([Parameter(Mandatory)] [AllowEmptyCollection()] [string[]]$Uris)
+    $hosts = @($Uris | Where-Object { $_ } | ForEach-Object { ([Uri]$_).GetLeftPart([UriPartial]::Authority) } |
+        Select-Object -Unique)
+    if ($hosts.Count -eq 0) { return }
+    Add-Type -AssemblyName System.Net.Http
+    $client = [Net.Http.HttpClient]::new()
+    $client.Timeout = [TimeSpan]::FromSeconds(20)
+    $unreachable = [Collections.Generic.List[string]]::new()
+    try {
+        foreach ($origin in $hosts) {
+            try {
+                $request = [Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::Head, "$origin/")
+                $response = $client.SendAsync($request).GetAwaiter().GetResult()
+                $response.Dispose()
+            }
+            catch {
+                $reason = $_.Exception.GetBaseException().Message
+                $unreachable.Add("$origin ($reason)")
+            }
+        }
+    }
+    finally { $client.Dispose() }
+    if ($unreachable.Count -gt 0) {
+        $hint = 'Setup downloads its build tools once from these sites. Check the internet connection, ' +
+            'or allow them in the firewall, proxy or parental controls, then start setup again: ' +
+            ($unreachable -join ', ')
+        $failure = [Exception]::new("A download site cannot be reached. $hint")
+        $failure.Data['step'] = 'Check the download sites'
+        $failure.Data['error_kind'] = 'network'
+        $failure.Data['hint'] = $hint
+        throw $failure
+    }
+}
+
 function Enter-PinyonBuildEnvironment {
     $root = Get-PinyonRepoRoot
     $config = Get-PinyonReleaseToolchain
     $vsRoot = Get-PinyonVisualStudioRoot
     $devCmd = Join-Path $vsRoot 'Common7/Tools/VsDevCmd.bat'
     $inheritedPath = $env:PATH
+    $inheritedTemp = $env:TEMP
+    $inheritedTmp = $env:TMP
     try {
         # Quoted PATH entries containing parentheses break VsDevCmd's batch parser.
         $env:PATH = ConvertTo-PinyonCommandPath -PathValue $inheritedPath
+        # VsDevCmd expands TEMP unquoted inside a parenthesized block even
+        # when debug logging is disabled. Portable install paths can break it.
+        $buildTemp = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'PinyonShift\build-temp'
+        New-Item -ItemType Directory -Path $buildTemp -Force | Out-Null
+        $env:TEMP = $buildTemp
+        $env:TMP = $buildTemp
         $marker = '::pinyon-environment::'
         # Merged stderr arrives as ErrorRecords; under 'Stop' the first one
         # would end the function before the exit code is known.
@@ -543,6 +691,8 @@ function Enter-PinyonBuildEnvironment {
     }
     finally {
         $env:PATH = $inheritedPath
+        $env:TEMP = $inheritedTemp
+        $env:TMP = $inheritedTmp
     }
     $markerIndex = -1
     for ($i = 0; $i -lt $output.Count; $i++) {
@@ -563,16 +713,28 @@ function Enter-PinyonBuildEnvironment {
     foreach ($line in $lines) {
         $separator = $line.IndexOf('=')
         if ($separator -gt 0) {
-            [Environment]::SetEnvironmentVariable($line.Substring(0, $separator),
+            $name = $line.Substring(0, $separator)
+            if ($name -in @('TEMP', 'TMP')) { continue }
+            [Environment]::SetEnvironmentVariable($name,
                 $line.Substring($separator + 1), 'Process')
         }
     }
     $llvm = [IO.Path]::GetFullPath((Join-Path $root $config.llvm.install_path))
     $env:PATH = "$(Join-Path $llvm 'bin');$env:PATH"
+    # The pinned Ninja first on PATH, where the presets' Ninja generator finds
+    # it; Visual Studio's copy remains the fallback for older installs.
+    $ninja = Join-Path ([IO.Path]::GetFullPath((Join-Path $root $config.ninja.install_path))) $config.ninja.executable
+    if (Test-Path -LiteralPath $ninja -PathType Leaf) {
+        $env:PATH = "$(Split-Path $ninja -Parent);$env:PATH"
+    }
+    else {
+        $ninja = Join-Path $vsRoot 'Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe'
+    }
+    Assert-PinyonBuildCapabilities -LlvmRoot $llvm
     [pscustomobject]@{
         VisualStudioRoot = $vsRoot
         CMake = Get-PinyonCMake -VisualStudioRoot $vsRoot
-        Ninja = Join-Path $vsRoot 'Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe'
+        Ninja = $ninja
         LlvmRoot = $llvm
     }
 }

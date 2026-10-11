@@ -29,7 +29,7 @@ verified before use.
 
 ## The build fails
 
-Restart Windows after a Build Tools installation, make at least 25 GB free, and
+Restart Windows after a Build Tools installation, make at least 30 GB free, and
 close every running Pinyon Shift preview before trying again. If it still
 fails, choose **Open logs** in the launcher and attach `launcher.log` to the bug
 report. This log contains build output and local paths, but no game data or
@@ -38,8 +38,8 @@ generated source. Never attach game files or generated source.
 ## A portable install cannot start or build
 
 A launcher with `portable.txt` beside it (or started with `--portable`) keeps
-everything in the `data` folder next to it; see "Portable install" in the
-README.
+everything in the `data` folder next to it; see
+[Portable install](INSTALLING.md#portable-install).
 
 - **"Portable folder is not writable"**: the launcher folder is read-only for
   your account, typically because it was extracted into Program Files or onto
@@ -67,12 +67,10 @@ fix.
 
 ## Something is missing the first time a screen appears
 
-The preview draws only with shaders prepared before launch. When the game
-builds a shader that preparation did not reach, those draws are skipped for
-that session and the shader is recorded. The next launch prepares graphics
-again ("Preparing graphics ... This only runs when needed.") and includes it.
-If the same thing stays missing after relaunching, report it with the latest
-runtime log from `.local/preview/logs`.
+Vulkan prepares newly encountered shaders during play and stores them for later
+launches. A new effect may cause brief stutter while its shaders compile. If
+something stays missing after relaunching, report it with the latest runtime
+log from `.local/preview/logs`.
 
 ## Graphics setup fails with a resolution scale error
 
@@ -84,7 +82,9 @@ supported scale in the launcher, or remove the file to reset runtime settings.
 
 ## The game does not start
 
-Update the GPU driver and confirm that the GPU supports DirectX 12. Remove
+Update the GPU driver and confirm that the GPU supports Vulkan 1.3. Vulkan is
+the sole supported graphics API; Direct3D 12 is legacy and unsupported. Saved
+Direct3D 12 selections migrate to Vulkan on the next launch. Remove
 `.local/preview/config/pinyon_shift.toml` to reset runtime settings. Security
 software may also quarantine a newly compiled unsigned executable; restore it
 only after confirming it was produced by your local checkout.
@@ -107,6 +107,25 @@ Xbox menus do not use Windows pointer targeting. Use controller A or Space to
 activate the selected item. Pinyon Shift also maps a left click to controller A,
 so clicking while `SIGN IN` or another row is selected activates that row.
 Press Enter for the Xbox Start button.
+
+## A save copied from Xenia crashes the game
+
+Forza Horizon signs its save with the profile's XUID, so a save made in Xenia
+only loads under that Xenia profile's XUID. Copying it over the Pinyon Shift
+save makes the game stop when it loads the profile (#335). Xenia keeps the
+XUID in the folder name: `<Xenia>\content\<XUID>\4D5309C9`.
+
+Close the game, then pass that `4D5309C9` folder to the import tool:
+
+```powershell
+.\tools\import-xenia-save.ps1 -StateRoot .local\preview -Source 'C:\Xenia\content\E030000012345678\4D5309C9'
+```
+
+It copies the save to `user\<XUID>\4D5309C9` and sets `user_xuid` in
+`pinyon_shift.toml`. Your previous Pinyon Shift save stays in its own folder;
+`.\tools\import-xenia-save.ps1 -StateRoot .local\preview -Restore` switches
+back to it. If the folder is not named after the XUID, add `-Xuid` with the
+16-digit name of the Xenia profile folder.
 
 ## The game crashes
 

@@ -1,5 +1,123 @@
 # Changelog
 
+## 0.5.0 - 2026-10-11
+
+- Built natively for Linux and the Steam Deck (not Proton), with a Linux
+  launcher archive and Add to Steam; 60 fps at 1x on the Deck at 15 W.
+- Built natively for Apple silicon Macs, with Vulkan on Metal through
+  MoltenVK and a macOS launcher app.
+- Installed the Android alpha over Wi-Fi from the launcher's Android panel,
+  without adb, and renamed its package to `studio.deimos.pinyonshift`
+  (`pinyon.py android migrate` moves an earlier install).
+- Imported DLC from the player's own Xbox 360 packages, and added the
+  optional title update v4 build for the original Horizon Rally and the
+  1000 Club challenges offline (Windows and Android).
+- Drove on WASD by default, rebound keys and mapped controllers in game,
+  and opened the settings with a controller chord.
+- Started new installs at the Low-spec 60 preset, added Balanced 40, and
+  recommended a preset for the PC in the launcher.
+- Imported Xenia saves under their profile and accepted verified extracted
+  game folders.
+- Steam Deck and Linux: about 3 % faster rendering by default, and a new
+  F6 > GRAPHICS > SCENE SHADING > COARSE that shades once per 2 x 2
+  pixels for about 8 % more on the Deck, a little softer (#427).
+- Expose the screen correctly at any time of day above 1x resolution;
+  mornings were overexposed until about noon in game (#444).
+- Make up to three radio stations from your own music in the launcher's
+  Radio panel, each with its own name, logo and songs in place of Bass
+  Arena, Pulse or Rocks, adding to or replacing the playlist (#445).
+- YOUR MUSIC plays only once the festival has loaded; the title screen
+  keeps the game's own music (#445).
+- HDR output: richer colors (gamma 2.2 decode), softer highlights
+  (HDR HIGHLIGHTS), brake lights expanded with their hue, no flicker on
+  translucent HUD. HDR now switches without a restart, HDR COMPARE shows
+  SDR and HDR side by side, and HDR CALIBRATION sets the paper white
+  and the display's peak from test patterns (#442).
+- The launchers' Logs link opens the game's own logs (runtime.log)
+  once it has run, instead of the setup logs (#424).
+- Update from inside the launcher: **Update to <version>** downloads the
+  newer GitHub release, checks its SHA-256, replaces the launcher and
+  restarts, keeping saves, settings and game files. Works on Windows,
+  Linux and macOS and in portable installs; `PINYON_SHIFT_UPDATE_CHECK=0`
+  turns the check off.
+- Offer the optional immersive camera on F6 > DISPLAY (#419), with
+  SUBTLE, DEFAULT and STRONG presets and G-force, lean, speed shake and
+  head motion rows, all applied without a restart (#443).
+- Start when the Windows user folder has an accent or other non-ASCII
+  characters, such as C:\Users\Júnior; the game closed at once (#436).
+- Build a radio station from a folder of music with
+  `tools/build-fh1-radio.py`, as a mod that adds the tracks to Radio1-3
+  or replaces a playlist (#420).
+- Play your own MP3 and WAV files from the state's `music` folder (F6 >
+  AUDIO > YOUR MUSIC, F9 and Shift+F9 to skip); the game silences its own
+  music as under a 360 dashboard soundtrack (#420).
+- Convert quad lists to triangle lists on every platform: about 3 % of
+  the GPU's frame at 2x on an RTX 4080 and 5 % on an M4 Pro; offer
+  TEXTURE GAMMA on desktop (#427).
+
+- Install the Forza Horizon XE mod from the player's own ModDB downloads
+  with `pinyon.py xe` or the launchers. XE runs on the base build with
+  Horizon Rally hidden and plays its own new save; the player's save is kept.
+- Let mods hide marketplace DLC (`hide_dlc`) and play their own save
+  (`profile`); list a mod's new files with the disc's directories; build
+  database and archive patches on top of a mod's replacement files.
+
+- Default to bloom OFF with a live settings toggle. Suppress its contribution
+  through the title's frame-local scale while preserving weather and tone mapping.
+- Default to MSAA OFF on desktop and Android while preserving saved choices;
+  changes still require a restart.
+
+- Avoid racing active SDL threads during a fatal render-test rejection; flush
+  the diagnostic failure before exiting immediately.
+
+- Bind Rally stages to their owned ticket artwork through reserved base-UI
+  texture names, fixing black cards in the native ticket prototype.
+
+- Preserve unfinished Rally championships when a native event menu loads its
+  selection; apply the same resume guard as named event entries.
+
+- Apply each Rally championship's correct class target and the supported base
+  class restriction to its stages; Rally upgrade eligibility remains pending.
+
+- Correct Rally championship and stage names to match their owned routes;
+  rebuild older prepared content without changing saves.
+
+- Initialize Visual Studio builds when a portable launcher uses a temporary
+  path containing parentheses; preserve its TEMP/TMP paths afterward.
+
+- Preserve base route and region labels while adding owned Rally labels in
+  all 20 languages during content preparation.
+
+- Release the diagnostic Rally AI driver back to player control at stage end;
+  verify the same car/race handoff and final-stage free-roam return.
+
+- Require Visual Studio 2022 Build Tools 17.1 or newer during discovery, so
+  VS 2019 cannot bypass provisioning and fail later on `std::byteswap`.
+
+- Fixed Android MSAA and graphics presets failing to show that a restart is
+  required. Settings now honor the SDK flag lifecycle metadata.
+- Accepted Windows line endings in render-test scripts on Android and other
+  platforms, including the schema header and clock directive.
+
+- Replaced a startup crash from an unavailable saved Rally tyre with a recovery
+  message. Re-enable or restore its DLC to keep driving with the purchased part;
+  the save is preserved.
+- Added Rally tyre conversions derived from the supported base-disc data when
+  owned Rally content is enabled. A Mustang's normal purchase, save/reload and
+  initial Rally driving pass; base-car suspension/transmission remain pending.
+
+- Made Vulkan the sole supported graphics API. Direct3D 12 is legacy and
+  unsupported; saved selections migrate to Vulkan and player settings no
+  longer offer it.
+- Fixed Custom Upgrade crashing after loading a saved car by initializing its
+  native upgrade views when the car loads.
+- Added the missing Rally tyre, suspension and transmission upgrade definitions
+  to owned-content preparation on the base build, with Rally tyre parameters and
+  English and Spanish menu text.
+- Added an experimental Horizon Rally menu for owned content, with championship
+  selection, resume status and retirement confirmation. Full Rally gameplay is
+  still being qualified on the base-disc build.
+
 ## 0.4.0 - 2026-10-03
 
 - Fixed Vulkan losing the GPU on AMD Radeon cards: the game could wait on a

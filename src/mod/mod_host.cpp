@@ -9,6 +9,7 @@
 #include <mutex>
 #include <set>
 #include <fstream>
+#include <iterator>
 #include <span>
 
 #include <fmt/format.h>
@@ -16,6 +17,7 @@
 #include <toml++/toml.hpp>
 
 #include <rex/cvar.h>
+#include <rex/filesystem.h>
 #include <rex/kernel/xam/ui_provider.h>
 #include <rex/logging.h>
 #include <rex/platform/dynlib.h>
@@ -44,18 +46,24 @@ struct OffsetEntry {
   int32_t offset;
 };
 
+// The title-update build uses its own verified symbol table (TU-3).
+#if defined(PINYON_SHIFT_TITLE_UPDATE_V4) && PINYON_SHIFT_TITLE_UPDATE_V4
+#define PINYON_FH1_SYMBOLS "mod/fh1_symbols_v4.inc"
+#else
+#define PINYON_FH1_SYMBOLS "mod/fh1_symbols.inc"
+#endif
 #define PINYON_SYMBOL_EXECUTABLE(executable, sha256)
 #define PINYON_SYMBOL(name, address) {name, address},
 #define PINYON_OFFSET(name, offset)
 constexpr SymbolEntry kSymbols[] = {
-#include "mod/fh1_symbols.inc"
+#include PINYON_FH1_SYMBOLS
 };
 #undef PINYON_SYMBOL
 #undef PINYON_OFFSET
 #define PINYON_SYMBOL(name, address)
 #define PINYON_OFFSET(name, offset) {name, offset},
 constexpr OffsetEntry kOffsets[] = {
-#include "mod/fh1_symbols.inc"
+#include PINYON_FH1_SYMBOLS
 };
 #undef PINYON_SYMBOL
 #undef PINYON_OFFSET
@@ -63,7 +71,7 @@ constexpr OffsetEntry kOffsets[] = {
 #define PINYON_SYMBOL_EXECUTABLE(executable, sha256) constexpr const char* kExecutableSha = sha256;
 #define PINYON_SYMBOL(name, address)
 #define PINYON_OFFSET(name, offset)
-#include "mod/fh1_symbols.inc"
+#include PINYON_FH1_SYMBOLS
 #undef PINYON_SYMBOL
 #undef PINYON_OFFSET
 #undef PINYON_SYMBOL_EXECUTABLE
@@ -96,6 +104,7 @@ struct LoadedMod {
   rex::platform::DynamicLibrary library;
   PinyonModApi api{};
   PinyonMod mod{};
+  std::vector<std::string> hide_dlc;
 };
 std::vector<std::unique_ptr<LoadedMod>> g_loaded;
 std::vector<ModInfo> g_mods;
@@ -221,27 +230,17 @@ uint32_t ApiCallGuest(uint32_t address, const uint32_t* args, uint32_t count) {
     REXLOG_ERROR("Mod: call_guest outside a guest task is ignored");
     return 0;
   }
-  PPCFunc* function = rex::runtime::ResolveIndirectFunction(address);
   auto* kernel_state = rex::system::kernel_state();
-  if (!function || !kernel_state) return 0;
-  PPCContext& context = *rex::runtime::current_ppc_context();
-  // A copy of the live context, as the host's own guest calls use: the
-  // callee sees the real thread pointer and stack, and the interrupted code's
-  // registers and FP mode are left as they were.
-  const uint32_t saved_csr = context.fpscr.csr;
-  PPCContext nested = context;
-  nested.dispatch_address = 0;
-  nested.lr = 0;
-  nested.r1.u32 = context.r1.u32 - 0x70u;
-  PPCRegister* registers[] = {&nested.r3, &nested.r4, &nested.r5,
-                              &nested.r6, &nested.r7, &nested.r8};
+  if (!kernel_state || !kernel_state->function_dispatcher()->GetFunction(address)) return 0;
+  // Kernel callbacks (including file completion while loading an audio bank)
+  // use ThreadState's live context. Dispatch on that same context and restore
+  // it through the SDK trap frame instead of passing an unbound local copy.
+  uint64_t values[6]{};
   for (uint32_t i = 0; i < 6; ++i) {
-    registers[i]->u64 = (args && i < count) ? args[i] : 0;
+    values[i] = (args && i < count) ? args[i] : 0;
   }
-  function(nested, kernel_state->memory()->virtual_membase());
-  context.fpscr.csr = saved_csr;
-  context.fpscr.setcsr(saved_csr);
-  return nested.r3.u32;
+  return uint32_t(kernel_state->function_dispatcher()->ExecuteTrap(
+      rex::runtime::ThreadState::Get(), address, values, 6));
 }
 
 int ApiRegisterCvar(const char* name, const char* default_value, const char* description) {
@@ -385,6 +384,9 @@ struct Manifest {
   std::string version;
   std::filesystem::path library;
   std::vector<std::string> requires_mods, load_after, conflicts;
+  std::vector<std::string> hide_dlc;  // marketplace package IDs
+  std::string profile;                // its own save tree, user-<profile>
+  bool shares_save = false;           // visual only: keeps the player's save
 };
 
 bool ValidName(const std::string& name) {
@@ -399,7 +401,12 @@ std::string ReadManifest(const std::string& name, const std::filesystem::path& d
   if (!ValidName(name)) return "the name may only use letters, digits, _ and -";
   toml::table table;
   try {
-    table = toml::parse_file((directory / "mod.toml").string());
+    // Read through the path itself: toml++ would open a narrow path in the
+    // ANSI code page.
+    std::ifstream stream(directory / "mod.toml", std::ios::binary);
+    if (!stream) return "mod.toml cannot be read";
+    const std::string text{std::istreambuf_iterator<char>(stream), std::istreambuf_iterator<char>()};
+    table = toml::parse(text, rex::path_to_utf8(directory / "mod.toml"));
   } catch (const toml::parse_error& error) {
     return "mod.toml cannot be read: " + std::string(error.description());
   }
@@ -407,9 +414,22 @@ std::string ReadManifest(const std::string& name, const std::filesystem::path& d
   if (table["abi"].value_or(int64_t(0)) != int64_t(PINYON_MOD_ABI_VERSION)) {
     return "mod.toml asks for another mod ABI version";
   }
-  const std::string game = table["game_version"].value_or(std::string());
-  if (!game.empty() && std::string_view(kExecutableSha).rfind(game, 0) != 0 &&
-      game.rfind(kExecutableSha, 0) != 0) {
+  // game_version names the executable(s) a mod was made for: one prefix, or
+  // a list when it supports several builds (the base disc and the v4 title
+  // update have separate symbol tables, so name-based mods can target both).
+  const auto matches = [](const std::string& game) {
+    return game.empty() || std::string_view(kExecutableSha).rfind(game, 0) == 0 ||
+           game.rfind(kExecutableSha, 0) == 0;
+  };
+  if (const auto* games = table["game_version"].as_array()) {
+    bool supported = false;
+    for (const auto& entry : *games) {
+      const auto game = entry.value<std::string>();
+      if (!game) return "mod.toml game_version lists a non-string entry";
+      supported = supported || matches(*game);
+    }
+    if (!supported) return "made for another game executable";
+  } else if (!matches(table["game_version"].value_or(std::string()))) {
     return "made for another game executable";
   }
   manifest.version = table["version"].value_or(std::string("0"));
@@ -420,6 +440,19 @@ std::string ReadManifest(const std::string& name, const std::filesystem::path& d
   manifest.requires_mods = StringArray(table, "requires");
   manifest.load_after = StringArray(table, "load_after");
   manifest.conflicts = StringArray(table, "conflicts");
+  manifest.hide_dlc = StringArray(table, "hide_dlc");
+  manifest.profile = table["profile"].value_or(std::string());
+  manifest.shares_save = table["shares_save"].value_or(false);
+  if (!manifest.profile.empty() && !ValidName(manifest.profile)) {
+    return "mod.toml profile may only use letters, digits, _ and -";
+  }
+  for (const auto& package : manifest.hide_dlc) {
+    if (package.empty() || package.size() > 42 ||
+        !std::all_of(package.begin(), package.end(),
+                     [](unsigned char c) { return std::isxdigit(c); })) {
+      return "mod.toml hide_dlc lists something other than a package ID";
+    }
+  }
   return {};
 }
 
@@ -475,6 +508,31 @@ void EnqueueHostGuestTask(std::function<void()> task) {
 uint32_t CallGuest(uint32_t address, std::initializer_list<uint32_t> args) {
   const std::vector<uint32_t> values(args);
   return ApiCallGuest(address, values.data(), uint32_t(values.size()));
+}
+
+std::string RequestedProfile(const std::filesystem::path& state_root,
+                             const std::string& enabled_mods) {
+  for (const auto& name : SplitList(enabled_mods)) {
+    Manifest manifest;
+    if (ReadManifest(name, state_root / "mods" / name, manifest).empty() &&
+        !manifest.profile.empty()) {
+      return manifest.profile;
+    }
+  }
+  return {};
+}
+
+bool ModsShareSave(const std::filesystem::path& state_root, const std::string& enabled_mods) {
+  const auto names = SplitList(enabled_mods);
+  if (names.empty()) return false;
+  for (const auto& name : names) {
+    Manifest manifest;
+    if (!ReadManifest(name, state_root / "mods" / name, manifest).empty() ||
+        !manifest.shares_save || !manifest.profile.empty()) {
+      return false;
+    }
+  }
+  return true;
 }
 
 void LoadMods(const std::filesystem::path& state_root, const std::string& enabled_mods,
@@ -546,7 +604,8 @@ void LoadMods(const std::filesystem::path& state_root, const std::string& enable
     auto loaded = std::make_unique<LoadedMod>();
     loaded->info = *info_it;
     loaded->name = name;
-    loaded->directory = info_it->directory.string();
+    loaded->directory = rex::path_to_utf8(info_it->directory);
+    loaded->hide_dlc = manifest.hide_dlc;
     if (manifest.library.empty()) {
       info_it->loaded = true;
       loaded->info.loaded = true;
@@ -554,7 +613,7 @@ void LoadMods(const std::filesystem::path& state_root, const std::string& enable
       continue;
     }
     if (!loaded->library.Load(manifest.library)) {
-      info_it->problem = "cannot load " + manifest.library.string();
+      info_it->problem = "cannot load " + rex::path_to_utf8(manifest.library);
       continue;
     }
     auto abi = loaded->library.GetSymbol<PinyonModAbiVersionFn>("rex_mod_abi_version");
@@ -660,8 +719,9 @@ void RecordSave(uint32_t body_address, uint32_t body_size) {
   std::error_code error;
   std::filesystem::create_directories(g_modded_user_root, error);
   const auto path = g_modded_user_root / "pinyon_shift_mods.json";
-  std::ofstream(path.string() + ".tmp", std::ios::binary | std::ios::trunc) << json;
-  std::filesystem::rename(path.string() + ".tmp", path, error);
+  const auto temporary = std::filesystem::path(path) += ".tmp";
+  std::ofstream(temporary, std::ios::binary | std::ios::trunc) << json;
+  std::filesystem::rename(temporary, path, error);
   diagnostics::RecordEvent("mod.save.tagged", {{"mod_set", ModSetHash()}});
 }
 
@@ -675,6 +735,18 @@ std::vector<std::filesystem::path> OverlayRoots() {
     if (std::filesystem::is_directory(root, error)) roots.push_back(root);
   }
   return roots;
+}
+
+std::vector<std::string> HiddenDlc() {
+  std::vector<std::string> packages;
+  for (const auto& mod : g_loaded) {
+    for (const auto& package : mod->hide_dlc) {
+      if (std::find(packages.begin(), packages.end(), package) == packages.end()) {
+        packages.push_back(package);
+      }
+    }
+  }
+  return packages;
 }
 
 std::vector<std::filesystem::path> TextureRoots() {

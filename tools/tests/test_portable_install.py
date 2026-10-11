@@ -45,9 +45,9 @@ class PortableLauncherContractTests(unittest.TestCase):
         self.assertIn('MarkerFileName = "portable.txt"', self.portable)
         self.assertIn('CommandLineSwitch = "--portable"', self.portable)
         self.assertIn('DataFolderName = "data"', self.portable)
-        readme = read("README.md")
+        guide = read("docs/INSTALLING.md")
         for text in ("portable.txt", "--portable", "Portable:"):
-            self.assertIn(text, readme)
+            self.assertIn(text, guide)
         self.assertIn("portable.txt", read("docs/TROUBLESHOOTING.md"))
 
     def test_portable_root_is_derived_from_the_launcher_folder_each_start(self):
@@ -59,7 +59,12 @@ class PortableLauncherContractTests(unittest.TestCase):
         portable_branch = portable_branch[:portable_branch.index("else")]
         self.assertNotIn("InstallRootPreference", portable_branch)
         self.assertIn("_canChooseInstallRoot = false;", portable_branch)
-        self.assertNotIn("Registry", self.window + self.portable)
+        # The one registry entry, the RunOnce that resumes setup after a
+        # restart, is skipped in portable mode.
+        self.assertNotIn("Registry", self.portable)
+        registry = self.window[self.window.index("Registry.") - 300:self.window.index("Registry.")]
+        self.assertIn("if (_portableRoot is null)", registry)
+        self.assertEqual(self.window.count("Registry."), 1)
         self.assertNotIn("LocalApplicationData", self.portable)
 
     def test_portable_folder_must_be_writable_and_short_enough(self):
@@ -68,6 +73,16 @@ class PortableLauncherContractTests(unittest.TestCase):
         self.assertIn("Program Files", self.portable)
         self.assertIn("MaximumDataRootLength = 70", self.portable)
         self.assertIn("PortableMode.PathLengthProblem(_portableRoot)", self.window)
+        # A chosen install folder holds the same tree (#393).
+        self.assertIn('PortableMode.PathLengthProblem(_installRoot, "install")', self.window)
+
+    def test_a_missing_vulkan_driver_is_raised_before_the_build(self):
+        click = self.window[self.window.index("private async void PrimaryButton_Click"):]
+        click = click[:click.index('SetPrimaryText("Building')]
+        self.assertIn("ConfirmGraphicsDriverBeforeBuild()", click)
+        hardware = (ROOT / "launcher/PinyonShift.Launcher/HardwareCheck.cs").read_text(encoding="utf-8")
+        for vendor in ("0x1002", "0x10DE", "0x8086"):
+            self.assertIn(vendor, hardware)
 
     def test_children_keep_temporary_files_and_overrides_inside(self):
         for name in ('"TEMP"', '"TMP"', '"PSModuleAnalysisCachePath"', '"PINYON_SHIFT_INSTALL_ROOT"',
@@ -105,11 +120,14 @@ class GameStorageTests(unittest.TestCase):
 
     def test_every_sdk_storage_root_is_overridden_from_the_state_root(self):
         app = read("src/pinyon_shift_app.cpp")
-        for line in ('paths.user_data_root = state_root / "user";',
+        # The user root is a long (\\?\) path so deep save trees stay under
+        # the Win32 limit; the v4 build mounts its own update root.
+        for line in ('paths.user_data_root = LongHostPath(state_root / "user");',
                      'paths.update_data_root = state_root / "update";',
+                     'paths.update_data_root = state_root / "title-update-v4";',
                      'paths.cache_root = state_root / "cache";',
                      'paths.config_path = state_root / "config" / "pinyon_shift.toml";',
-                     'REXCVAR_SET(log_file, (state_root / "logs" / "runtime.log").string());'):
+                     'REXCVAR_SET(log_file, rex::path_to_utf8(state_root / "logs" / "runtime.log"));'):
             self.assertIn(line, app)
         diagnostics = read("src/pinyon_shift_diagnostics.cpp")
         self.assertIn('EnvironmentPath("PINYON_SHIFT_STATE_ROOT")', diagnostics)

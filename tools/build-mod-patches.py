@@ -22,10 +22,13 @@ import re
 import shutil
 import sqlite3
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 GENERATED = "zz-db-patches"
+# Mods these tools write; never a base for another generated file.
+GENERATED_MODS = ("zz-db-patches", "zz-archive-patches")
 
 
 def enabled_mods(config: Path) -> list[str]:
@@ -45,8 +48,137 @@ def set_enabled_mods(config: Path, mods: list[str]) -> None:
     config.write_text(text, encoding="utf-8", newline="\n")
 
 
+def effective_game_file(state: Path, mods: list[str], game_root: Path, relative: str) -> Path:
+    """The file the title opens at `relative`: the earliest enabled mod's
+    whole-file replacement under game/ (as the host matches it, ignoring
+    case), otherwise the player's own copy. A total conversion such as the
+    XE mod replaces gamedb.slt and zipmanifest.xml, and generated patches
+    must build on its files, not on the disc's."""
+    for mod in mods:
+        if mod in GENERATED_MODS:
+            continue
+        current = state / "mods" / mod / "game"
+        for part in relative.split("/"):
+            if not current.is_dir():
+                break
+            current = next((c for c in current.iterdir() if c.name.lower() == part.lower()),
+                           current / part)
+        if current.is_file():
+            return current
+    return game_root / relative
+
+
+def hidden_dlc(state: Path) -> dict[str, str]:
+    """Marketplace package ID -> the enabled mod whose mod.toml hides it
+    (`hide_dlc`), as the game's mod host reads it. The XE mod cannot run
+    with Rally, so the launchers leave Rally unprepared while it is on."""
+    hidden: dict[str, str] = {}
+    for mod in enabled_mods(state / "config" / "pinyon_shift.toml"):
+        manifest = state / "mods" / mod / "mod.toml"
+        text = manifest.read_text(encoding="utf-8") if manifest.is_file() else ""
+        match = re.search(r'^hide_dlc[ \t]*=[ \t]*\[([^\]]*)\]', text, re.MULTILINE)
+        for package in re.findall(r'"([0-9A-Fa-f]{1,42})"', match.group(1) if match else ""):
+            hidden.setdefault(package.upper(), mod)
+    return hidden
+
+
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest().upper()
+
+
+BUILTIN = ROOT / "mods_src" / "builtin"
+# Written into each installed built-in mod; a player's own mod of the same
+# name (without it) is never replaced.
+BUILTIN_MARKER = ".pinyon-builtin"
+
+
+def _tree(root: Path) -> dict[str, bytes]:
+    return {path.relative_to(root).as_posix(): path.read_bytes()
+            for path in sorted(root.rglob("*")) if path.is_file() and path.name != BUILTIN_MARKER}
+
+
+def rename_written_directory(source: Path, target: Path) -> None:
+    """Rename a directory just written. On Windows a scanner can still hold
+    the new files for a moment, and the rename is then denied."""
+    for attempt in range(20):
+        try:
+            source.rename(target)
+            return
+        except PermissionError:
+            if attempt == 19:
+                raise
+            time.sleep(0.25)
+
+
+def install_builtin_mods(state: Path, source: Path = BUILTIN) -> list[str]:
+    """Copy the project's own optional mods (such as the immersive camera)
+    into <state>/mods, replacing an older copy, so the player can switch them
+    on in the MODS settings. They are not enabled here (see
+    enable_builtin_mods)."""
+    installed = []
+    if not source.is_dir():
+        return installed
+    for mod in sorted(p for p in source.iterdir() if p.is_dir()):
+        target = state / "mods" / mod.name
+        if target.exists() and not (target / BUILTIN_MARKER).is_file():
+            continue
+        if target.exists() and _tree(target) == _tree(mod):
+            continue
+        staging = target.with_name(target.name + ".installing")
+        if staging.exists():
+            shutil.rmtree(staging)
+        shutil.copytree(mod, staging)
+        (staging / BUILTIN_MARKER).write_text("Installed by tools/build-mod-patches.py; "
+                                              "replaced when the game updates.\n",
+                                              encoding="utf-8", newline="\n")
+        if target.exists():
+            shutil.rmtree(target)
+        rename_written_directory(staging, target)
+        installed.append(mod.name)
+    return installed
+
+
+def _manifest(state: Path, mod: str) -> str:
+    manifest = state / "mods" / mod / "mod.toml"
+    return manifest.read_text(encoding="utf-8") if manifest.is_file() else ""
+
+
+def enable_builtin_mods(state: Path) -> list[str]:
+    """Enable each installed built-in mod whose mod.toml says
+    `always_enabled = true` (the immersive camera, whose strength is a
+    setting since #443). A player who had it switched off gets its
+    `off_settings` ("key = value" lines, written only where the settings
+    file has no such key), so the game looks as before. Returns the mods
+    enabled here."""
+    config = state / "config" / "pinyon_shift.toml"
+    mods = enabled_mods(config)
+    added = []
+    for marker in sorted((state / "mods").glob(f"*/{BUILTIN_MARKER}")):
+        mod = marker.parent.name
+        text = _manifest(state, mod)
+        if mod in mods or not re.search(r"^always_enabled[ \t]*=[ \t]*true[ \t]*(#.*)?$", text,
+                                        re.MULTILINE):
+            continue
+        settings = config.read_text(encoding="utf-8") if config.exists() else ""
+        match = re.search(r"^off_settings[ \t]*=[ \t]*\[([^\]]*)\]", text, re.MULTILINE)
+        for line in re.findall(r'"([A-Za-z0-9_]+[ \t]*=[^"]*)"', match.group(1) if match else ""):
+            key = line.split("=", 1)[0].strip()
+            if not re.search(rf"^{key}[ \t]*=", settings, re.MULTILINE):
+                settings = settings.rstrip("\n") + ("\n" if settings else "") + line + "\n"
+        config.parent.mkdir(parents=True, exist_ok=True)
+        config.write_text(settings, encoding="utf-8", newline="\n")
+        mods.append(mod)
+        added.append(mod)
+    if added:
+        set_enabled_mods(config, mods)
+    return added
+
+
+def shares_save(state: Path, mod: str) -> bool:
+    """mod.toml declares `shares_save = true` (it never changes saved data)."""
+    manifest = state / "mods" / mod / "mod.toml"
+    text = manifest.read_text(encoding="utf-8") if manifest.is_file() else ""
+    return re.search(r"^shares_save[ \t]*=[ \t]*true[ \t]*(#.*)?$", text, re.MULTILINE) is not None
 
 
 def build(state: Path, game_root: Path) -> dict:
@@ -62,7 +194,7 @@ def build(state: Path, game_root: Path) -> dict:
             shutil.rmtree(target)
         set_enabled_mods(config, mods)
         return {"patched": False, "mods": mods}
-    base = game_root / "media" / "db" / "gamedb.slt"
+    base = effective_game_file(state, mods, game_root, "media/db/gamedb.slt")
     database = target / "game" / "media" / "db" / "gamedb.slt"
     staging = database.with_suffix(".building")
     database.parent.mkdir(parents=True, exist_ok=True)
@@ -80,7 +212,8 @@ def build(state: Path, game_root: Path) -> dict:
     (target / "mod.toml").write_text(
         f'# Generated by tools/build-mod-patches.py; rebuilt when mods change.\n'
         f'name = "{GENERATED}"\nversion = "1"\nabi = 1\n', encoding="utf-8", newline="\n")
-    manifest = {"base_sha256": sha256(base), "patched_sha256": sha256(database),
+    manifest = {"base": base.as_posix(), "base_sha256": sha256(base),
+                "patched_sha256": sha256(database),
                 "scripts": applied}
     (target / "patches.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     set_enabled_mods(config, [GENERATED] + mods)
@@ -92,7 +225,12 @@ def main() -> int:
     parser.add_argument("state_root", type=Path)
     parser.add_argument("--game-root", type=Path, default=ROOT / ".local" / "game" / "base")
     args = parser.parse_args()
+    (args.state_root / "mods").mkdir(parents=True, exist_ok=True)
+    installed = install_builtin_mods(args.state_root.resolve())
+    enabled = enable_builtin_mods(args.state_root.resolve())
     result = build(args.state_root.resolve(), args.game_root.resolve())
+    result["builtin_installed"] = installed
+    result["builtin_enabled"] = enabled
     print(json.dumps(result, indent=2))
     return 0
 

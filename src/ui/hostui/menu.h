@@ -4,6 +4,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace pinyon_shift::hostui {
@@ -63,6 +64,31 @@ class MenuScreen {
       text_input_(code_point);
     }
   }
+  // The next key or mouse button press as a virtual key code, before menu
+  // navigation sees it, for a screen that asks for a key (a keybind).
+  void set_key_capture(std::function<void(int virtual_key)> key_capture) {
+    key_capture_ = std::move(key_capture);
+  }
+  bool captures_keys() const { return bool(key_capture_); }
+  void CaptureKey(int virtual_key) {
+    if (key_capture_) {
+      key_capture_(virtual_key);
+    }
+  }
+  // Runs on every frame the screen is on top, on the UI thread. While a
+  // screen ticks, the pad does not navigate: the controller mapping
+  // assistant reads the controller's raw inputs instead.
+  void set_tick(std::function<void()> tick) { tick_ = std::move(tick); }
+  bool ticks() const { return bool(tick_); }
+  void Tick() {
+    if (tick_) {
+      tick_();
+    }
+  }
+  // A band of the guest image, as fractions of its height, that the menu
+  // does not dim (the HDR calibration patterns show there), or none.
+  void set_backdrop_gap(float top, float bottom) { backdrop_gap_ = {top, bottom}; }
+  std::pair<float, float> backdrop_gap() const { return backdrop_gap_; }
   // A line shown under the rows, or empty.
   std::string note() const { return note_ ? note_() : std::string(); }
   const std::vector<MenuRow>& rows() const { return rows_; }
@@ -83,7 +109,10 @@ class MenuScreen {
   std::function<std::string()> note_;
   std::function<void()> on_back_;
   std::function<void(char32_t)> text_input_;
+  std::function<void(int)> key_capture_;
+  std::function<void()> tick_;
   size_t focus_ = 0;
+  std::pair<float, float> backdrop_gap_ = {1.0f, 1.0f};
 };
 
 // Turns polled pad state into navigation commands with the usual menu key

@@ -40,11 +40,35 @@ library = "code/hello_telemetry.dll"  # omit for an asset-only mod
 requires = []                     # mods that must be enabled and load first
 load_after = []                   # mods to load after when they are enabled
 conflicts = []                    # mods that must not be enabled with this one
+hide_dlc = []                     # marketplace package IDs the title must not see
+profile = ""                      # play a new save, <state>/user-<profile>
+shares_save = false               # true: never changes saved data, keeps the player's save
 ```
 
 A mod whose requirement is missing or failed, or that conflicts with an
 enabled mod, is not loaded. Load order follows `requires` and `load_after`,
 otherwise the `enabled_mods` order.
+
+`game_version` may also be a list. The FH1 v4 title-update build identifies
+itself as `74B033805AB1BCAA`, the SHA-256 prefix of its verified patched
+image. It has its own symbol table, so a mod that uses only symbol and hook
+names can list both builds:
+`game_version = ["DB40DF605ADE49A6", "74B033805AB1BCAA"]`. A mod that relies
+on raw guest addresses or field offsets must target one build: classes grew
+in v4, so several offsets differ (see the
+[title update v4 backlog](TITLE_UPDATE_V4_BACKLOG.md)).
+
+`hide_dlc` lists marketplace package IDs (the hex names of the DLC
+directories) that the title does not see while the mod is loaded: they are
+not enumerated, opened or counted as installed, and nothing in them is
+changed. A mod that replaces the database an expansion extends hides it; the
+XE mod hides Horizon Rally (`6F6992766050D818245ADD408031E280FB5F4E634D`),
+and with it hidden the built-in Rally adapter stays off. Each hidden package
+is logged once in a `mod.dlc.hidden` event.
+
+`profile` gives a mod its own new save instead of the shared modded copy
+(see below). Use it when the mod's saves cannot be mixed with the game's,
+such as a total conversion that renumbers cars.
 
 ## Your saves stay separate
 
@@ -56,16 +80,74 @@ with the enabled mods, a hash of the mod set and a hash of the plaintext save
 body, so a save can always be traced to the mods that made it. Turning all
 mods off returns to the unmodded profile unchanged.
 
+The first enabled mod with a `profile` replaces `user-modded` with
+`<state>/user-<profile>`, created empty the first time (a
+`mod.profile.created` event), so the game starts a new save there. Neither
+the player's own profile nor `user-modded` is opened while it is enabled.
+
+A mod that changes only how the game looks or sounds, never what it saves,
+sets `shares_save = true`. When every enabled mod does (the generated
+`zz-archive-patches` counts as its sources do; `zz-db-patches` never does),
+the title keeps the player's own profile in `<state>/user`, and no
+`user-modded` copy is made.
+
+Marketplace DLC installations and their entitlement headers are shared from
+`<state>/user`: launcher enable/disable changes apply to both profiles. Creating
+the modded profile copies save data without duplicating DLC assets. Existing
+DLC copies under `user-modded` are left in place but are not enumerated.
+
+## Built-in mods
+
+The project's own optional mods live in `mods_src/builtin/<name>`. Before
+each start, `tools/build-mod-patches.py` copies each one into
+`<state>/mods/<name>` (replacing an older copy, and never a player's own mod
+of the same name), with a `.pinyon-builtin` marker. They are not enabled,
+except one whose `mod.toml` sets `always_enabled = true`: it is added to
+`enabled_mods`, and a player who had it switched off gets its
+`off_settings` (only for settings not already in their file), so nothing
+looks different. Such a mod is not listed on F6 > MODS.
+`immersive_camera` (#419) appends Pinyon Shift's own camera layers to
+`media/camera.zip`'s `CameraPhysics.xml` (G-forces, the throttle and brake
+jolt, corner lean, speed shake, braking vibration, breathing and head sway),
+written by `tools/build-immersive-camera.py`, and sets `shares_save`. It
+always loads (#443): each layer carries its effect group in the fraction of
+its `SpringK` or `NoiseSeed`, and the game's per-frame layer update scales
+the group by `pinyon_shift_camera_gforce`, `_lean`, `_shake` and `_head`
+(0 to 2, applied at once). F6 > DISPLAY > IMMERSIVE CAMERA sets all four
+(OFF 0, SUBTLE 0.5, DEFAULT 1, STRONG 1.5), and the four CAMERA rows below it
+set each one (CUSTOM). On the v4 build the title update's own
+`media.zip` carries `camera/cameraphysics.xml`, which the game reads instead,
+so the layers do not load there yet.
+
 ## Asset mods
 
 Files under `game/` replace the game's files with the same path
 (case-insensitive) while the mod is enabled; an earlier mod in the load order
-wins over a later one. Replacement is whole files: the title reads its
+wins over a later one. New directories supplied by a mod are accessible;
+existing disc directories retain their base files alongside replacements.
+A mod's new files are also listed with the disc's directories, as the title
+enumerates some of them (wildcards in `FilesToCache.xml`); the overlay
+records the number of entries it added in a `mod.overlay.listed` event.
+Replacement is whole files: the title reads its
 archives (`media/*.zip`) through C streams, so an asset mod ships a complete
 archive. Nothing from the game disc may be distributed; a mod's install
 instructions should build its files from the player's own copy, as
 `tools/install-sample-mod.py english_strings` does. Each replaced file the
 title opens is logged as `mod.file.override`.
+
+For an FH1 archive containing XMem members, use
+[`patch-fh1-archive.py`](../tools/patch-fh1-archive.py) to replace selected
+members in a new archive built from your own game files:
+
+```powershell
+python tools/patch-fh1-archive.py <original.zip> <new.zip> --replace member.xml=<edited.xml>
+```
+
+The tool retains other members' compressed bytes and updates both ZIP header
+offsets and FH1's absolute payload offsets (extra field `0x1123`). Ordinary ZIP
+repacking can leave those offsets pointing into unrelated data. The output
+must be a new file; the original is never overwritten. A loose XML under
+`game/media/GameModes` does not replace an existing member of `gamemodes.zip`.
 
 The title checks some game files block by block against SHA-256 digests of
 the originals and stops with a dirty-disc error on a mismatch. For a file a
@@ -109,7 +191,9 @@ structure with only the elements to change: an element matches the file's
 element of the same tag with the same `id`, `name`, `model`, `key` or `type`
 attribute, or, without one, the one at the same position among its tag; its
 attributes and text replace the file's, unmatched elements are added, and
-`pinyon-remove="true"` removes the matched one. For example, no free-roam
+`pinyon-remove="true"` removes the matched one. Elements without a key attribute (the
+layers of `CameraPhysics.xml`) match by position, so a merge that adds one
+marks it `pinyon-add="true"`: it is appended, and the attribute dropped. For example, no free-roam
 traffic:
 
 ```xml
@@ -154,6 +238,60 @@ folders again and reloads every texture (`texture_replacement_reload`), so
 edited, added or removed replacements show without a restart; the game
 hitches once while its caches refill.
 
+## Custom radio stations
+
+`tools/build-fh1-radio.py` turns a folder of music into an asset mod that
+adds the tracks to Radio1, Radio2 or Radio3, or replaces a station's
+playlist with them (#420, FB-1.4). It needs FFmpeg on the `PATH` (or
+`--ffmpeg`), and builds from the player's own game files:
+
+```powershell
+python tools/build-fh1-radio.py D:\Music\Drive --state-root <state> --station Radio1 --replace --enable
+```
+
+Any format FFmpeg reads is encoded to the bank's own format (MPEG-1 Layer
+III, 48 kHz stereo, 160 kbps CBR) and appended to a copy of
+`media/audio/radio/Radio_Music.fsb`, so the stock tracks keep their indexes
+and the other stations are unchanged. The tool writes the bank,
+`RadioSoundbankInfo_Music.xml` (computed, not generated by the game) and
+`RadioSystem.xml` to `<state>/mods/custom_radio/game/media/audio/radio`, sets
+`shares_save`, and with `--enable` adds the mod to `enabled_mods`.
+`--station` can be repeated; `--name` builds a differently named mod; running
+it again rebuilds the mod it made. Titles and artists come from the files'
+tags, or the file name. Each track's `SongStart` and `EventStart` sync
+points are at its beginning and `IdentStart` four seconds before its end.
+The DJ lines are unchanged (FB-1.5).
+
+The bank is a copy of the player's 680 MB original plus the new tracks, so
+the mod takes that much disk space; nothing in it may be distributed.
+
+`pinyon.py radio` manages whole stations, which the launchers' Radio panels
+use (#445). A station takes over one of the three slots the executable
+names (Radio1 HORIZON BASS ARENA, Radio2 HORIZON PULSE, Radio3 HORIZON
+ROCKS) with its own name, folders or files and optional PNG logo, and
+either replaces the slot's playlist or adds to it. The stations are kept in
+`<state>/config/radio-stations.json`:
+
+```powershell
+python tools/pinyon.py radio create "Night Drive" --slot Radio2 --state-root <state>
+python tools/pinyon.py radio add Radio2 D:\Music\Night --state-root <state>
+python tools/pinyon.py radio logo Radio2 night.png --state-root <state>
+python tools/pinyon.py radio build --state-root <state>
+```
+
+`build` writes every station into the one `custom_radio` mod and enables
+it. The name replaces the station's text in each language's `MyProfile.str`
+(the RADIO STATION option) and `Tips.str` (the loading tip's title and
+text), and the logo is fitted into `Hud/Radio/RS_BassArena.xds`,
+`RS_Pulse.xds` or `RS_2Eleven.xds` (210x100 DXT5, the station popup), all
+as archive members built from the player's files. With no stations left,
+`build` removes the mod and disables it. `rename`, `delete`, `remove`,
+`mode replace|add`, `logo --clear` and `list` change or show the stations;
+`ffmpeg PATH` stores the FFmpeg to use (otherwise `PINYON_SHIFT_FFMPEG` or
+the `PATH`), and `--json` prints one JSON object for the launchers.
+`--check-bank [file]` checks that the tool reads and rebuilds a bank byte for
+byte.
+
 ## Database patches
 
 The game's data (cars, prices, events) is the SQLite database
@@ -171,6 +309,62 @@ result as the generated mod `zz-db-patches`, listed first so it wins. With no
 scripts left the generated mod is removed and the stock database returns.
 `zz-db-patches/patches.json` records the base and patched hashes and every
 script applied.
+
+When an enabled mod replaces `media/db/gamedb.slt` itself, as the XE mod
+does, the scripts apply to that mod's database instead of the disc's; the
+earliest enabled mod in the load order that ships one is the base, recorded as
+`base` in `patches.json`. Archive members and merges likewise start from a
+mod's replacement archive or `zipmanifest.xml` when one is enabled.
+
+## The Forza Horizon XE mod
+
+[Forza Horizon XE](https://www.moddb.com/mods/forza-horizon-xe-mod) by
+Teancum adds about 170 cars, among them FH2 and Fast & Furious 7 cars, plus
+engine and drivetrain swaps. It is installed from the player's own downloads;
+nothing from it is part of Pinyon Shift. Download both archives from ModDB:
+`Forza_Horizon_1_XE_Mod_v1.0.7z` (2.0 GB) and the
+`FH1XE_v1.01_hotfix.7z` (1.6 GB). In the Windows launcher, open DLC and choose
+**Download from ModDB**: it opens both ModDB download pages in the player's
+browser and installs the archives as soon as both finish in the Downloads
+folder (found by name and size, then checked by MD5; it waits up to four
+hours). **Install XE** takes archives the player already has. Linux and macOS
+launchers have the same controls. From a terminal:
+
+```text
+python tools/pinyon.py xe install Forza_Horizon_1_XE_Mod_v1.0.7z FH1XE_v1.01_hotfix.7z
+python tools/pinyon.py xe install --find [--open-pages] [--wait SECONDS] [--dir DIR]
+python tools/pinyon.py xe find
+python tools/pinyon.py xe status | enable | disable | remove
+```
+
+Pinyon Shift does not fetch XE by itself. ModDB's `robots.txt` disallows
+automated clients on `/downloads/start/` and `/downloads/mirror/`, the pages a
+scripted download would need (checked 2026-10-10, #426), so the player's
+browser downloads it, from ModDB, with credit to Teancum shown in the launcher.
+
+`install` checks each archive's size and MD5 against ModDB's, extracts them
+(the hotfix over 1.0) with 7-Zip or bsdtar (`tar.exe` on Windows 10 and
+later), and keeps only the files that differ from the player's game: 10
+replaced files (seven cars, the database, the UI textures and
+`zipmanifest.xml`) and about 1,140 new ones, 2.4 GB in `<state>/mods/xe`. It
+needs 7 GB free while it works. XE's executables are not used: they differ
+from the disc's only in the file hash table, and the host accepts the hashes
+of files a mod replaces, so the base build runs XE unchanged.
+
+As XE's readme asks, the mod runs on the base game without the title update,
+with Horizon Rally removed and on a new save. Its `mod.toml` targets the base
+executable, hides Rally and sets `profile = "xe"`, so XE plays
+`<state>/user-xe` and the player's own save is untouched. While XE is on, the
+launcher starts the base build even if title update v4 is chosen. `disable`
+returns to the player's own save, and `remove` deletes the mod's files but
+keeps `user-xe`. Smaller mods made for XE can be enabled before it; their
+database scripts apply to XE's database.
+
+Known XE issues, present on the console too: some new cars have black
+thumbnails, and the Autoshow asks for an ambience bank XE does not ship
+while an XE car is shown (`AMB_FA_Autoshow.fsb`, logged and harmless).
+The route `config/render-tests/fh1-xe-buy-car.fh1test` buys an XE car and
+races it from a seed with XE installed.
 
 ## Native mods
 

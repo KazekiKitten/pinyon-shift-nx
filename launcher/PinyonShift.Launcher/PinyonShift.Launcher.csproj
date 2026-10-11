@@ -25,6 +25,10 @@
     <ApplicationIcon>Branding\pinyon-shift.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
+    <!-- The updater both launchers share (FB-10.7). -->
+    <Compile Include="..\Shared\LauncherUpdate.cs" Link="Shared\LauncherUpdate.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <!-- Derived from .github/pinyon-shift-logo.png. -->
     <Resource Include="Branding\pinyon-shift.ico" />
     <Resource Include="Branding\logo-light.png" />

@@ -18,6 +18,7 @@ CHECK = r'''
 using System;
 using System.IO;
 using System.IO.Compression;
+using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,6 +27,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using PinyonShift.Launcher;
+using PinyonShift.Launcher.Updates;
 
 class Check {
     static void Require(bool value, string message) {
@@ -40,9 +42,12 @@ class Check {
         var resolver = typeof(MainWindow).GetMethod("ResolveRepositoryRootAsync", flags)!;
         string Resolve(string selected) => ((Task<string>)resolver.Invoke(window, [selected])!).GetAwaiter().GetResult();
         bool CanChoose() => (bool)typeof(MainWindow).GetField("_canChooseInstallRoot", flags)!.GetValue(window)!;
-        var root = AppContext.BaseDirectory;
+        // The launcher expands 8.3 short names (C:\Users\RUNNER~1) in the
+        // paths it resolves; compare against the same long form.
+        var root = Path.GetFullPath(AppContext.BaseDirectory);
         using (var zip = ZipFile.Open(Path.Combine(root, "pinyon-shift-source.zip"), ZipArchiveMode.Create)) {
-            foreach (var name in new[] { "config/supported-dumps.json", "tools/setup-preview.ps1" }) {
+            foreach (var name in new[] { "config/supported-dumps.json", "tools/setup-preview.ps1", "CMakeLists.txt",
+                "src/main.cpp", "src/config/host_config.cpp", "src/ui/settings_menu.cpp", "src/save/profile_body.cpp" }) {
                 using var writer = new StreamWriter(zip.CreateEntry(name).Open());
                 writer.Write("test payload");
             }
@@ -55,6 +60,27 @@ class Check {
         var sentinel = Path.Combine(installed, "user-save-sentinel");
         File.WriteAllText(sentinel, "preserve");
         Require(Resolve(selected) == installed && File.ReadAllText(sentinel) == "preserve", "Existing files changed");
+        var preservedState = Path.Combine(installed, ".local", "preview");
+        Directory.CreateDirectory(Path.Combine(preservedState, "user", "ForzaProfile"));
+        Directory.CreateDirectory(Path.Combine(preservedState, "config"));
+        var save = Path.Combine(preservedState, "user", "ForzaProfile", "ForzaProfile");
+        var config = Path.Combine(preservedState, "config", "settings.toml");
+        File.WriteAllBytes(save, new byte[] { 0, 255, 17, 42 });
+        File.WriteAllText(config, "keep my settings");
+        foreach (var damaged in new[] { "src/main.cpp", "src/config/host_config.cpp",
+                "src/ui/settings_menu.cpp", "src/save/profile_body.cpp" }) {
+            var file = Path.Combine(installed, damaged);
+            File.Delete(file);
+            Require(Resolve(selected) == installed && File.ReadAllText(file) == "test payload",
+                $"Missing source not repaired: {damaged}");
+            Require(Convert.ToHexString(File.ReadAllBytes(save)) == "00FF112A"
+                && File.ReadAllText(config) == "keep my settings"
+                && File.ReadAllText(sentinel) == "preserve", "Source repair changed user files");
+        }
+        File.WriteAllText(Path.Combine(installed, "src/main.cpp"), "truncated");
+        Require(Resolve(selected) == installed
+            && File.ReadAllText(Path.Combine(installed, "src/main.cpp")) == "test payload",
+            "Truncated source accepted");
         var alternate = Path.Combine(root, "second installation");
         Require(Resolve(alternate).StartsWith(alternate), "Switch failed");
         Require(File.ReadAllText(sentinel) == "preserve", "Switch touched old installation");
@@ -75,10 +101,44 @@ class Check {
         typeof(MainWindow).GetField("_busy", flags)!.SetValue(window, false);
         update.Invoke(window, null);
 
+        // An extracted source uses the same ownership gate as an ISO.
+        var sourceFolder = Path.Combine(root, "owned extracted game");
+        Directory.CreateDirectory(sourceFolder);
+        var sourceField = typeof(MainWindow).GetField("_repositoryRoot", flags)!;
+        var previousSource = sourceField.GetValue(window);
+        sourceField.SetValue(window, installed);
+        typeof(MainWindow).GetMethod("SelectDiscImage", flags)!.Invoke(window, [sourceFolder]);
+        var ownership = (CheckBox)window.FindName("OwnershipCheckBox");
+        ownership.IsChecked = false; update.Invoke(window, null);
+        Require(!((Button)window.FindName("PrimaryButton")).IsEnabled, "Folder bypassed ownership gate");
+        ownership.IsChecked = true; update.Invoke(window, null);
+        Require(((Button)window.FindName("PrimaryButton")).IsEnabled, "Extracted folder cannot start setup");
+        Require(((Button)window.FindName("BrowseFolderButton")).Content.ToString() == "Choose extracted folder",
+            "Extracted folder picker missing");
+        if (args.Length != 0) {
+            Directory.CreateDirectory(args[0]);
+            var setupContent = (FrameworkElement)window.Content;
+            setupContent.Measure(new Size(920, 640));
+            setupContent.Arrange(new Rect(new Size(920, 640)));
+            setupContent.UpdateLayout();
+            var bitmap = new RenderTargetBitmap(920, 640, 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(setupContent);
+            var png = new PngBitmapEncoder(); png.Frames.Add(BitmapFrame.Create(bitmap));
+            using var file = File.Create(Path.Combine(args[0], "launcher-extracted-source-920.png")); png.Save(file);
+        }
+        ownership.IsChecked = false;
+        sourceField.SetValue(window, previousSource);
+        ((TextBox)window.FindName("IsoPathTextBox")).Text = "";
+        update.Invoke(window, null);
+
         // Portable installs: portable.txt beside the launcher keeps everything in its data folder.
         var portableType = typeof(MainWindow).Assembly.GetType("PinyonShift.Launcher.PortableMode")!;
         object Portable(string name, params object[] arguments) {
-            try { return portableType.GetMethod(name)!.Invoke(null, arguments); }
+            var method = portableType.GetMethod(name)!;
+            // Optional parameters left out take their defaults.
+            var padded = arguments.Concat(Enumerable.Repeat(Type.Missing,
+                method.GetParameters().Length - arguments.Length)).ToArray();
+            try { return method.Invoke(null, BindingFlags.OptionalParamBinding, null, padded, null); }
             catch (TargetInvocationException ex) { throw ex.InnerException!; }
         }
         var marker = Path.Combine(root, "portable.txt");
@@ -131,13 +191,14 @@ class Check {
         var game = Path.Combine(root, ".local/game/base/default.xex");
         Directory.CreateDirectory(Path.GetDirectoryName(game)!);
         File.WriteAllText(game, "test game");
-        // Direct3D 12 prepares shader packs before the first start.
+        // An old Direct3D 12 selection migrates to Vulkan on start.
         Directory.CreateDirectory(Path.Combine(state, "config"));
         File.WriteAllText(Path.Combine(state, "config/pinyon_shift.toml"),
             "pinyon_shift_config_schema = 27\ngpu_backend = \"d3d12\"\n");
         typeof(MainWindow).GetMethod("DetectExistingBuild", flags)!.Invoke(window, null);
         var primary = (TextBlock)window.FindName("PrimaryButtonText");
-        Require(primary.Text == "Prepare and play", "Existing build skips graphics preparation");
+        Require(primary.Text == "Play", "Legacy settings still require Direct3D 12 preparation");
+        Require(window.FindName("GraphicsApiComboBox") is null, "Unsupported graphics API is selectable");
         var payloadMarker = Path.Combine(root, ".pinyon-source-sha256");
         File.WriteAllText(payloadMarker, "current payload");
         typeof(MainWindow).GetMethod("DetectExistingBuild", flags)!.Invoke(window, null);
@@ -146,7 +207,34 @@ class Check {
         File.WriteAllText(Path.Combine(root, ".local/build.json"), "{\"pinyon_shift_source_payload_sha256\":\"current payload\"}");
         typeof(MainWindow).GetMethod("DetectExistingBuild", flags)!.Invoke(window, null);
         Require(typeof(MainWindow).GetField("_gameExecutable", flags)!.GetValue(window) is not null,
-            "Matching release build cannot prepare graphics");
+            "Matching release build cannot play");
+        // Exercise the real watcher/result path without starting a game.
+        Directory.CreateDirectory(Path.Combine(root, "tools"));
+        File.WriteAllText(Path.Combine(root, "tools/launch-preview.ps1"),
+            "Write-Output '{\"result\":\"saved-content-unavailable\",\"exit_code\":1307}'\nexit 1\n");
+        var savedConfig = File.ReadAllText(Path.Combine(state, "config/pinyon_shift.toml"));
+        SynchronizationContext.SetSynchronizationContext(
+            new System.Windows.Threading.DispatcherSynchronizationContext(window.Dispatcher));
+        var launch = (Task)typeof(MainWindow).GetMethod("LaunchGameAsync", flags)!.Invoke(window, null)!;
+        var frame = new System.Windows.Threading.DispatcherFrame();
+        var timeout = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(15) };
+        timeout.Tick += (_, _) => { timeout.Stop(); frame.Continue = false; };
+        launch.ContinueWith(_ => window.Dispatcher.BeginInvoke(new Action(() => frame.Continue = false)));
+        timeout.Start();
+        System.Windows.Threading.Dispatcher.PushFrame(frame);
+        timeout.Stop();
+        Require(launch.IsCompleted, "Missing-content watcher did not finish");
+        launch.GetAwaiter().GetResult();
+        SynchronizationContext.SetSynchronizationContext(null);
+        Require(((TextBlock)window.FindName("HeadlineText")).Text == "Restore your saved car's DLC",
+            "Missing saved content is reported as a crash");
+        Require(typeof(MainWindow).GetField("_pendingReport", flags)!.GetValue(window) is null,
+            "Missing content creates a pending crash report");
+        Require(((Button)window.FindName("DlcButton")).IsEnabled &&
+            ((Button)window.FindName("DlcButton")).Visibility == Visibility.Visible,
+            "Missing content cannot be restored from the DLC panel");
+        Require(File.ReadAllText(Path.Combine(state, "config/pinyon_shift.toml")) == savedConfig,
+            "Recovery rewrites the saved configuration");
         var output = typeof(MainWindow).GetMethod("HandleOutput", flags)!;
         output.Invoke(window, ["::pinyon::{\"stage\":\"shaders\",\"percent\":20,\"message\":\"Preparing graphics\"}"]);
         Require(primary.Text == "Preparing…", "Shader progress is not shown");
@@ -196,15 +284,171 @@ class Check {
             Require(button.ActualWidth > 0 && button.ActualHeight >= 24,
                 $"Folder control clipped: {button.ActualWidth} x {button.ActualHeight}");
         }
+        // The fixed Vulkan label and remaining graphics choices fit the panel.
+        typeof(MainWindow).GetMethod("SetComplete", flags)!.Invoke(window, null);
+        typeof(MainWindow).GetMethod("UpdateSummary", flags)!.Invoke(window, null);
+        var viewType = typeof(MainWindow).GetNestedType("View", BindingFlags.NonPublic)!;
+        typeof(MainWindow).GetMethod("ShowPanel", flags)!.Invoke(window, [Enum.Parse(viewType, "Graphics")]);
+        typeof(MainWindow).GetMethod("UpdateResolutionLine", flags)!.Invoke(window, null);
+        foreach (var size in new[] { new Size(1080, 720), new Size(920, 640) }) {
+            content.Measure(size); content.Arrange(new Rect(size)); content.UpdateLayout();
+            foreach (var name in new[] { "ResolutionComboBox", "OutputScalingComboBox", "SaveGraphicsButton" }) {
+                var control = (FrameworkElement)window.FindName(name);
+                Require(control.ActualHeight >= 24 && control.TranslatePoint(new Point(), content).Y +
+                    control.ActualHeight < size.Height, $"Graphics control clipped: {name}");
+            }
+            if (args.Length != 0) {
+                var bitmap = new RenderTargetBitmap((int)size.Width, (int)size.Height, 96, 96, PixelFormats.Pbgra32);
+                bitmap.Render(content);
+                var png = new PngBitmapEncoder(); png.Frames.Add(BitmapFrame.Create(bitmap));
+                using var file = File.Create(Path.Combine(args[0], $"launcher-graphics-{size.Width}.png")); png.Save(file);
+            }
+        }
+        // DLC rows remain usable with the full catalog, and damaged content
+        // cannot offer an enable button. No real package or save is used.
+        var dlc = new MainWindow.DlcResult();
+        for (var index = 0; index < 21; index++) dlc.Packages.Add(new MainWindow.DlcPackage {
+            PackageId = index.ToString(), DisplayName = index == 0 ? "Rally Expansion Pack" :
+                "Season Pass: 2006 Lamborghini Miura Concept", Status = "gameplay_unverified", Enabled = index == 0
+        });
+        dlc.Packages[1].Status = "missing";
+        Require(dlc.Packages[0].ToggleText == "Disable" && dlc.Packages[0].CanToggle &&
+            !dlc.Packages[1].CanToggle, "DLC status does not control management");
+        Require(dlc.Packages[0].ToggleAccessibleName == "Disable Rally Expansion Pack",
+            "DLC toggle omits its package name for accessibility");
+        dlc.Packages[0].PackageId = "6F6992766050D818245ADD408031E280FB5F4E634D";
+        Require(dlc.Packages[0].StatusText.Contains("Assets not prepared"),
+            "Unprepared Rally assets are not reported");
+        dlc.Packages[0].RallyAssetsCached = true;
+        Require(dlc.Packages[0].StatusText.Contains("Assets cached") &&
+            dlc.Packages[0].StatusText.Contains("Gameplay unverified"),
+            "Rally preparation is mistaken for gameplay qualification");
+        foreach (var damaged in new[] { "missing", "metadata_invalid" }) {
+            dlc.Packages[1].Status = damaged;
+            dlc.Packages[1].Enabled = true;
+            Require(dlc.Packages[1].CanToggle && dlc.Packages[1].ToggleText == "Disable",
+                "Damaged enabled DLC cannot be disabled");
+            dlc.Packages[1].Enabled = false;
+            Require(!dlc.Packages[1].CanToggle, "Damaged disabled DLC offers enable");
+        }
+        typeof(MainWindow).GetMethod("ApplyDlcResult", flags)!.Invoke(window, [dlc]);
+        typeof(MainWindow).GetMethod("ShowPanel", flags)!.Invoke(window, [Enum.Parse(viewType, "Dlc")]);
+        update.Invoke(window, null);
+        Require(!((Button)window.FindName("PrimaryButton")).IsEnabled && !button.IsEnabled,
+            "Launch or relocation remains available during DLC management");
+        Require(((FrameworkElement)window.FindName("DlcEmptyText")).Visibility == Visibility.Collapsed,
+            "Empty DLC message remains over imported content");
+        foreach (var size in new[] { new Size(1080, 720), new Size(940, 640) }) {
+            content.Measure(size); content.Arrange(new Rect(size)); content.UpdateLayout();
+            var controls = (FrameworkElement)window.FindName("DlcControls");
+            Require(controls.ActualHeight >= 30 && controls.TranslatePoint(new Point(), content).Y +
+                controls.ActualHeight < size.Height - 44, "DLC import controls clipped");
+            if (args.Length != 0) {
+                var bitmap = new RenderTargetBitmap((int)size.Width, (int)size.Height, 96, 96, PixelFormats.Pbgra32);
+                bitmap.Render(content);
+                var png = new PngBitmapEncoder(); png.Frames.Add(BitmapFrame.Create(bitmap));
+                using var file = File.Create(Path.Combine(args[0], $"launcher-dlc-{size.Width}.png")); png.Save(file);
+            }
+        }
+        File.Delete(payloadMarker); // This next fixture represents a developer checkout.
         // Checkout detection takes precedence over packaged configuration.
         Directory.CreateDirectory(Path.Combine(root, "config"));
         Directory.CreateDirectory(Path.Combine(root, "tools"));
         File.WriteAllText(Path.Combine(root, "config/supported-dumps.json"), "{}");
         File.WriteAllText(Path.Combine(root, "tools/setup-preview.ps1"), "");
-        Require(Path.TrimEndingDirectorySeparator(Resolve(selected)) == Path.TrimEndingDirectorySeparator(root)
+        Require(Resolve(selected) == installed && CanChoose(), "Partial checkout accepted");
+        Directory.CreateDirectory(Path.Combine(root, "src"));
+        File.WriteAllText(Path.Combine(root, "CMakeLists.txt"), "");
+        File.WriteAllText(Path.Combine(root, "src/main.cpp"), "");
+        Require(Path.TrimEndingDirectorySeparator(Path.GetFullPath(Resolve(selected))) == Path.TrimEndingDirectorySeparator(root)
             && !CanChoose(), "Checkout relocated");
-        Console.WriteLine("Launcher folder selection, portable installs, preservation, graphics preparation, progress and layout passed.");
+        File.WriteAllText(Path.Combine(root, ".pinyon-source-sha256"), "managed source");
+        Require(Resolve(selected) == installed && CanChoose(), "Managed source bypasses payload checks");
+        using (var damagedZip = ZipFile.Open(Path.Combine(root, "pinyon-shift-source.zip"), ZipArchiveMode.Update))
+            damagedZip.GetEntry("src/main.cpp")!.Delete();
+        var brokenRoot = Path.Combine(root, "broken release");
+        try { Resolve(brokenRoot); throw new Exception("Incomplete release ZIP accepted"); }
+        catch (InvalidDataException) { }
+        Require(!File.Exists(Path.Combine(brokenRoot, "source", "0.1.1", ".pinyon-source-sha256")),
+            "Incomplete ZIP marked as installed");
+        UpdateChecks(Path.Combine(root, "update checks"));
+        Console.WriteLine("Launcher folders, portable installs, preservation, graphics, DLC states, progress, layout and updates passed.");
         window.Close();
+    }
+
+    // FB-10.7: release selection, the file swap and stale source removal.
+    static void UpdateChecks(string root) {
+        string[] ordered = ["0.4.0", "0.4.1-preview.1", "0.4.1-preview.2", "0.4.1-preview.10", "0.4.1", "0.5.0", "1.0.0"];
+        for (var i = 0; i + 1 < ordered.Length; i++) {
+            Require(ReleaseVersion.TryParse(ordered[i], out var a) && ReleaseVersion.TryParse(ordered[i + 1], out var b)
+                && a.CompareTo(b) < 0 && b.CompareTo(a) > 0, $"Version order {ordered[i]} < {ordered[i + 1]}");
+        }
+        Require(ReleaseVersion.TryParse("v0.4.0", out var tagged) && tagged.ToString() == "0.4.0", "Tag not parsed");
+        Require(!ReleaseVersion.TryParse("0.4", out _) && !ReleaseVersion.TryParse("latest", out _), "Bad version parsed");
+        var hex = new string('a', 64);
+        string Asset(string url, string digest) =>
+            $"{{\"name\":\"PinyonShift-Launcher.zip\",\"size\":5,\"digest\":\"{digest}\",\"browser_download_url\":\"{url}\"}}";
+        string Release(string tag, bool pre, string asset, bool draft = false) =>
+            $"{{\"tag_name\":\"{tag}\",\"prerelease\":{(pre ? "true" : "false")},\"draft\":{(draft ? "true" : "false")},\"html_url\":\"https://github.com/arcanite24/pinyon-shift/releases/tag/{tag}\",\"assets\":[{asset}]}}";
+        var good = Asset("https://github.com/arcanite24/pinyon-shift/releases/download/x/PinyonShift-Launcher.zip", "sha256:" + hex);
+        var json = "[" + string.Join(",",
+            Release("v0.7.0", false, good, draft: true),
+            Release("v0.6.0-preview.1", true, good),
+            Release("v0.5.1", false, Asset("https://example.com/a.zip", "")),
+            Release("v0.5.2", false, Asset("http://example.com/a.zip", "sha256:" + hex)),
+            Release("v0.5.0", false, good),
+            Release("v0.3.0", false, good)) + "]";
+        using var feed = System.Text.Json.JsonDocument.Parse(json);
+        var stable = LauncherUpdate.Select(feed.RootElement, "0.4.0", "stable", LauncherUpdate.WindowsAsset);
+        Require(stable is { Version: "0.5.0", Sha256: var sha } && sha == hex, $"Stable picked {stable?.Version}");
+        Require(LauncherUpdate.Select(feed.RootElement, "0.4.0", "preview", LauncherUpdate.WindowsAsset)?.Version
+            == "0.6.0-preview.1", "Preview channel skipped the preview");
+        Require(LauncherUpdate.Select(feed.RootElement, "0.5.0", "stable", LauncherUpdate.WindowsAsset) is null,
+            "Offered an unverifiable or insecure release");
+        Require(LauncherUpdate.Select(feed.RootElement, "0.4.0", "stable", LauncherUpdate.LinuxAsset) is null,
+            "Offered another platform's asset");
+
+        var launcher = Path.Combine(root, "launcher");
+        var staged = Path.Combine(root, "staged");
+        Directory.CreateDirectory(launcher);
+        Directory.CreateDirectory(staged);
+        File.WriteAllText(Path.Combine(launcher, "PinyonShiftLauncher.exe"), "old launcher");
+        File.WriteAllText(Path.Combine(launcher, "pinyon-shift-source.zip"), "old payload");
+        File.WriteAllText(Path.Combine(launcher, "portable.txt"), "");
+        File.WriteAllText(Path.Combine(staged, "PinyonShiftLauncher.exe"), "new launcher");
+        File.WriteAllText(Path.Combine(staged, "pinyon-shift-source.zip"), "new payload");
+        var plan = LauncherUpdate.Plan(staged, launcher);
+        var broken = plan.Append((Path.Combine(staged, "missing"), Path.Combine(launcher, "missing"))).ToList();
+        try { LauncherUpdate.Swap(broken); throw new Exception("Swap with a missing file succeeded"); }
+        catch (FileNotFoundException) { }
+        Require(File.ReadAllText(Path.Combine(launcher, "PinyonShiftLauncher.exe")) == "old launcher"
+            && File.ReadAllText(Path.Combine(launcher, "pinyon-shift-source.zip")) == "old payload"
+            && File.ReadAllText(Path.Combine(staged, "PinyonShiftLauncher.exe")) == "new launcher",
+            "A failed swap was not rolled back");
+        LauncherUpdate.Swap(plan);
+        Require(File.ReadAllText(Path.Combine(launcher, "PinyonShiftLauncher.exe")) == "new launcher"
+            && File.ReadAllText(Path.Combine(launcher, "pinyon-shift-source.zip")) == "new payload"
+            && File.ReadAllText(Path.Combine(launcher, "PinyonShiftLauncher.exe.pinyon-old")) == "old launcher"
+            && File.Exists(Path.Combine(launcher, "portable.txt")), "Swap did not install the release");
+        Directory.CreateDirectory(Path.Combine(launcher, LauncherUpdate.StagingFolder));
+        LauncherUpdate.CleanUpAsync(launcher).GetAwaiter().GetResult();
+        Require(Directory.GetFileSystemEntries(launcher).Select(Path.GetFileName).Order(StringComparer.Ordinal).SequenceEqual(
+            ["PinyonShiftLauncher.exe", "pinyon-shift-source.zip", "portable.txt"]),
+            "Update leftovers remain: " + string.Join(", ", Directory.GetFileSystemEntries(launcher)));
+
+        var source = Path.Combine(root, "source");
+        string[] listed = ["kept.txt", "dropped/old.ps1", ".local/preview/user/ForzaProfile/ForzaProfile", "out/build/x", "../outside.txt"];
+        foreach (var file in listed.Append("unlisted.txt")) {
+            var path = Path.Combine(source, file);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            File.WriteAllText(path, "x");
+        }
+        PayloadManifest.Write(source, listed);
+        var removed = PayloadManifest.RemoveStale(source, ["kept.txt"]);
+        Require(removed.SequenceEqual(["dropped/old.ps1"]) && File.Exists(Path.Combine(source, "kept.txt"))
+            && File.Exists(Path.Combine(source, ".local/preview/user/ForzaProfile/ForzaProfile"))
+            && File.Exists(Path.Combine(source, "out/build/x")) && File.Exists(Path.Combine(root, "outside.txt"))
+            && File.Exists(Path.Combine(source, "unlisted.txt")), "Stale source removal touched other files");
     }
 }
 '''
@@ -221,5 +465,6 @@ if __name__ == "__main__":
   <ItemGroup><ProjectReference Include="{reference}" /></ItemGroup>
 </Project>''')
         (project / "Program.cs").write_text(CHECK)
-        subprocess.run(["dotnet", "run", "--project", str(project), "-c", "Release",
-                        "--", *[str(pathlib.Path(p).resolve()) for p in sys.argv[1:]]], check=True)
+        output = project / "bin"
+        subprocess.run(["dotnet", "build", str(project), "-c", "Release", "-o", str(output)], check=True)
+        subprocess.run([str(output / "Check.exe"), *[str(pathlib.Path(p).resolve()) for p in sys.argv[1:]]], check=True)

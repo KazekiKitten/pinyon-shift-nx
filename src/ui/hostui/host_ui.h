@@ -16,6 +16,7 @@
 #include "ui/hostui/glyph_atlas.h"
 #include "ui/hostui/menu.h"
 #include "ui/hostui/vector_font.h"
+#include "dlc/rally_pace_notes.h"
 
 namespace rex {
 class ReXApp;
@@ -83,6 +84,11 @@ class HostUi final : public rex::ui::UIDrawer, public rex::ui::WindowInputListen
     float x = 0.0f, y = 0.0f, size = 24.0f;
   };
   void SetHudSource(std::function<std::vector<HudText>()> source) { hud_source_ = std::move(source); }
+  // Private base-disc Rally adapter, using the player's owned icon atlas.
+  void SetRallyPaceSource(std::function<rally::PaceHud()> source, std::filesystem::path atlas) {
+    rally_pace_source_ = std::move(source);
+    rally_pace_atlas_path_ = std::move(atlas);
+  }
   // Discs drawn over the game while no menu is open (the touch controls), in
   // window pixels; pressed ones are brighter.
   struct OverlayDisc {
@@ -135,6 +141,7 @@ class HostUi final : public rex::ui::UIDrawer, public rex::ui::WindowInputListen
   void DrawMenu(rex::ui::UIDrawContext& context);
   void DrawToasts(rex::ui::UIDrawContext& context);
   void DrawHud(rex::ui::UIDrawContext& context);
+  void DrawRallyPace(rex::ui::UIDrawContext& context);
   void DrawOverlay(rex::ui::UIDrawContext& context);
   void DrawDisc(float x, float y, float radius, uint32_t color);
   bool HasHud() const;
@@ -143,6 +150,11 @@ class HostUi final : public rex::ui::UIDrawer, public rex::ui::WindowInputListen
   void EnsureDrawer();
   void ReleaseDrawer();
   void Apply(NavCommand command);
+  // Hands a press to the top screen's key capture (a keybind prompt).
+  void CaptureKey(int virtual_key);
+  // Runs a callback of the top screen, then removes it or closes the UI if the
+  // callback finished it.
+  void RunOnTopScreen(const std::function<void(MenuScreen&)>& callback);
   void PollPad();
   void RequestPaint();
   void SetGuestUiActive(bool active);
@@ -189,10 +201,23 @@ class HostUi final : public rex::ui::UIDrawer, public rex::ui::WindowInputListen
   };
   std::vector<Toast> toasts_;
   std::function<std::vector<HudText>()> hud_source_;
+  std::function<rally::PaceHud()> rally_pace_source_;
+  std::filesystem::path rally_pace_atlas_path_;
+  std::unique_ptr<rex::ui::ImmediateTexture> rally_pace_atlas_;
+  bool rally_pace_atlas_attempted_ = false;
+  rally::PaceHud rally_pace_drawn_;
+  float rally_pace_drawn_scale_ = 0;
   std::function<std::vector<OverlayDisc>()> overlay_source_;
   // Closed, waiting for held buttons and keys to be released.
   bool draining_ = false;
   std::chrono::steady_clock::time_point drain_started_;
+  // What the input being handled came from, and what closed the menu, for
+  // the hostui.closed event (#429).
+  const char* input_source_ = "app";
+  const char* closed_via_ = "app";
+  // An open menu that could not draw is reported once per open (#429).
+  bool draw_skip_reported_ = false;
+  bool drawn_since_open_ = false;
   std::vector<int> held_keys_;
   // Expires with this object, for deferred work queued from Draw.
   std::shared_ptr<bool> alive_ = std::make_shared<bool>(true);

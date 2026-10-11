@@ -2,13 +2,14 @@
 param(
     [ValidateSet('Get', 'Apply', 'Reset', 'Restore')]
     [string]$Action = 'Get',
-    [ValidateSet(4, 8, 16)]
-    [int]$Anisotropy = 4,
+    # 0 keeps the game's own filtering per texture (anisotropic_override -1).
+    [ValidateSet(0, 4, 8, 16)]
+    [int]$Anisotropy = 0,
     [ValidateSet('none', 'fxaa', 'fxaa_extreme')]
     [string]$PostEffect = 'none',
     [ValidateSet(1, 2, 3, 4)]
     [int]$ResolutionScale = 1,
-    [ValidateSet('vulkan', 'd3d12')]
+    [ValidateSet('vulkan')]
     [string]$GraphicsApi = 'vulkan',
     [ValidateSet('bilinear', 'cas', 'fsr')]
     [string]$OutputScaling = 'bilinear',
@@ -16,14 +17,20 @@ param(
     [string]$TreasureMap = 'true',
     [ValidateSet('custom', 'shipping_1x', 'experimental_2x', 'experimental_3x')]
     [string]$Preset = 'custom',
+    # The in-game GRAPHICS PRESET rows (src/ui/settings_menu.cpp); applied
+    # after the other choices, which it overrides.
+    [ValidateSet('low_spec_60', 'balanced_40', 'performance_120', 'quality_60')]
+    [string]$GamePreset,
     [ValidateSet(0, 30, 60, 120, 240)]
     [int]$PresentationFps = 0,
     [ValidateRange(0, 240)]
-    [int]$RenderFps = 0,
+    [int]$RenderFps = 60,
     [ValidateSet('true', 'false')]
-    [string]$DisableMotionBlur = 'false',
+    [string]$DisableBloom = 'true',
     [ValidateSet('true', 'false')]
-    [string]$DisableDepthOfField = 'false',
+    [string]$DisableMotionBlur = 'true',
+    [ValidateSet('true', 'false')]
+    [string]$DisableDepthOfField = 'true',
     [string]$StateRoot,
     [switch]$Json
 )
@@ -45,15 +52,37 @@ $backupDirectory = Join-Path $configDirectory 'backups'
 function Get-DefaultConfigText {
     @'
 # Pinyon Shift host configuration.
-# Schema 27 renders on Vulkan with the split GPU commands thread; schema 26
+# Schema 29 writes every keyboard bind (#432); schema 28 supports only Vulkan with the split GPU commands thread; schema 26
 # stops re-uploading CPU-written memory every frame; schema 25 keeps one
 # occlusion-query path; schema 24 retired the renderer choice.
-pinyon_shift_config_schema = 27
+pinyon_shift_config_schema = 29
 input_backend = "sdl"
 hid_mappings_file = "gamecontrollerdb.txt"
 mnk_mode = true
-keybind_a = "LMB,Space"
-keybind_start = "Return"
+keybind_a = "Space,Return,LMB"
+keybind_b = "E,Backspace"
+keybind_x = "Q"
+keybind_y = "R"
+keybind_left_trigger = "S"
+keybind_right_trigger = "W"
+keybind_left_shoulder = "Z"
+keybind_right_shoulder = "C"
+keybind_lstick_up = "Up"
+keybind_lstick_down = "Down"
+keybind_lstick_left = "A,Left"
+keybind_lstick_right = "D,Right"
+keybind_lstick_press = "F"
+keybind_rstick_up = "I"
+keybind_rstick_down = "K"
+keybind_rstick_left = "J"
+keybind_rstick_right = "L"
+keybind_rstick_press = "V"
+keybind_dpad_up = "Shift+Up"
+keybind_dpad_down = "Shift+Down"
+keybind_dpad_left = "Shift+Left"
+keybind_dpad_right = "Shift+Right"
+keybind_back = "Tab,M"
+keybind_start = "Escape"
 d3d12_allow_variable_refresh_rate_and_tearing = false
 gpu_backend = "vulkan"
 gpu_record_thread = true
@@ -62,13 +91,16 @@ host_present_fps_limit = 0
 host_present_sleep_spin = true
 pinyon_shift_stabilize_vehicle_presentation = false
 pinyon_shift_skip_opening_movies = false
-pinyon_shift_fh1_render_fps_limit = 0
+pinyon_shift_fh1_render_fps_limit = 60
 pinyon_shift_fh1_source_presentation = true
 xma_relaxed_padding_admission = false
-anisotropic_override = 3
+anisotropic_override = -1
+present_effect = "bilinear"
 swap_post_effect = "none"
-disable_motion_blur = false
-disable_depth_of_field = false
+disable_bloom = true
+disable_motion_blur = true
+disable_depth_of_field = true
+fh1_msaa_single_sample = true
 draw_resolution_scale_x = 1
 draw_resolution_scale_y = 1
 clear_memory_page_state = false
@@ -78,6 +110,35 @@ clear_memory_page_state = false
 # Settings a config file may still carry from an earlier release. Apply writes
 # the current schema, so the game's own migration never sees the file again:
 # drop every setting that migration retires (src/pinyon_shift_app.cpp).
+# The keys configurations had through schema 28; schema 29 writes them into
+# older files that lack them, as the game does (src/config/default_keys.h).
+$schema28Keys = [ordered]@{
+    'keybind_a' = 'LMB,Space'
+    'keybind_b' = 'Quote,Backspace'
+    'keybind_x' = 'L'
+    'keybind_y' = 'P'
+    'keybind_left_trigger' = 'Q,I'
+    'keybind_right_trigger' = 'E,O'
+    'keybind_left_shoulder' = '1'
+    'keybind_right_shoulder' = '3'
+    'keybind_lstick_up' = 'W'
+    'keybind_lstick_down' = 'S'
+    'keybind_lstick_left' = 'A'
+    'keybind_lstick_right' = 'D'
+    'keybind_lstick_press' = 'F'
+    'keybind_rstick_up' = 'Up'
+    'keybind_rstick_down' = 'Down'
+    'keybind_rstick_left' = 'Left'
+    'keybind_rstick_right' = 'Right'
+    'keybind_rstick_press' = 'K'
+    'keybind_dpad_up' = 'Shift+Up'
+    'keybind_dpad_down' = 'Shift+Down'
+    'keybind_dpad_left' = 'Shift+Left'
+    'keybind_dpad_right' = 'Shift+Right'
+    'keybind_back' = 'Z,Tab'
+    'keybind_start' = 'Return'
+}
+
 $retiredSettings = @(
     'pinyon_shift_fh1_guest_vblank_hz',
     'pinyon_shift_native_renderer_texture_bridge',
@@ -142,25 +203,58 @@ $retiredSettings = @(
     'zpd_end_fallback'
 )
 
+# The values of each in-game preset, as its row in the settings screen sets
+# them (Vulkan and the recorder thread are always set by Apply).
+$gamePresets = [ordered]@{
+    low_spec_60 = [ordered]@{ draw_resolution_scale_x = '1'; draw_resolution_scale_y = '1'
+        present_effect = '"bilinear"'; fh1_msaa_single_sample = 'true'; host_present_fps_limit = '0'
+        pinyon_shift_fh1_render_fps_limit = '60'; anisotropic_override = '-1'; swap_post_effect = '"none"' }
+    balanced_40 = [ordered]@{ draw_resolution_scale_x = '1'; draw_resolution_scale_y = '1'
+        present_effect = '"bilinear"'; fh1_msaa_single_sample = 'true'; host_present_fps_limit = '0'
+        pinyon_shift_fh1_render_fps_limit = '40'; anisotropic_override = '-1'; swap_post_effect = '"none"' }
+    performance_120 = [ordered]@{ draw_resolution_scale_x = '1'; draw_resolution_scale_y = '1'
+        present_effect = '"fsr"'; fh1_msaa_single_sample = 'true'; host_present_fps_limit = '0'
+        pinyon_shift_fh1_render_fps_limit = '120' }
+    quality_60 = [ordered]@{ draw_resolution_scale_x = '2'; draw_resolution_scale_y = '2'
+        present_effect = '"bilinear"'; fh1_msaa_single_sample = 'false'; host_present_fps_limit = '0'
+        pinyon_shift_fh1_render_fps_limit = '60' }
+}
+
+# The in-game preset the file matches, as the settings screen shows it.
+function Get-GamePreset([string]$Text) {
+    $defaults = @{ present_effect = '"bilinear"'; fh1_msaa_single_sample = 'false'
+        host_present_fps_limit = '0'; anisotropic_override = '-1'; swap_post_effect = '"none"'
+        pinyon_shift_fh1_render_fps_limit = '0'; draw_resolution_scale_x = '1'; draw_resolution_scale_y = '1' }
+    foreach ($name in $gamePresets.Keys) {
+        $all = $true
+        foreach ($setting in $gamePresets[$name].GetEnumerator()) {
+            $value = (Get-TomlValue $Text $setting.Key $defaults[$setting.Key]).Trim('"').ToLowerInvariant()
+            if ($value -ne $setting.Value.Trim('"').ToLowerInvariant()) { $all = $false; break }
+        }
+        if ($all) { return $name }
+    }
+    'custom'
+}
+
 function Get-SchemaVersion([string]$Text) {
     $match = [regex]::Match($Text,
         '(?m)^\s*pinyon_shift_config_schema\s*=\s*(?<value>[0-9]+)\s*(?:#.*)?$')
-    if (-not $match.Success) { throw 'The host configuration has no schema version.' }
+    # A file without one was saved by the old F4 overlay with only changed
+    # settings; the game keeps them under the current schema, so do the same.
+    if (-not $match.Success) { return 29 }
     [int]$match.Groups['value'].Value
 }
 
 function Get-SettingsResult([string]$Text, [string]$BackupPath, [string]$Operation) {
-    $override = [int](Get-TomlValue $Text 'anisotropic_override' '3')
-    $anisotropyValue = switch ($override) { 3 { 4 } 4 { 8 } 5 { 16 } default { 4 } }
+    $override = [int](Get-TomlValue $Text 'anisotropic_override' '-1')
+    $anisotropyValue = switch ($override) { 3 { 4 } 4 { 8 } 5 { 16 } default { 0 } }
     $resolutionScale = [int](Get-TomlValue $Text 'draw_resolution_scale_x' '1')
     $clearPageState = (Get-TomlValue $Text 'clear_memory_page_state' 'false') -eq 'true'
     $vsyncEnabled = (Get-TomlValue $Text 'vsync' 'true') -eq 'true'
     $presentationFps = [int](Get-TomlValue $Text 'host_present_fps_limit' '0')
     $renderFps = [int](Get-TomlValue $Text 'pinyon_shift_fh1_render_fps_limit' '0')
-    # Before schema 27 the game moves the file to Vulkan when it starts; "any"
-    # is the plugin's first backend, Direct3D 12.
-    $backend = (Get-TomlValue $Text 'gpu_backend' '"vulkan"').Trim('"').ToLowerInvariant()
-    $graphicsApi = if ((Get-SchemaVersion $Text) -lt 27 -or $backend -eq 'vulkan') { 'vulkan' } else { 'd3d12' }
+    # Player settings use Vulkan; schema 28 migrates legacy backend selections.
+    $graphicsApi = 'vulkan'
     $presetName = if ($resolutionScale -eq 2) {
         'experimental_2x'
     } elseif ($resolutionScale -eq 3) {
@@ -178,9 +272,11 @@ function Get-SettingsResult([string]$Text, [string]$BackupPath, [string]$Operati
         settings = [ordered]@{
             anisotropy = $anisotropyValue
             post_effect = Get-TomlValue $Text 'swap_post_effect' 'none'
-            disable_motion_blur = (Get-TomlValue $Text 'disable_motion_blur' 'false') -eq 'true'
-            disable_depth_of_field = (Get-TomlValue $Text 'disable_depth_of_field' 'false') -eq 'true'
+            disable_bloom = (Get-TomlValue $Text 'disable_bloom' 'true') -eq 'true'
+            disable_motion_blur = (Get-TomlValue $Text 'disable_motion_blur' 'true') -eq 'true'
+            disable_depth_of_field = (Get-TomlValue $Text 'disable_depth_of_field' 'true') -eq 'true'
             preset = $presetName
+            game_preset = Get-GamePreset $Text
             resolution_scale = $resolutionScale
             graphics_api = $graphicsApi
             output_scaling = (Get-TomlValue $Text 'present_effect' '"bilinear"').Trim('"').ToLowerInvariant()
@@ -211,7 +307,7 @@ switch ($Action) {
             Get-Content -LiteralPath $configPath -Raw
         } else { Get-DefaultConfigText }
         $schema = Get-SchemaVersion $text
-        if ($schema -lt 1 -or $schema -gt 27) { throw "Unsupported host configuration schema: $schema" }
+        if ($schema -lt 1 -or $schema -gt 29) { throw "Unsupported host configuration schema: $schema" }
     }
     'Reset' {
         $backup = New-HostConfigBackup $configPath
@@ -228,7 +324,7 @@ switch ($Action) {
         $backup = New-HostConfigBackup $configPath
         $text = Get-Content -LiteralPath $source.FullName -Raw
         $schema = Get-SchemaVersion $text
-        if ($schema -lt 1 -or $schema -gt 27) { throw "Backup uses unsupported schema: $schema" }
+        if ($schema -lt 1 -or $schema -gt 29) { throw "Backup uses unsupported schema: $schema" }
         Write-HostConfig $configPath $text
     }
     'Apply' {
@@ -236,10 +332,10 @@ switch ($Action) {
             Get-Content -LiteralPath $configPath -Raw
         } else { Get-DefaultConfigText }
         $schema = Get-SchemaVersion $text
-        if ($schema -lt 1 -or $schema -gt 27) { throw "Unsupported host configuration schema: $schema" }
+        if ($schema -lt 1 -or $schema -gt 29) { throw "Unsupported host configuration schema: $schema" }
         $backup = New-HostConfigBackup $configPath
-        # The retired guest vblank rate became the render limit, which the
-        # replacement defaults to following the display.
+        # The retired guest vblank rate became the render limit, which now
+        # defaults to 60 (LOW-SPEC 60), not the display's rate.
         $hadLegacyVblank = [regex]::IsMatch($text, '(?m)^[ \t]*pinyon_shift_fh1_guest_vblank_hz[ \t]*=')
         foreach ($retired in $retiredSettings) {
             $text = Remove-TomlValue $text $retired
@@ -249,12 +345,20 @@ switch ($Action) {
         if ($schema -lt 24) { $text = Remove-TomlValue $text 'readback_resolve' }
         # Schema 26 turned clear_memory_page_state off (src/pinyon_shift_app.cpp).
         if ($schema -lt 26) { $text = Set-TomlValue $text 'clear_memory_page_state' 'false' }
-        # Schema 27 made Vulkan with the split GPU commands thread the default.
-        if ($schema -lt 27) {
-            $text = Set-TomlValue $text 'gpu_backend' '"vulkan"'
-            $text = Set-TomlValue $text 'gpu_record_thread' 'true'
+        # Schema 28 makes Vulkan the only supported player backend.
+        $text = Set-TomlValue $text 'gpu_backend' '"vulkan"'
+        $text = Set-TomlValue $text 'gpu_record_thread' 'true'
+        # Schema 28 turns off depth of field once, as the game does
+        # (src/pinyon_shift_app.cpp); a choice passed below still wins.
+        if ($schema -lt 28) { $text = Set-TomlValue $text 'disable_depth_of_field' 'true' }
+        if ($schema -lt 29) {
+            foreach ($key in $schema28Keys.Keys) {
+                if (-not [regex]::IsMatch($text, "(?m)^[ \t]*$key[ \t]*=")) {
+                    $text = Set-TomlValue $text $key ('"' + $schema28Keys[$key] + '"')
+                }
+            }
         }
-        $text = Set-TomlValue $text 'pinyon_shift_config_schema' '27'
+        $text = Set-TomlValue $text 'pinyon_shift_config_schema' '29'
         $text = Set-TomlValue $text 'pinyon_shift_fh1_source_presentation' 'true'
         if (-not [regex]::IsMatch($text, '(?m)^[ \t]*xma_relaxed_padding_admission[ \t]*=')) {
             $text = Set-TomlValue $text 'xma_relaxed_padding_admission' 'false'
@@ -275,11 +379,6 @@ switch ($Action) {
             $text = Set-TomlValue $text 'draw_resolution_scale_x' ([string]$effectiveResolution)
             $text = Set-TomlValue $text 'draw_resolution_scale_y' ([string]$effectiveResolution)
         }
-        if ($bound.ContainsKey('GraphicsApi')) {
-            # Vulkan records draws on a second thread; Direct3D 12 keeps one.
-            $text = Set-TomlValue $text 'gpu_backend' ('"' + $GraphicsApi + '"')
-            $text = Set-TomlValue $text 'gpu_record_thread' ($(if ($GraphicsApi -eq 'vulkan') { 'true' } else { 'false' }))
-        }
         if ($bound.ContainsKey('TreasureMap')) {
             $text = Set-TomlValue $text 'pinyon_shift_dlc_treasure_map' $TreasureMap
         }
@@ -287,11 +386,14 @@ switch ($Action) {
             $text = Set-TomlValue $text 'present_effect' ('"' + $OutputScaling + '"')
         }
         if ($bound.ContainsKey('Anisotropy')) {
-            $override = switch ($Anisotropy) { 4 { 3 } 8 { 4 } 16 { 5 } }
+            $override = switch ($Anisotropy) { 0 { -1 } 4 { 3 } 8 { 4 } 16 { 5 } }
             $text = Set-TomlValue $text 'anisotropic_override' ([string]$override)
         }
         if ($bound.ContainsKey('PostEffect')) {
             $text = Set-TomlValue $text 'swap_post_effect' ('"' + $PostEffect + '"')
+        }
+        if ($bound.ContainsKey('DisableBloom')) {
+            $text = Set-TomlValue $text 'disable_bloom' $DisableBloom
         }
         if ($bound.ContainsKey('DisableMotionBlur')) {
             $text = Set-TomlValue $text 'disable_motion_blur' $DisableMotionBlur
@@ -304,6 +406,11 @@ switch ($Action) {
         }
         if ($bound.ContainsKey('RenderFps') -or $hadLegacyVblank) {
             $text = Set-TomlValue $text 'pinyon_shift_fh1_render_fps_limit' ([string]$RenderFps)
+        }
+        if ($GamePreset) {
+            foreach ($setting in $gamePresets[$GamePreset].GetEnumerator()) {
+                $text = Set-TomlValue $text $setting.Key $setting.Value
+            }
         }
         $text = Set-TomlValue $text 'host_present_sleep_spin' 'true'
         Write-HostConfig $configPath $text

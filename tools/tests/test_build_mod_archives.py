@@ -87,6 +87,36 @@ class BuildModArchivesTests(unittest.TestCase):
             with zipfile.ZipFile(game / "media" / "StringTables" / "EN.zip") as zipped:
                 self.assertEqual(b"pause menu", zipped.read("PauseMenu.str"))
 
+    def test_patches_the_manifest_and_archive_a_mod_replaces(self):
+        # A total conversion (the XE mod) ships its own zipmanifest.xml, with
+        # lines for its new archives, and replaced archives; member mods must
+        # build on those, or the generated manifest drops its archives.
+        with tempfile.TemporaryDirectory() as directory:
+            game, state = self.make(Path(directory))
+            conversion = state / "mods" / "conversion" / "game" / "media"
+            (conversion / "StringTables").mkdir(parents=True)
+            archive = conversion / "StringTables" / "EN.zip"
+            with zipfile.ZipFile(archive, "w") as zipped:
+                zipped.writestr("PauseMenu.str", b"conversion pause")
+                zipped.writestr("Sub/Other.str", b"conversion other")
+            text = (game / "media" / "zipmanifest.xml").read_bytes().decode("utf-8-sig")
+            text = text.replace(manifest_line(game / "media" / "StringTables" / "EN.zip",
+                                              "game:\\media\\stringtables\\en.zip"),
+                                manifest_line(archive, "game:\\media\\stringtables\\en.zip"))
+            text = text.replace("</ZipFiles>", '<Zip version="1" path="game:\\media\\cars\\'
+                                'new_car.zip" priority="80" dirstart="4" dirsize="5" '
+                                'direntries="6" />\r\n</ZipFiles>')
+            (conversion / "zipmanifest.xml").write_bytes(b"\xef\xbb\xbf" + text.encode())
+            (state / "config" / "pinyon_shift.toml").write_text(
+                'enabled_mods = "first,conversion"\n', encoding="utf-8")
+            MODULE.build(state, game)
+            generated = state / "mods" / MODULE.GENERATED / "game" / "media"
+            with zipfile.ZipFile(generated / "StringTables" / "EN.zip") as zipped:
+                self.assertEqual(b"FIRST", zipped.read("PauseMenu.str"))
+                self.assertEqual(b"conversion other", zipped.read("Sub/Other.str"))
+            self.assertIn("new_car.zip", (generated / "zipmanifest.xml").read_text(
+                encoding="utf-8-sig"))
+
     def test_removes_the_generated_mod_without_members(self):
         with tempfile.TemporaryDirectory() as directory:
             game, state = self.make(Path(directory))
@@ -149,6 +179,20 @@ class BuildModArchivesTests(unittest.TestCase):
         with self.assertRaises(MODULE.ArchiveError):
             MODULE.merge_xml(base, b"<Other/>")
 
+    def test_appends_unkeyed_elements_marked_to_add(self):
+        base = (b'<CameraPhysics>\r\n  <DriverCam NumLayers="2">\r\n'
+                b'    <Layer InputType="SpeedMPH"/>\r\n    <Layer InputType="Slip"/>\r\n'
+                b'  </DriverCam>\r\n</CameraPhysics>\r\n')
+        patch = (b'<CameraPhysics><DriverCam NumLayers="3">'
+                 b'<Layer pinyon-add="true" InputType="ConstantOne"/></DriverCam></CameraPhysics>')
+        text = MODULE.merge_xml(base, patch).decode("utf-8")
+        self.assertIn('NumLayers="3"', text)
+        self.assertIn('<Layer InputType="SpeedMPH" />', text)
+        self.assertIn('<Layer InputType="Slip" />', text)
+        self.assertIn('<Layer InputType="ConstantOne" />', text)
+        self.assertNotIn("pinyon-add", text)
+        self.assertLess(text.index("Slip"), text.index("ConstantOne"))
+
     def test_builds_merged_members_over_the_players_copy(self):
         with tempfile.TemporaryDirectory() as directory:
             game, state = self.make(Path(directory))
@@ -176,6 +220,14 @@ class BuildModArchivesTests(unittest.TestCase):
             with zipfile.ZipFile(rebuilt) as zipped:
                 self.assertEqual(b"A\\One 10\r\nA\\Two 20\r\n", zipped.read("Settings.ini"))
                 self.assertEqual(b"pause menu", zipped.read("PauseMenu.str"))
+            generated = state / "mods" / MODULE.GENERATED / "mod.toml"
+            self.assertNotIn("shares_save", generated.read_text(encoding="utf-8"))
+            # Built only from mods that keep the player's save, it keeps it.
+            for mod in ("first", "second"):
+                (state / "mods" / mod / "mod.toml").write_text(
+                    f'name = "{mod}"\nshares_save = true\n', encoding="utf-8")
+            MODULE.build(state, game)
+            self.assertIn("shares_save = true", generated.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

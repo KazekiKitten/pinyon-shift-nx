@@ -83,6 +83,12 @@ try {
         (Join-Path $logs 'rexglue-build.log') 'ReXGlue code-generator build failed.' -Step 'Build the ReXGlue code generator'
 }
 finally { Pop-Location }
+# The pinned CLI uses narrow argv and file APIs. UTF-8 process code pages keep
+# Unicode installation paths intact on Windows 10 1903 and newer.
+Invoke-PinyonBuildCommand 'mt.exe' @('-nologo', "-inputresource:$rexglueExe;#1",
+    '-manifest', (Join-Path $root 'config/rexglue/codegen-windows.manifest'),
+    "-outputresource:$rexglueExe;#1") (Join-Path $logs 'rexglue-manifest.log') `
+    'Could not enable Unicode paths for the code generator.' -Step 'Configure code generator Unicode paths'
 if (-not (Test-Path -LiteralPath $rexglueExe -PathType Leaf)) {
     throw "The ReXGlue code generator was not produced: $rexglueExe"
 }
@@ -90,6 +96,7 @@ if (-not (Test-Path -LiteralPath $rexglueExe -PathType Leaf)) {
 Write-PinyonEvent build 72 'Translating the verified game code locally.' -JsonEvents:$JsonEvents
 $generatedTrees = @('default', 'speech', 'xmedia')
 $codegenLog = Join-Path $logs 'codegen.log'
+$codegenConsoleLog = Join-Path $logs 'codegen-console.log'
 if ($CleanGenerated -and (Test-Path -LiteralPath $generatedRoot)) {
     Remove-Item -LiteralPath $generatedRoot -Recurse -Force
 }
@@ -105,7 +112,9 @@ if ($requiresBootstrap) {
     if (Test-Path -LiteralPath $codegenLog) {
         Remove-Item -LiteralPath $codegenLog -Force
     }
-    & $rexglueExe --log-level info --log-file $codegenLog codegen $manifest
+    Invoke-PinyonLoggedCommand -FilePath $rexglueExe -Arguments @(
+        '--log-level', 'info', '--log-file', $codegenLog, 'codegen', $manifest) `
+        -LogPath $codegenConsoleLog -Utf8Output | Out-Host
     $codegenExit = $LASTEXITCODE
     if ($codegenExit -ne 0) {
         foreach ($tree in $generatedTrees) {
@@ -113,7 +122,7 @@ if ($requiresBootstrap) {
             if (Test-Path -LiteralPath $stamp) { Remove-Item -LiteralPath $stamp -Force }
         }
         throw (New-PinyonCommandFailure -FailureMessage 'Local code generation failed; incomplete generation stamps were removed.' `
-            -Step 'Translate the game code' -LogPath $codegenLog -ExitCode $codegenExit `
+            -Step 'Translate the game code' -LogPath $codegenConsoleLog -ExitCode $codegenExit `
             -CommandLine (Format-PinyonCommandLine -FilePath $rexglueExe -Arguments @(
                 '--log-level', 'info', '--log-file', $codegenLog, 'codegen', $manifest)))
     }

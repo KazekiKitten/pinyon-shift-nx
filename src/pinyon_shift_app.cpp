@@ -1,7 +1,10 @@
 #include "pinyon_shift_app.h"
 #include "pinyon_shift_init.h"
 #include "fh1_render_test.h"
+#include "dlc/rally_audio_probe.h"
+#include "dlc/rally_pace_notes.h"
 
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -9,26 +12,40 @@
 #include <sstream>
 #include <string>
 #include <system_error>
+#include <thread>
 
 #include <rex/cvar.h>
+#include <rex/filesystem.h>
 #include <rex/kernel/xboxkrnl/io.h>
 #include <rex/logging.h>
 #include <rex/perf/counter.h>
 #include <rex/runtime.h>
+#include <rex/system/gpu_plugin.h>
 #include <rex/system/kernel_state.h>
+#include <rex/system/xam/content_manager.h>
 #include <rex/system/xthread.h>
+#include <rex/thread.h>
 #include <rex/input/input_system.h>
+#include <rex/input/sdl/joystick_mapping.h>
 #include <rex/ui/flags.h>
 #include <rex/ui/keybinds.h>
 #include <rex/ui/presenter.h>
+#if REX_HAS_VULKAN
+#include <rex/ui/vulkan/provider.h>
+#endif
 #include <rex/ui/windowed_app_context.h>
 #include <rex/ui/window.h>
+
+#if !defined(_WIN32) && !defined(__ANDROID__)
+#include <SDL3/SDL_video.h>
+#endif
 
 #include "native_renderer/guest_output_renderer.h"
 #include "native_renderer/shader_capture.h"
 #include "pinyon_shift_diagnostics.h"
 #include "platform/host_platform.h"
 #include "pinyon_shift_runtime_hooks.h"
+#include "config/default_keys.h"
 #include "config/host_config.h"
 #include "ui/host_style.h"
 #include "ui/hostui/host_ui.h"
@@ -42,6 +59,7 @@
 #include "ui/xam_dialogs.h"
 #include "ui/settings_menu.h"
 #include "ui/touch_pad.h"
+#include "ui/music.h"
 
 #include <cstdio>
 
@@ -53,7 +71,7 @@ REXCVAR_DEFINE_BOOL(pinyon_shift_touch_controls, REX_PLATFORM_ANDROID, "Pinyon S
                     "On-screen controls for touch screens: a steering stick, throttle, brake "
                     "and buttons, shown on a touch and hidden after a while without one")
     .lifecycle(rex::cvar::Lifecycle::kRequiresRestart);
-REXCVAR_DEFINE_UINT32(pinyon_shift_config_schema, 27, "Pinyon Shift",
+REXCVAR_DEFINE_UINT32(pinyon_shift_config_schema, 29, "Pinyon Shift",
                       "Pinyon Shift host configuration schema version");
 REXCVAR_DEFINE_STRING(enabled_mods, "", "Mods",
                       "Mods to load from <state>/mods, in order, separated by commas. With any "
@@ -88,6 +106,17 @@ REXCVAR_DEFINE_BOOL(pinyon_shift_capture_performance, true, "Pinyon Shift",
                     "Capture lightweight per-frame performance counters to a session CSV");
 namespace {
 
+std::filesystem::path LongHostPath(std::filesystem::path path) {
+#if REX_PLATFORM_WIN32
+  // DLC localized assets exceed MAX_PATH in installed state roots.
+  path = std::filesystem::absolute(path).make_preferred();
+  if (!path.native().starts_with(L"\\\\?\\"))
+    path = path.native().starts_with(L"\\\\")
+        ? L"\\\\?\\UNC\\" + path.native().substr(2) : L"\\\\?\\" + path.native();
+#endif
+  return path;
+}
+
 // Schema 22 added the renderer choice (fh1_renderer) and schema 23 made the
 // native renderer its default. Schema 24 retires the choice: the native
 // renderer is the only renderer, so migration drops fh1_renderer and the other
@@ -100,9 +129,11 @@ namespace {
 // FMV routes. Schema 27 makes Vulkan the renderer's graphics API, with the
 // GPU commands thread split into a decoder and a recorder: the 1x race runs
 // at 120 fps there against about 55 on Direct3D 12 (docs/PERFORMANCE_BACKLOG.md).
-// Migration moves every earlier configuration to it once; the GRAPHICS page's
-// GRAPHICS API row switches back.
-constexpr uint32_t kConfigSchema = 27;
+// Schema 28 retires Direct3D 12 from player settings and moves its saved
+// selections to Vulkan. The legacy backend remains available to developers.
+// Schema 29 writes every keyboard bind into the file: new files get the
+// driving-first keys (#432), older ones the keys they already had.
+constexpr uint32_t kConfigSchema = 29;
 
 bool EnsureSupportedConfig(const std::filesystem::path& path, bool& created,
                            bool& migrated) {
@@ -120,9 +151,11 @@ bool EnsureSupportedConfig(const std::filesystem::path& path, bool& created,
            << kConfigSchema << "\n"
               "input_backend = \"sdl\"\n"
               "hid_mappings_file = \"gamecontrollerdb.txt\"\n"
-              "mnk_mode = true\n"
-              "keybind_a = \"LMB,Space\"\n"
-              "keybind_start = \"Return\"\n"
+              "mnk_mode = true\n";
+    for (const auto& key : pinyon_shift::config::kDefaultKeys) {
+      output << key.name << " = " << pinyon_shift::config::Quote(key.keys) << "\n";
+    }
+    output <<
               "d3d12_allow_variable_refresh_rate_and_tearing = false\n"
               "gpu_backend = \"vulkan\"\n"
               "gpu_record_thread = true\n"
@@ -133,12 +166,19 @@ bool EnsureSupportedConfig(const std::filesystem::path& path, bool& created,
               "xma_relaxed_padding_admission = false\n"
               "pinyon_shift_stabilize_vehicle_presentation = false\n"
               "pinyon_shift_skip_opening_movies = false\n"
-              "pinyon_shift_fh1_render_fps_limit = 0\n"
+              // LOW-SPEC 60 (LS-1.5): never the display's rate, which on a
+              // 144-240 Hz display renders and simulates that many frames.
+              // A capable machine moves to PERFORMANCE 120 once its GPU is
+              // known (ApplyFirstRunHardwareDefaults).
+              "pinyon_shift_fh1_render_fps_limit = 60\n"
               "pinyon_shift_fh1_source_presentation = true\n"
-              "anisotropic_override = 3\n"
+              "anisotropic_override = -1\n"
+              "present_effect = \"bilinear\"\n"
               "swap_post_effect = \"none\"\n"
-              "disable_motion_blur = false\n"
-              "disable_depth_of_field = false\n"
+              "disable_bloom = true\n"
+              "disable_motion_blur = true\n"
+              "disable_depth_of_field = true\n"
+              "fh1_msaa_single_sample = true\n"
               "draw_resolution_scale_x = 1\n"
               "draw_resolution_scale_y = 1\n"
               "clear_memory_page_state = false\n";
@@ -146,19 +186,37 @@ bool EnsureSupportedConfig(const std::filesystem::path& path, bool& created,
     return output.good();
   }
 
-  std::ifstream input(path, std::ios::binary);
-  if (!input) {
+  const auto config_contents = pinyon_shift::config::ReadFile(path);
+  if (!config_contents) {
     return false;
   }
-  std::ostringstream contents;
-  contents << input.rdbuf();
-  input.close();
-  const std::string config_text = contents.str();
+  const std::string& config_text = *config_contents;
   const std::regex schema_pattern(
       R"((?:^|\n)\s*pinyon_shift_config_schema\s*=\s*([0-9]+)\s*(?:#.*)?(?:\r?\n|$))");
   std::smatch match;
   if (!std::regex_search(config_text, match, schema_pattern) || match.size() != 2) {
-    return false;
+    // A file without a schema line was rewritten by something that keeps
+    // only the settings it knows, such as the F4 settings overlay's save
+    // before it merged into the file (#345, #364). Its settings are current,
+    // so keep them under the current schema rather than refuse to start.
+    if (std::regex_search(config_text, std::regex(R"((?:^|\n)\s*pinyon_shift_config_schema\s*=)"))) {
+      return false;
+    }
+    std::filesystem::path backup = path;
+    backup += ".noschema.bak";
+    std::error_code backup_error;
+    std::filesystem::copy_file(path, backup, std::filesystem::copy_options::overwrite_existing,
+                               backup_error);
+    if (backup_error) {
+      return false;
+    }
+    const std::string repaired =
+        "pinyon_shift_config_schema = " + std::to_string(kConfigSchema) + "\n" + config_text;
+    if (!pinyon_shift::config::WriteAtomically(path, repaired)) {
+      return false;
+    }
+    migrated = true;
+    return true;
   }
   try {
     const uint32_t schema = std::stoul(match[1].str());
@@ -188,11 +246,13 @@ bool EnsureSupportedConfig(const std::filesystem::path& path, bool& created,
         std::regex::icase);
     migrated_text = std::regex_replace(migrated_text,
                                        rejected_interpolation_pattern, "\n");
-    migrated_text = std::regex_replace(
-        migrated_text,
-        std::regex(R"((host_present_fps_limit\s*=\s*)\d+)",
-                   std::regex::icase),
-        "$1 0");
+    if (schema < 27) {
+      migrated_text = std::regex_replace(
+          migrated_text,
+          std::regex(R"((host_present_fps_limit\s*=\s*)\d+)",
+                     std::regex::icase),
+          "$1 0");
+    }
     migrated_text = std::regex_replace(
         migrated_text,
         std::regex(
@@ -290,10 +350,9 @@ bool EnsureSupportedConfig(const std::filesystem::path& path, bool& created,
           std::regex(R"((^|\n)(\s*clear_memory_page_state\s*=\s*)true)", std::regex::icase),
           "$1$2false");
     }
-    if (schema < 27) {
-      // Vulkan by default: replace an earlier backend choice (the old QUALITY
-      // preset wrote "any", which meant Direct3D 12). The settings list below
-      // appends both when absent.
+    if (schema < 28) {
+      // Vulkan is the supported backend. Replace old Direct3D 12 selections,
+      // including "any"; the settings list below appends both when absent.
       migrated_text = std::regex_replace(
           migrated_text,
           std::regex(R"re((^|\n)(\s*gpu_backend\s*=\s*)"[^"]*")re", std::regex::icase),
@@ -302,6 +361,24 @@ bool EnsureSupportedConfig(const std::filesystem::path& path, bool& created,
           migrated_text,
           std::regex(R"((^|\n)(\s*gpu_record_thread\s*=\s*)false)", std::regex::icase),
           "$1$2true");
+      // Depth of field turns cutscenes and garages green, pink and white on
+      // current AMD and NVIDIA drivers (#356, #375, #363). Schema 27 files
+      // carry the old default `false`, which few players chose, so turn it
+      // off once here; the setting stays available.
+      migrated_text = std::regex_replace(
+          migrated_text,
+          std::regex(R"((^|\n)(\s*disable_depth_of_field\s*=\s*)false)", std::regex::icase),
+          "$1$2true");
+    }
+    if (schema < 29) {
+      // Keep the keys the player had: until now only A and Start were
+      // written, and the rest came from defaults that change here.
+      for (const auto& key : pinyon_shift::config::kSchema28Keys) {
+        if (!pinyon_shift::config::GetValue(migrated_text, key.name)) {
+          migrated_text = pinyon_shift::config::SetValue(
+              migrated_text, key.name, pinyon_shift::config::Quote(key.keys));
+        }
+      }
     }
     if (schema == 1) {
       const std::regex stabilization_pattern(
@@ -333,10 +410,12 @@ bool EnsureSupportedConfig(const std::filesystem::path& path, bool& created,
     const std::pair<const char*, const char*> graphics_settings[] = {
         {"xma_relaxed_padding_admission",
          "xma_relaxed_padding_admission = false\n"},
-        {"anisotropic_override", "anisotropic_override = 3\n"},
+        {"anisotropic_override", "anisotropic_override = -1\n"},
         {"swap_post_effect", "swap_post_effect = \"none\"\n"},
-        {"disable_motion_blur", "disable_motion_blur = false\n"},
-        {"disable_depth_of_field", "disable_depth_of_field = false\n"},
+        {"disable_bloom", "disable_bloom = true\n"},
+        {"disable_motion_blur", "disable_motion_blur = true\n"},
+        {"disable_depth_of_field", "disable_depth_of_field = true\n"},
+        {"fh1_msaa_single_sample", "fh1_msaa_single_sample = true\n"},
         {"draw_resolution_scale_x", "draw_resolution_scale_x = 1\n"},
         {"draw_resolution_scale_y", "draw_resolution_scale_y = 1\n"},
         {"gpu_backend", "gpu_backend = \"vulkan\"\n"},
@@ -346,7 +425,7 @@ bool EnsureSupportedConfig(const std::filesystem::path& path, bool& created,
         {"host_present_sleep_spin", "host_present_sleep_spin = true\n"},
         {"clear_memory_page_state", "clear_memory_page_state = false\n"},
         {"pinyon_shift_fh1_render_fps_limit",
-         "pinyon_shift_fh1_render_fps_limit = 0\n"},
+         "pinyon_shift_fh1_render_fps_limit = 60\n"},
         {"pinyon_shift_fh1_source_presentation",
          "pinyon_shift_fh1_source_presentation = true\n"},
     };
@@ -383,6 +462,24 @@ bool EnsureSupportedConfig(const std::filesystem::path& path, bool& created,
   }
 }
 
+// The GPU stopped answering: usually a driver reset after a frame took too
+// long (TDR) on a weak or integrated GPU, or a driver fault. The SDK used to
+// abort without a word (0xC0000409); say what happened and exit 1309 so the
+// launcher can advise instead of filing a crash.
+void OnHostGpuLoss() {
+  pinyon_shift::diagnostics::RecordEvent("graphics.device_lost",
+                                         {{"gpu_backend", rex::cvar::GetFlagByName("gpu_backend")}});
+  if (!pinyon_shift::fh1_render_test::Enabled()) {
+    pinyon_shift::platform::ShowFatalError(
+        "Graphics driver stopped responding",
+        "The graphics driver stopped responding, so Pinyon Shift has to close. Your "
+        "progress up to the last save is kept. Install the newest graphics driver; on "
+        "integrated or older graphics, choose the Low-spec 60 preset or a lower "
+        "resolution scale in the launcher's settings.");
+  }
+  pinyon_shift::platform::ExitImmediately(1309);
+}
+
 }  // namespace
 
 std::unique_ptr<rex::ui::WindowedApp> PinyonShiftApp::Create(
@@ -404,8 +501,16 @@ void PinyonShiftApp::OnConfigurePaths(rex::PathConfig& paths) {
   if (auto game_root = diagnostics::EnvironmentPath("PINYON_SHIFT_GAME_ROOT")) {
     paths.game_data_root = *game_root;
   }
-  paths.user_data_root = state_root / "user";
+  paths.user_data_root = LongHostPath(state_root / "user");
+#if defined(PINYON_SHIFT_TITLE_UPDATE_V4) && PINYON_SHIFT_TITLE_UPDATE_V4
+  // The v4 build's code was generated from the patched executables: load the
+  // player's verified title update (its .xexp files and media.zip) from a
+  // folder the base build never mounts, and apply the patches while loading.
+  paths.update_data_root = state_root / "title-update-v4";
+  rex::cvar::SetFlagByName("xex_apply_patches", "true");
+#else
   paths.update_data_root = state_root / "update";
+#endif
   paths.cache_root = state_root / "cache";
   paths.config_path = state_root / "config" / "pinyon_shift.toml";
   host_config_ = std::make_unique<pinyon_shift::config::HostConfig>(paths.config_path);
@@ -430,14 +535,31 @@ void PinyonShiftApp::OnConfigurePaths(rex::PathConfig& paths) {
     enabled_mods_ = host_config_->Get("enabled_mods").value_or("");
     cheats = cheats || host_config_->Get("pinyon_shift_cheats").value_or("false") == "true";
   }
-  if (!enabled_mods_.empty() || cheats) {
-    const auto modded = state_root / "user-modded";
+  // Mods that only change how the game looks (shares_save) keep it.
+  if ((!enabled_mods_.empty() &&
+       !pinyon_shift::mod::ModsShareSave(state_root, enabled_mods_)) ||
+      cheats) {
+    // A mod that cannot share a save (the XE mod) plays its own profile,
+    // which starts new instead of as a copy of the player's.
+    const std::string own_profile =
+        pinyon_shift::mod::RequestedProfile(state_root, enabled_mods_);
+    const auto modded = LongHostPath(
+        state_root / (own_profile.empty() ? "user-modded" : "user-" + own_profile));
     std::error_code error;
-    if (!std::filesystem::exists(modded, error) &&
-        std::filesystem::exists(paths.user_data_root, error)) {
-      std::filesystem::copy(paths.user_data_root, modded,
-                            std::filesystem::copy_options::recursive, error);
-      diagnostics::RecordEvent("mod.profile.created", {{"path", modded.string()}});
+    if (!own_profile.empty()) {
+      if (!std::filesystem::exists(modded, error)) {
+        std::filesystem::create_directories(modded, error);
+        diagnostics::RecordEvent("mod.profile.created",
+                                 {{"path", rex::path_to_utf8(modded)}, {"profile", own_profile}});
+      }
+    } else if (!std::filesystem::exists(modded, error) &&
+               std::filesystem::exists(paths.user_data_root, error)) {
+      if (!pinyon_shift::SaveBackups::CopyProfile(paths.user_data_root, modded)) {
+        pinyon_shift::platform::ShowFatalError(
+            "Could not create the modded profile", "The player profile could not be copied.");
+        pinyon_shift::platform::ExitImmediately(1);
+      }
+      diagnostics::RecordEvent("mod.profile.created", {{"path", rex::path_to_utf8(modded)}});
     }
     paths.user_data_root = modded;
     pinyon_shift::mod::SetModdedProfile(modded);
@@ -449,7 +571,7 @@ void PinyonShiftApp::OnConfigurePaths(rex::PathConfig& paths) {
   if (!EnsureSupportedConfig(paths.config_path, config_created,
                              config_migrated)) {
     diagnostics::RecordEvent("config.unsupported",
-                             {{"path", paths.config_path.string()},
+                             {{"path", rex::path_to_utf8(paths.config_path)},
                               {"required_schema", std::to_string(kConfigSchema)}});
     pinyon_shift::platform::ShowFatalError(
         "Unsupported configuration",
@@ -459,17 +581,23 @@ void PinyonShiftApp::OnConfigurePaths(rex::PathConfig& paths) {
     pinyon_shift::platform::ExitImmediately(1306);
   }
 
+  config_created_ = config_created;
   if (REXCVAR_GET(log_file).empty()) {
-    REXCVAR_SET(log_file, (state_root / "logs" / "runtime.log").string());
+    REXCVAR_SET(log_file, rex::path_to_utf8(state_root / "logs" / "runtime.log"));
+  }
+  // Controllers the player mapped in CONTROLS > MAP CONTROLLER (#432).
+  if (REXCVAR_GET(hid_user_mappings_file).empty()) {
+    REXCVAR_SET(hid_user_mappings_file,
+                rex::path_to_utf8(paths.config_path.parent_path() / "controller_mappings.txt"));
   }
 
   diagnostics::RecordEvent(
       "paths.configured",
-      {{"game", paths.game_data_root.string()},
-       {"user", paths.user_data_root.string()},
-       {"update", paths.update_data_root.string()},
-       {"cache", paths.cache_root.string()},
-       {"config", paths.config_path.string()},
+      {{"game", rex::path_to_utf8(paths.game_data_root)},
+       {"user", rex::path_to_utf8(paths.user_data_root)},
+       {"update", rex::path_to_utf8(paths.update_data_root)},
+       {"cache", rex::path_to_utf8(paths.cache_root)},
+       {"config", rex::path_to_utf8(paths.config_path)},
        {"config_schema", std::to_string(kConfigSchema)},
        {"config_created", config_created ? "1" : "0"},
        {"config_migrated", config_migrated ? "1" : "0"},
@@ -480,8 +608,19 @@ std::optional<rex::PathConfig> PinyonShiftApp::OnFinalizePaths(
     const rex::PathConfig& defaults,
     std::function<void(rex::PathConfig)> resume) {
   (void)resume;
-  const auto refresh = pinyon_shift::platform::DisplayRefreshRate(
+  auto refresh = pinyon_shift::platform::DisplayRefreshRate(
       window() ? window()->GetNativeWindowHandle() : nullptr);
+#if !defined(_WIN32) && !defined(__ANDROID__)
+  // LX-5.5: no native handle off Windows; SDL knows the display's mode (under
+  // gamescope, its output's). Android keeps the guest's own 60 Hz.
+  if (!refresh) {
+    const SDL_DisplayID display = SDL_GetPrimaryDisplay();
+    if (const SDL_DisplayMode* mode = display ? SDL_GetCurrentDisplayMode(display) : nullptr;
+        mode && mode->refresh_rate > 1.0f) {
+      refresh = uint32_t(std::lround(mode->refresh_rate));
+    }
+  }
+#endif
   if (refresh && *refresh >= 24 && *refresh <= 240) {
     REXCVAR_SET(video_mode_refresh_rate, double(*refresh));
     pinyon_shift::diagnostics::RecordEvent("display.refresh.detected",
@@ -505,9 +644,10 @@ void PinyonShiftApp::OnConfigureStyle(ImGuiStyle& imgui_style, rex::ui::Style& u
 void PinyonShiftApp::OnPostInitLogging() {
   std::string perf_csv = rex::cvar::GetFlagByName("perf_log_csv");
   if (perf_csv.empty() && REXCVAR_GET(pinyon_shift_capture_performance)) {
-    perf_csv = (pinyon_shift::diagnostics::StateRoot() / "logs" /
-                (pinyon_shift::diagnostics::SessionId() + ".perf.csv"))
-                   .string();
+    // UTF-8, as the SDK reads it; string() would use the ANSI code page and
+    // a profile path with an accent made the SDK throw at startup (#436).
+    perf_csv = rex::path_to_utf8(pinyon_shift::diagnostics::StateRoot() / "logs" /
+                                 (pinyon_shift::diagnostics::SessionId() + ".perf.csv"));
   }
   if (!perf_csv.empty()) {
     rex::perf::SetCsvLogPath(perf_csv);
@@ -520,7 +660,7 @@ void PinyonShiftApp::OnPostInitLogging() {
                         {"vehicle_presentation_stabilization",
                          rex::cvar::GetFlagByName(
                              "pinyon_shift_stabilize_vehicle_presentation")},
-                        {"renderer", "d3d12"},
+                        {"renderer", rex::cvar::GetFlagByName("gpu_backend")},
                         {"resolution", rex::cvar::GetFlagByName("resolution")},
                         {"vsync", rex::cvar::GetFlagByName("vsync")},
                         {"host_present_fps_limit",
@@ -536,6 +676,7 @@ void PinyonShiftApp::OnPostInitLogging() {
                         {"anisotropic_override",
                          rex::cvar::GetFlagByName("anisotropic_override")},
                         {"swap_post_effect", rex::cvar::GetFlagByName("swap_post_effect")},
+                        {"disable_bloom", rex::cvar::GetFlagByName("disable_bloom")},
                         {"disable_motion_blur",
                          rex::cvar::GetFlagByName("disable_motion_blur")},
                         {"disable_depth_of_field",
@@ -557,11 +698,13 @@ void PinyonShiftApp::OnPostInitLogging() {
 }
 
 void PinyonShiftApp::OnPreSetup(rex::RuntimeConfig& config) {
+  rex::system::SetHostGpuLossHandler(&OnHostGpuLoss);
   config.gpu_plugin =
       pinyon_shift::platform::EnvironmentVariable("PINYON_SHIFT_FH1_DISC_SHADER_CORPUS_DIR")
           ? "fh1-producer"
           : "fh1";
   pinyon_shift::fh1_render_test::Configure(config);
+  pinyon_shift::rally::ConfigureAudioProbe(config);
   // The on-screen controls feed user 0 beside any controller (AP-4.2);
   // routes keep their scripted pad alone.
   if (REXCVAR_GET(pinyon_shift_touch_controls) && !pinyon_shift::fh1_render_test::Enabled() &&
@@ -582,6 +725,27 @@ void PinyonShiftApp::OnPreSetup(rex::RuntimeConfig& config) {
        {"gpu_plugin", config.gpu_plugin},
        {"audio_requested", config.audio_factory ? "1" : "0"},
        {"input_requested", config.input_factory ? "1" : "0"}});
+}
+
+bool PinyonShiftApp::SetupPresentation() {
+  if (ReXApp::SetupPresentation()) {
+    // Self-test of the GPU-loss report, like PINYON_SHIFT_CRASH_SELF_TEST.
+    if (pinyon_shift::platform::EnvironmentFlag("PINYON_SHIFT_GPU_LOSS_SELF_TEST")) {
+      rex::system::ReportHostGpuLoss();
+    }
+    return true;
+  }
+  pinyon_shift::diagnostics::RecordEvent("graphics.unavailable",
+                                         {{"gpu_backend", rex::cvar::GetFlagByName("gpu_backend")}});
+  if (!pinyon_shift::fh1_render_test::Enabled()) {
+    pinyon_shift::platform::ShowFatalError(
+        "Graphics unavailable",
+        "Pinyon Shift could not start the graphics device. It needs a GPU whose "
+        "driver supports Vulkan 1.3. Install the newest driver from AMD, Intel or "
+        "NVIDIA, then retry. Older integrated graphics, such as Intel HD Graphics "
+        "before the 6th generation, cannot run the game.");
+  }
+  pinyon_shift::platform::ExitImmediately(1308);
 }
 
 void PinyonShiftApp::OnPostLoadXexImage() {
@@ -632,6 +796,15 @@ bool PinyonShiftApp::EnsureHostUi() {
       });
     }
   });
+  if (PinyonShiftRallyPaceEnabled()) {
+    host_ui_->SetRallyPaceSource(pinyon_shift::rally::ReadPaceHud,
+        PinyonShiftRallyAdapterRoot() / "game/media/UI/Textures/Horizon/Hud/Rally/CoDriverIconSet.xds");
+    pinyon_shift::rally::SetPaceHudChangedCallback([this] {
+      if (window()) window()->app_context().CallInUIThreadDeferred([this] {
+        if (host_ui_) host_ui_->HudChanged();
+      });
+    });
+  }
   if (REXCVAR_GET(pinyon_shift_touch_controls)) {
     auto& pad = pinyon_shift::ui::TouchPad::Get();
     window()->AddInputListener(&pad, 0);
@@ -726,13 +899,28 @@ void PinyonShiftApp::UpdateHorPlus() {
     }
   }
   PinyonShiftSetViewportAspectScale(scale);
-  // The HUD keeps 16:9 proportions in the stretched image.
-  rex::cvar::SetFlagByName("fh1_hud_squeeze", fmt::format("{:.6f}", scale));
+  // The HUD keeps 16:9 proportions in the stretched image; 16:9 screens do not squeeze.
+  rex::cvar::SetFlagByName("fh1_hud_squeeze",
+                           fmt::format("{:.6f}", map_view_open_ ? 1.0f : scale));
   pinyon_shift::diagnostics::RecordEvent("display.hor_plus",
                                          {{"scale", fmt::format("{:.4f}", scale)}});
 }
 
+void PinyonShiftApp::ApplyMapView(bool open) {
+  map_view_open_ = open;
+  if (!REXCVAR_GET(pinyon_shift_hor_plus)) return;
+  // Wider View stretches the widened gameplay frame over the window; the
+  // title's 16:9 screens (menus, Autoshow, map) are letterboxed (#363).
+  rex::cvar::SetFlagByName("present_letterbox", open ? "true" : "false");
+  UpdateHorPlus();
+  pinyon_shift::diagnostics::RecordEvent("display.hor_plus_view", {{"wide", open ? "0" : "1"}});
+}
+
 void PinyonShiftApp::OnPostSetup() {
+  // Launcher DLC selection is shared by normal and isolated modded profiles.
+  // Saved games still use the active user root chosen in OnConfigurePaths.
+  runtime()->kernel_state()->content_manager()->SetMarketplaceRoot(
+      LongHostPath(pinyon_shift::diagnostics::StateRoot() / "user"));
   if (window() && !resize_listener_added_) {
     window()->AddListener(&resize_listener_);
     resize_listener_added_ = true;
@@ -741,11 +929,17 @@ void PinyonShiftApp::OnPostSetup() {
                                     [this](std::string_view, std::string_view) {
                                       if (window()) {
                                         window()->app_context().CallInUIThreadDeferred(
-                                            [this] { UpdateHorPlus(); });
+                                            [this] { ApplyMapView(map_view_open_); UpdateHorPlus(); });
                                       }
                                     });
   UpdateHorPlus();
-  rex::ui::RegisterBind("bind_game_menu", "F6", "Open the in-game settings menu",
+  PinyonShiftSetMapViewCallback([this](bool open) {
+    if (window()) {
+      window()->app_context().CallInUIThreadDeferred([this, open] { ApplyMapView(open); });
+    }
+  });
+  rex::ui::RegisterBind("bind_game_menu", pinyon_shift::config::kGameMenuKeys,
+                        "Open the in-game settings menu",
                         [this] { ToggleGameMenu(); });
 #if defined(__ANDROID__)
   // Android's Back (the button or gesture; a key to the app) opens SETTINGS
@@ -772,12 +966,13 @@ void PinyonShiftApp::OnPostSetup() {
         // The credits take -1 for "leave them", the field list "".
         host_config_->Set(name, name == "cheat_set_credits" ? "-1" : "");
         if (!host_config_->Save()) {
-          REXLOG_ERROR("Cheats: could not clear {} in {}", name, host_config_->path().string());
+          REXLOG_ERROR("Cheats: could not clear {} in {}", name, rex::path_to_utf8(host_config_->path()));
         }
       }
     });
   });
-  rex::ui::RegisterBind("bind_trainer", "F10", "Open the trainer (cheats on)", [this] {
+  rex::ui::RegisterBind("bind_trainer", pinyon_shift::config::kTrainerKeys,
+                        "Open the trainer (cheats on)", [this] {
     if (!pinyon_shift::cheats::Enabled()) {
       return;
     }
@@ -787,12 +982,21 @@ void PinyonShiftApp::OnPostSetup() {
       host_ui_->Open(pinyon_shift::ui::CreateTrainerMenu(*host_ui_, *host_config_));
     }
   });
-  rex::ui::RegisterBind("bind_photo", "F8", "Save the current frame as a PNG photo", [this] {
+  rex::ui::RegisterBind("bind_photo", pinyon_shift::config::kPhotoKeys,
+                        "Save the current frame as a PNG photo", [this] {
     pinyon_shift::ui::SavePhoto(runtime() && runtime()->graphics_system()
                                     ? runtime()->graphics_system()->presenter()
                                     : nullptr);
   });
-  rex::ui::RegisterBind("bind_fullscreen", "F11", "Toggle fullscreen", [this] {
+  rex::ui::RegisterBind("bind_music_next", pinyon_shift::config::kMusicNextKeys,
+                        "Your music: next track", [] { pinyon_shift::music::Next(); });
+  rex::ui::RegisterBind("bind_music_previous", pinyon_shift::config::kMusicPreviousKeys,
+                        "Your music: previous track", [] { pinyon_shift::music::Previous(); });
+  rex::ui::RegisterBind("bind_quit", pinyon_shift::config::kQuitKeys, "Quit the game", [this] {
+    if (window()) window()->RequestClose();
+  });
+  rex::ui::RegisterBind("bind_fullscreen", pinyon_shift::config::kFullscreenKeys,
+                        "Toggle fullscreen", [this] {
     const bool fullscreen = !REXCVAR_GET(fullscreen);
     rex::cvar::SetFlagByName("fullscreen", fullscreen ? "true" : "false");
     if (host_config_ && host_config_->Load()) {
@@ -831,22 +1035,19 @@ void PinyonShiftApp::OnPostSetup() {
     };
     pinyon_shift::mod::LoadMods(pinyon_shift::diagnostics::StateRoot(), enabled_mods_,
                                 std::move(services));
-    // Mods' game/ files over the game's, before the title opens any.
-    if (auto overlays = pinyon_shift::mod::OverlayRoots(); !overlays.empty()) {
-      constexpr const char* kGameMount = "\\Device\\Harddisk0\\Partition1";
-      auto* file_system = runtime()->file_system();
-      auto overlay = std::make_unique<pinyon_shift::mod::OverlayDevice>(
-          kGameMount, game_data_root(), std::move(overlays));
-      if (overlay->Initialize() && file_system->ReplaceDevice(std::move(overlay))) {
-        pinyon_shift::diagnostics::RecordEvent("mod.overlay.mounted");
-      } else {
-        REXLOG_ERROR("Mods: could not mount the mods' game files");
-      }
+    // DLC a loaded mod cannot run with (the XE mod and Rally) stays installed
+    // but hidden from the title.
+    if (auto hidden = pinyon_shift::mod::HiddenDlc(); !hidden.empty()) {
+      std::string packages;
+      for (const auto& package : hidden) packages += (packages.empty() ? "" : ",") + package;
+      runtime()->kernel_state()->content_manager()->SetHiddenMarketplacePackages(
+          std::move(hidden));
+      pinyon_shift::diagnostics::RecordEvent("mod.dlc.hidden", {{"packages", packages}});
     }
     // Mods' texture replacements, ahead of any folders already configured.
     if (auto textures = pinyon_shift::mod::TextureRoots(); !textures.empty()) {
       std::string dirs;
-      for (const auto& root : textures) dirs += (dirs.empty() ? "" : ";") + root.string();
+      for (const auto& root : textures) dirs += (dirs.empty() ? "" : ";") + rex::path_to_utf8(root);
       // Defined in the GPU module, so read by name.
       if (const std::string configured = rex::cvar::GetFlagByName("texture_replacement_dirs");
           !configured.empty()) {
@@ -854,6 +1055,24 @@ void PinyonShiftApp::OnPostSetup() {
       }
       rex::cvar::SetFlagByName("texture_replacement_dirs", dirs);
       pinyon_shift::diagnostics::RecordEvent("mod.textures", {{"dirs", dirs}});
+    }
+  }
+  // Owned DLC overlays do not activate mods or select the modded save tree.
+  // Explicit mods remain ahead of the built-in assets in the overlay order.
+  auto overlays = pinyon_shift::mod::OverlayRoots();
+  const bool builtin_rally = PinyonShiftUseBuiltinRallyAdapter();
+  if (builtin_rally) overlays.push_back(PinyonShiftRallyAdapterRoot() / "game");
+  if (!overlays.empty()) {
+    for (auto& root : overlays) root = LongHostPath(root);
+    constexpr const char* kGameMount = "\\Device\\Harddisk0\\Partition1";
+    auto overlay = std::make_unique<pinyon_shift::mod::OverlayDevice>(
+        kGameMount, game_data_root(), std::move(overlays));
+    if (overlay->Initialize() && runtime()->file_system()->ReplaceDevice(std::move(overlay))) {
+      pinyon_shift::diagnostics::RecordEvent(builtin_rally ? "dlc.rally.overlay_mounted" : "mod.overlay.mounted");
+    } else {
+      REXLOG_ERROR("Could not mount the game file overlays");
+      if (builtin_rally) pinyon_shift::diagnostics::RecordEvent("dlc.rally.adapter_error", {
+          {"error", "could not mount the built-in Rally overlay"}});
     }
   }
   if (REXCVAR_GET(pinyon_shift_save_backups)) {
@@ -871,6 +1090,9 @@ void PinyonShiftApp::OnPostSetup() {
       pinyon_shift::mod::NotifyCreateDialogs();
     });
   }
+  pinyon_shift::music::Install([this](std::function<void()> task) {
+    if (window()) window()->app_context().CallInUIThreadDeferred(std::move(task));
+  });
   pinyon_shift::ui::ApplyMasterVolume();
   rex::cvar::RegisterChangeCallback(
       "pinyon_shift_master_volume",
@@ -881,6 +1103,27 @@ void PinyonShiftApp::OnPostSetup() {
       runtime() ? runtime()->graphics_system() : nullptr);
   pinyon_shift::native_renderer::InstallShaderCapture(
       runtime() ? runtime()->graphics_system() : nullptr);
+#if REX_HAS_VULKAN
+  if (auto* graphics = runtime() ? runtime()->graphics_system() : nullptr) {
+    if (auto* provider = dynamic_cast<rex::ui::vulkan::VulkanProvider*>(
+            graphics->provider())) {
+      if (auto* device = provider->vulkan_device()) {
+        const auto& properties = device->properties();
+        pinyon_shift::diagnostics::RecordEvent(
+            "graphics.device.selected",
+            {{"backend", "vulkan"},
+             {"name", properties.deviceName},
+             {"vendor_id", std::to_string(properties.vendorID)},
+             {"device_id", std::to_string(properties.deviceID)},
+             {"api_version", std::to_string(properties.apiVersion)},
+             {"driver_version", std::to_string(properties.driverVersion)}});
+        if (config_created_) {
+          ApplyFirstRunHardwareDefaults(*device);
+        }
+      }
+    }
+  }
+#endif
   pinyon_shift::diagnostics::RecordEvent(
       "runtime.setup.complete",
       {{"memory", runtime() && runtime()->memory() ? "1" : "0"},
@@ -890,6 +1133,51 @@ void PinyonShiftApp::OnPostSetup() {
        {"audio", runtime() && runtime()->audio_system() ? "1" : "0"},
        {"input", runtime() && runtime()->input_system() ? "1" : "0"}});
 }
+
+#if REX_HAS_VULKAN
+void PinyonShiftApp::ApplyFirstRunHardwareDefaults(const rex::ui::vulkan::VulkanDevice& device) {
+  // LS-1.5: a new config starts at LOW-SPEC 60. A discrete GPU with 6 GB or
+  // more of its own memory, 6 or more logical cores and a display of 120 Hz
+  // or faster start at PERFORMANCE 120 instead. Only on the launch that
+  // created the config, so a player's own choices are never changed.
+  const auto& functions = device.vulkan_instance()->functions();
+  VkPhysicalDeviceProperties properties = {};
+  functions.vkGetPhysicalDeviceProperties(device.physical_device(), &properties);
+  VkPhysicalDeviceMemoryProperties memory = {};
+  functions.vkGetPhysicalDeviceMemoryProperties(device.physical_device(), &memory);
+  uint64_t device_local = 0;
+  for (uint32_t i = 0; i < memory.memoryHeapCount; ++i) {
+    if (memory.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) {
+      device_local = std::max(device_local, uint64_t(memory.memoryHeaps[i].size));
+    }
+  }
+  const bool discrete = properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
+  const unsigned cores = rex::thread::logical_processor_count();
+  const double refresh = REXCVAR_GET(video_mode_refresh_rate);
+  const bool capable = discrete && device_local >= (uint64_t(6) << 30) && cores >= 6 &&
+                       refresh >= 119.0;
+  if (capable && host_config_ && host_config_->Load()) {
+    for (const auto& [name, literal] :
+         {std::pair{"present_effect", "\"fsr\""},
+          std::pair{"pinyon_shift_fh1_render_fps_limit", "120"}}) {
+      host_config_->Set(name, literal);
+      std::string value = literal;
+      std::erase(value, '"');
+      rex::cvar::SetFlagByName(name, value);
+    }
+    if (!host_config_->Save()) {
+      REXLOG_ERROR("Settings: could not write {}", rex::path_to_utf8(host_config_->path()));
+    }
+  }
+  pinyon_shift::diagnostics::RecordEvent(
+      "config.first_run.preset",
+      {{"preset", capable ? "performance_120" : "low_spec_60"},
+       {"discrete", discrete ? "1" : "0"},
+       {"device_local_mb", std::to_string(device_local >> 20)},
+       {"logical_cores", std::to_string(cores)},
+       {"refresh_hz", fmt::format("{:.0f}", refresh)}});
+}
+#endif
 
 std::unique_ptr<rex::ui::ImGuiDialog> PinyonShiftApp::CreateAchievementsOverlay() {
   if (host_ui_ && host_ui_->is_open()) {
@@ -904,6 +1192,8 @@ void PinyonShiftApp::OnPreLaunchModule() {
   pinyon_shift::diagnostics::RefreshCrashReporter();
   pinyon_shift::diagnostics::RecordEvent("guest.launch.begin");
   pinyon_shift::mod::NotifyModuleLaunched();
+  PinyonShiftInstallRallySeriesLoader(runtime()->function_dispatcher());
+  PinyonShiftInstallCarChallengeProbe(runtime()->function_dispatcher());
   // Unlocks arrive on guest threads; the toast is drawn on the UI thread.
   achievement_listener_ = achievements().RegisterNotificationCallback(
       [this](const rex::system::AchievementEvent& event) {
@@ -969,13 +1259,18 @@ void PinyonShiftApp::OnShutdown() {
   pinyon_shift::mod::NotifyShutdown();
   rex::ui::UnregisterBind("bind_game_menu");
   rex::cvar::UnregisterChangeCallbacks("pinyon_shift_hor_plus");
+  PinyonShiftSetMapViewCallback(nullptr);
   if (resize_listener_added_ && window()) {
     window()->RemoveListener(&resize_listener_);
     resize_listener_added_ = false;
   }
   rex::ui::UnregisterBind("bind_fullscreen");
+  rex::ui::UnregisterBind("bind_quit");
   rex::ui::UnregisterBind("bind_photo");
   rex::ui::UnregisterBind("bind_trainer");
+  rex::ui::UnregisterBind("bind_music_next");
+  rex::ui::UnregisterBind("bind_music_previous");
+  pinyon_shift::music::Shutdown();
   pinyon_shift::cheats::SetAppliedCallback(nullptr);
   pinyon_shift::ui::WaitForPhoto();
   PinyonShiftSetPauseSettingsHandler(nullptr);
@@ -987,6 +1282,7 @@ void PinyonShiftApp::OnShutdown() {
   }
   rex::kernel::xam::SetXamUiProvider(nullptr);
   pinyon_shift::mod::SetHudChangedCallback(nullptr);
+  pinyon_shift::rally::SetPaceHudChangedCallback(nullptr);
   xam_dialogs_.reset();
   host_ui_.reset();
   achievement_icons_.reset();

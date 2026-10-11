@@ -48,10 +48,23 @@ struct ModInfo {
 // the list order), and loads their libraries. Mods are never unloaded.
 void LoadMods(const std::filesystem::path& state_root, const std::string& enabled_mods,
               HostServices services);
+// The save tree the first valid enabled mod asks for with `profile` in its
+// mod.toml (the XE mod needs a new save, so it plays user-xe), or "" for the
+// shared modded profile. Read before the mods load, while paths are chosen.
+std::string RequestedProfile(const std::filesystem::path& state_root,
+                             const std::string& enabled_mods);
+// True when every enabled mod declares `shares_save = true` (it changes
+// only how the game looks or sounds, never what it saves), so the player's
+// own profile stays in use. The generated archive mod counts as its sources
+// do; the generated database mod never shares the save.
+bool ModsShareSave(const std::filesystem::path& state_root, const std::string& enabled_mods);
 const std::vector<ModInfo>& Mods();
 bool AnyModLoaded();
 // Directories of loaded mods' game/ overrides, in priority order.
 std::vector<std::filesystem::path> OverlayRoots();
+// Marketplace packages that loaded mods cannot run with (mod.toml
+// hide_dlc): the title neither lists nor opens them while those mods are on.
+std::vector<std::string> HiddenDlc();
 // Directories of loaded mods' textures/ replacements (<hash>.dds, NP-10.3),
 // in priority order.
 std::vector<std::filesystem::path> TextureRoots();

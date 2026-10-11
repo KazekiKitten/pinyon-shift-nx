@@ -31,7 +31,11 @@ set(PINYON_SHIFT_HOST_SOURCES
     src/save_backups.cpp
     src/cheats.cpp
     src/cheats_map.cpp
+    src/dlc_token_unlocks.cpp
     src/dlc_treasure_map.cpp
+    src/dlc/rally_progress.cpp
+    src/dlc/rally_pace_notes.cpp
+    src/dlc/rally_audio_probe.cpp
     src/stall_dump.cpp
     src/save/car_cards.cpp
     src/save/live_profile.cpp
@@ -48,6 +52,7 @@ set(PINYON_SHIFT_HOST_SOURCES
     src/ui/hostui/vector_font.cpp
     src/ui/hostui/xds_texture.cpp
     src/ui/settings_menu.cpp
+    src/ui/music.cpp
     src/ui/photo_export.cpp
     src/ui/png_writer.cpp
     src/ui/xam_dialogs.cpp
@@ -126,6 +131,19 @@ add_executable(pinyon_shift_profile_body_tests EXCLUDE_FROM_ALL
 )
 target_include_directories(pinyon_shift_profile_body_tests PRIVATE src)
 
+add_executable(pinyon_shift_rally_progress_tests EXCLUDE_FROM_ALL
+    tests/dlc/rally_progress_test.cpp
+    src/dlc/rally_progress.cpp src/platform/host_platform.cpp)
+target_include_directories(pinyon_shift_rally_progress_tests PRIVATE src)
+target_include_directories(pinyon_shift_rally_progress_tests SYSTEM PRIVATE
+    ${REXSDK_DIR}/thirdparty/tomlplusplus/include)
+
+add_executable(pinyon_shift_rally_pace_tests EXCLUDE_FROM_ALL
+    tests/dlc/rally_pace_notes_test.cpp src/dlc/rally_pace_notes.cpp)
+target_include_directories(pinyon_shift_rally_pace_tests PRIVATE src)
+target_include_directories(pinyon_shift_rally_pace_tests SYSTEM PRIVATE
+    ${REXSDK_DIR}/thirdparty/tomlplusplus/include)
+
 add_executable(pinyon_shift_car_cards_tests EXCLUDE_FROM_ALL
     tests/save/car_cards_test.cpp
     src/save/car_cards.cpp
@@ -133,11 +151,25 @@ add_executable(pinyon_shift_car_cards_tests EXCLUDE_FROM_ALL
 target_include_directories(pinyon_shift_car_cards_tests PRIVATE src)
 target_link_libraries(pinyon_shift_car_cards_tests PRIVATE rex::runtime)
 
+add_executable(pinyon_shift_save_backups_tests EXCLUDE_FROM_ALL
+    tests/save/save_backups_test.cpp src/save_backups.cpp)
+target_include_directories(pinyon_shift_save_backups_tests PRIVATE src)
+target_link_libraries(pinyon_shift_save_backups_tests PRIVATE rex::runtime)
+
+add_executable(pinyon_shift_content_roots_tests EXCLUDE_FROM_ALL
+    tests/dlc/content_roots_test.cpp)
+target_link_libraries(pinyon_shift_content_roots_tests PRIVATE rex::runtime)
+
 add_executable(pinyon_shift_fh1_edram_tiles_tests EXCLUDE_FROM_ALL
     tests/native_renderer/fh1_edram_tiles_test.cpp
 )
 target_include_directories(pinyon_shift_fh1_edram_tiles_tests PRIVATE ${REXSDK_DIR}/include)
 target_link_libraries(pinyon_shift_fh1_edram_tiles_tests PRIVATE rex::runtime)
+
+add_executable(pinyon_shift_overlay_device_tests EXCLUDE_FROM_ALL
+    tests/mod/overlay_device_test.cpp src/mod/overlay_device.cpp)
+target_include_directories(pinyon_shift_overlay_device_tests PRIVATE src)
+target_link_libraries(pinyon_shift_overlay_device_tests PRIVATE rex::runtime)
 
 # Every host-side test, for CI (PINYON_SHIFT_HOST_TESTS_ONLY) and local runs.
 add_custom_target(pinyon_shift_host_tests)
@@ -147,9 +179,24 @@ add_dependencies(pinyon_shift_host_tests
     pinyon_shift_hostui_tests
     pinyon_shift_host_config_tests
     pinyon_shift_profile_body_tests
+    pinyon_shift_rally_progress_tests
+    pinyon_shift_rally_pace_tests
     pinyon_shift_car_cards_tests
+    pinyon_shift_save_backups_tests
+    pinyon_shift_content_roots_tests
+    pinyon_shift_overlay_device_tests
     pinyon_shift_fh1_edram_tiles_tests
     pinyon_shift_mod_hello_telemetry)
+
+# These checks use assert; Release must execute them instead of compiling
+# away the test operations themselves.
+get_target_property(pinyon_host_checks pinyon_shift_host_tests MANUALLY_ADDED_DEPENDENCIES)
+foreach(pinyon_host_check IN LISTS pinyon_host_checks)
+    if(pinyon_host_check MATCHES "_tests$")
+        target_compile_options(${pinyon_host_check} PRIVATE
+            $<IF:$<CXX_COMPILER_ID:MSVC>,/UNDEBUG,-UNDEBUG>)
+    endif()
+endforeach()
 
 add_executable(pinyon_shift_fh1_archive_extract EXCLUDE_FROM_ALL
     tools/fh1_archive_extract.cpp
@@ -172,14 +219,28 @@ endif()
 target_include_directories(pinyon_shift_fh1_archive_extract PRIVATE
     src ${REXSDK_DIR}/include)
 target_link_libraries(pinyon_shift_fh1_archive_extract PRIVATE rex::runtime)
+
+# FSB4 banks to WAV for the asset export (#446), with the SDK's FFmpeg (MP3
+# and the XMA frame decoder the game's audio runs on).
+add_executable(pinyon_shift_fh1_audio_decode EXCLUDE_FROM_ALL
+    tools/fh1_audio_decode.cpp
+    ${REXSDK_DIR}/src/core/bit_stream.cpp)
+target_include_directories(pinyon_shift_fh1_audio_decode PRIVATE ${REXSDK_DIR}/include)
+target_link_libraries(pinyon_shift_fh1_audio_decode PRIVATE libavcodec libavutil)
 if(WIN32)
     # Non-elevated sampling profiler for named threads (CPU_HOTSPOT_PROFILING.md).
     add_executable(pinyon_shift_thread_sampler EXCLUDE_FROM_ALL tools/thread_sampler.cpp)
     target_link_libraries(pinyon_shift_thread_sampler PRIVATE dbghelp)
+    # Holds device-local memory beside the game to shrink its VRAM budget
+    # (LOW_SPEC_BACKLOG LS-0.5); loads vulkan-1.dll at run time.
+    add_executable(pinyon_shift_vram_balloon EXCLUDE_FROM_ALL tools/vram_balloon.cpp)
+    target_include_directories(pinyon_shift_vram_balloon PRIVATE
+        ${REXSDK_DIR}/thirdparty/vulkan-headers/include)
 endif()
 
 if(NOT PINYON_SHIFT_HOST_TESTS_ONLY)
 pinyon_shift_attach_rexglue(pinyon_shift)
+add_dependencies(pinyon_shift pinyon_shift_fh1_archive_extract)
 
 # ReXGlue's SDL backend loads project overrides from the executable directory.
 # Keep this as an always-built staging target so mapping-only updates do not
@@ -193,6 +254,27 @@ add_custom_target(pinyon_shift_stage_controller_mappings ALL
     COMMENT "Staging project gamepad mappings beside pinyon_shift"
     VERBATIM)
 
+# The game and its libraries use the Visual C++ runtime DLLs. Copies from the
+# toolset that built them sit beside the game (Microsoft's app-local
+# deployment), so it starts on a PC without the matching redistributable
+# (#393). The developer prompt sets VCToolsRedistDir.
+if(WIN32 AND DEFINED ENV{VCToolsRedistDir})
+    set(PINYON_SHIFT_VC_REDIST_DIR "$ENV{VCToolsRedistDir}" CACHE PATH
+        "Visual C++ redistributable folder of the build toolset")
+endif()
+if(WIN32 AND PINYON_SHIFT_VC_REDIST_DIR)
+    file(GLOB PINYON_SHIFT_VC_RUNTIME_DLLS
+        "${PINYON_SHIFT_VC_REDIST_DIR}/x64/Microsoft.VC*.CRT/*.dll")
+    if(PINYON_SHIFT_VC_RUNTIME_DLLS)
+        add_custom_target(pinyon_shift_stage_vc_runtime ALL
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${PINYON_SHIFT_VC_RUNTIME_DLLS} "$<TARGET_FILE_DIR:pinyon_shift>"
+            DEPENDS pinyon_shift ${PINYON_SHIFT_VC_RUNTIME_DLLS}
+            COMMENT "Staging the Visual C++ runtime beside pinyon_shift"
+            VERBATIM)
+    endif()
+endif()
+
 if(WIN32)
     target_link_libraries(pinyon_shift PRIVATE bcrypt d3d12 dbghelp dxgi rex::gpu-fh1)
 else()
@@ -204,6 +286,7 @@ endif()
 target_include_directories(pinyon_shift PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${REXSDK_DIR}/thirdparty/tomlplusplus/include
+    ${REXSDK_DIR}/thirdparty/renderdoc
     ${REXSDK_DIR})
 endif()  # NOT PINYON_SHIFT_HOST_TESTS_ONLY
 

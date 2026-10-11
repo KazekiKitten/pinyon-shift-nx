@@ -6,6 +6,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import tomllib
 import unittest
 import zipfile
 
@@ -14,17 +15,123 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 
 
 class ReleaseContractTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("powershell"), "Windows PowerShell is required")
+    def test_vsdevcmd_uses_safe_temp_and_restores_portable_install_paths(self):
+        with tempfile.TemporaryDirectory(prefix="pinyon-vs-temp-") as directory:
+            root = pathlib.Path(directory)
+            batch = root / "Build Tools/Common7/Tools/VsDevCmd.bat"
+            batch.parent.mkdir(parents=True)
+            batch.write_text(
+                '@echo off\n'
+                'if "1" == "0" (\n'
+                '  echo %TEMP%\\dd_vsdevcmd17_preinit_env.log\n'
+                ')\n'
+                'if "%PINYON_TEST_VS_FAIL%" == "1" exit /b 17\n'
+                'set "PINYON_TEST_VS_TEMP=%TEMP%"\n'
+                'exit /b 0\n')
+            environment = os.environ.copy()
+            environment["PINYON_TEST_VS_ROOT"] = str(root / "Build Tools")
+            environment["PINYON_TEST_INSTALL"] = str(root / "Forza (Pinyon Shift)")
+            command = r"""
+. ./tools/release-common.ps1
+$ErrorActionPreference = 'Stop'
+function Get-PinyonVisualStudioRoot { $env:PINYON_TEST_VS_ROOT }
+function Get-PinyonCMake { 'test-cmake' }
+function Assert-PinyonBuildCapabilities { }
+$env:TEMP = Join-Path $env:PINYON_TEST_INSTALL 'data\temp'
+$env:TMP = Join-Path $env:PINYON_TEST_INSTALL 'other (temp)'
+$expectedTemp = $env:TEMP
+$expectedTmp = $env:TMP
+$env:PINYON_TEST_VS_FAIL = '0'
+Enter-PinyonBuildEnvironment | Out-Null
+if ($env:PINYON_TEST_VS_TEMP -match '[ ()]') { throw 'Unsafe child TEMP' }
+if ($env:TEMP -ne $expectedTemp -or $env:TMP -ne $expectedTmp) { throw 'Temp paths changed on success' }
+$env:PINYON_TEST_VS_FAIL = '1'
+try {
+    Enter-PinyonBuildEnvironment | Out-Null
+    throw 'Failed tools were accepted'
+} catch {
+    if ($_.Exception.Data['exit_code'] -ne 17) { throw }
+}
+if ($env:TEMP -ne $expectedTemp -or $env:TMP -ne $expectedTmp) { throw 'Temp paths changed on failure' }
+exit 0
+"""
+            result = subprocess.run(["powershell", "-NoProfile", "-Command", command],
+                                    cwd=ROOT, env=environment, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    @unittest.skipUnless(shutil.which("powershell"), "Windows PowerShell is required")
+    def test_visual_studio_selection_excludes_incompatible_standard_library(self):
+        with tempfile.TemporaryDirectory(prefix="pinyon-vswhere-") as directory:
+            root = pathlib.Path(directory)
+            executable = root / "Microsoft Visual Studio/Installer/vswhere.exe"
+            executable.parent.mkdir(parents=True)
+            executable.touch()
+            environment = os.environ.copy()
+            environment["PINYON_TEST_ROOT"] = str(root)
+            command = r"""
+. ./tools/release-common.ps1
+${env:ProgramFiles(x86)} = $env:PINYON_TEST_ROOT
+$vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+Set-Item -Path "Function:$vswhere" -Value {
+    param([Parameter(ValueFromRemainingArguments=$true)] $Arguments)
+    $rangeIndex = [Array]::IndexOf($Arguments, '-version')
+    if ($rangeIndex -lt 0) { return 'incompatible-vs2019' }
+    if ($Arguments[$rangeIndex + 1] -ne '[17.1,)') { throw 'Unexpected supported version range' }
+    if ($env:PINYON_TEST_HAS_SUPPORTED -eq '1') { return 'compatible-vs2022' }
+}
+$env:PINYON_TEST_HAS_SUPPORTED = '0'
+if ($null -ne (Get-PinyonVisualStudioRoot -AllowMissing)) { throw 'Old tools bypass provisioning' }
+try {
+    Get-PinyonVisualStudioRoot | Out-Null
+    throw 'Missing tools were accepted'
+} catch {
+    if ($_.Exception.Message -notmatch 'provision-toolchain.ps1') { throw }
+}
+$env:PINYON_TEST_HAS_SUPPORTED = '1'
+if ((Get-PinyonVisualStudioRoot) -ne 'compatible-vs2022') { throw 'Supported tools were not selected' }
+"""
+            result = subprocess.run(["powershell", "-NoProfile", "-Command", command],
+                                    cwd=ROOT, env=environment, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_native_jump_addresses_remain_analysis_root_keys(self):
+        analysis = tomllib.loads((ROOT / "config/rexglue/analysis/main-xex.toml").read_text())
+        self.assertEqual(analysis["setjmp_address"], 0x82A81E80)
+        self.assertEqual(analysis["longjmp_address"], 0x82A81950)
+
     def test_release_workflow_publishes_only_preview_channels_as_prereleases(self):
         workflow = (ROOT / ".github/workflows/release.yml").read_text()
-        self.assertIn("$release.channel -eq 'preview'", workflow)
-        self.assertIn("$release.channel -ne 'stable'", workflow)
-        self.assertIn("$arguments += '--prerelease'", workflow)
-        self.assertIn('docs/releases/$($release.version).md', workflow)
-        self.assertIn("@('--notes-file', $notesPath, '--title', $title)", workflow)
+        self.assertIn("preview) arguments+=(--prerelease) ;;", workflow)
+        self.assertIn("stable) ;;", workflow)
+        self.assertIn('Unsupported release channel: $channel"; exit 1', workflow)
+        self.assertIn('notes="docs/releases/$version.md"', workflow)
+        self.assertIn('arguments+=(--notes-file "$notes" --title', workflow)
+        # Every platform's launcher is attached to the same release.
+        for asset in ("PinyonShift-Launcher.zip", "PinyonShift-Launcher-linux-x86_64.tar.gz",
+                      "PinyonShift-Launcher-macos-arm64.zip"):
+            self.assertIn(f".artifacts/{asset}", workflow)
         self.assertNotIn(
             "--generate-notes --prerelease --verify-tag",
             workflow,
         )
+
+    def test_launcher_updater_downloads_the_published_assets(self):
+        # FB-10.7: the launchers update from the assets this workflow attaches,
+        # by name, and the release names its repository and channel.
+        workflow = (ROOT / ".github/workflows/release.yml").read_text()
+        updater = (ROOT / "launcher/Shared/LauncherUpdate.cs").read_text(encoding="utf-8")
+        assets = dict(re.findall(r'public const string (\w+Asset) = "([^"]+)";', updater))
+        self.assertEqual(set(assets), {"WindowsAsset", "LinuxAsset", "MacAsset"})
+        for asset in assets.values():
+            self.assertIn(f".artifacts/{asset}", workflow)
+        release = json.loads((ROOT / "config/release.json").read_text(encoding="utf-8"))
+        self.assertRegex(release["repository"], r"^https://github\.com/[^/]+/[^/]+$")
+        self.assertIn(release["channel"], ("stable", "preview"))
+        # Both launchers compile the same updater.
+        for project in ("launcher/PinyonShift.Launcher/PinyonShift.Launcher.csproj",
+                        "launcher/PinyonShift.Launcher.Desktop/PinyonShift.Launcher.Desktop.csproj"):
+            self.assertIn(r'<Compile Include="..\Shared\LauncherUpdate.cs"', (ROOT / project).read_text(encoding="utf-8"))
 
     def test_preview_release_uses_dev_and_stable_keeps_main(self):
         workflow = (ROOT / ".github/workflows/release.yml").read_text()
@@ -96,6 +203,11 @@ catch { [Console]::Error.Write($_.Exception.Message); exit 2 }
         launch = (ROOT / "tools/launch-preview.ps1").read_text(encoding="utf-8")
         sources += ["tools/" + name for name in
                     re.findall(r"Join-Path \$PSScriptRoot '([^'.][^']*)'", launch)]
+        # The modules pinyon.py imports, and the scripts the launchers run.
+        pinyon = (ROOT / "tools/pinyon.py").read_text(encoding="utf-8")
+        sources += [f"tools/{name}.py" for name in re.findall(r"^import (pinyon_\w+)", pinyon, re.MULTILINE)]
+        launcher = (ROOT / "launcher/PinyonShift.Launcher/MainWindow.xaml.cs").read_text(encoding="utf-8")
+        sources += ["tools/" + name for name in set(re.findall(r'"(manage-[\w-]+\.ps1)"', launcher))]
         self.assertTrue(sources)
         for source in sources:
             self.assertTrue((ROOT / source).is_file(), source)
@@ -295,7 +407,7 @@ catch { [Console]::Error.Write($_.Exception.Message); exit 2 }
         }
         self.assertTrue(required.issubset({p.name for p in (ROOT / "tools").glob("*.ps1")}))
         package_script = (ROOT / "tools/package-launcher.ps1").read_text(encoding="utf-8")
-        for shipped in ("host-config.ps1", "set-graphics-experiment.ps1", "verify-codegen-log.ps1"):
+        for shipped in ("host-config.ps1", "set-graphics-experiment.ps1", "verify-codegen-log.ps1", "prepare-fh1-rally.py", "patch-fh1-archive.py", "fh1-strings.py"):
             self.assertIn(shipped, package_script)
 
     def test_launcher_payload_ships_the_android_build(self):
@@ -326,6 +438,7 @@ catch { [Console]::Error.Write($_.Exception.Message); exit 2 }
         self.assertIn("${REXSDK_DIR}/src/graphics/fh1_shader_pack.cpp", cmake)
         for source in ("tests/native_renderer", "tools/fh1_archive_extract.cpp",
                        "tools/fh1_texture_import.cpp", "tools/thread_sampler.cpp",
+                       "tools/vram_balloon.cpp",
                        "tools/extract-fh1-shader-corpus.py",
                        "tools/build-fh1-gpu-prewarm.py", "tools/produce-fh1-artifacts.ps1",
                        "config/render-tests"):
@@ -419,7 +532,7 @@ catch { [Console]::Error.Write($_.Exception.Message); exit 2 }
 
     def test_graphics_schema_and_diagnostics_contract(self):
         app = (ROOT / "src/pinyon_shift_app.cpp").read_text(encoding="utf-8")
-        self.assertIn("constexpr uint32_t kConfigSchema = 27", app)
+        self.assertIn("constexpr uint32_t kConfigSchema = 29", app)
         self.assertIn(".schema", app)
         for setting in ("anisotropic_override", "swap_post_effect", "draw_resolution_scale_x"):
             self.assertIn(setting, app)
@@ -478,10 +591,15 @@ catch { [Console]::Error.Write($_.Exception.Message); exit 2 }
         launcher_xaml = (ROOT / "launcher/PinyonShift.Launcher/MainWindow.xaml").read_text(
             encoding="utf-8"
         )
-        self.assertIn("constexpr uint32_t kConfigSchema = 27;", app)
-        self.assertRegex(app, r"pinyon_shift_config_schema,\s*27,")
+        self.assertIn("constexpr uint32_t kConfigSchema = 29;", app)
+        self.assertRegex(app, r"pinyon_shift_config_schema,\s*29,")
         self.assertIn('"pinyon_shift_stabilize_vehicle_presentation = false\\n"', app)
-        self.assertIn('"keybind_a = \\"LMB,Space\\"\\n"', app)
+        # New files get every keyboard bind; older ones keep the keys they had.
+        keys = (ROOT / "src/config/default_keys.h").read_text(encoding="utf-8")
+        self.assertIn("for (const auto& key : pinyon_shift::config::kDefaultKeys)", app)
+        self.assertIn("for (const auto& key : pinyon_shift::config::kSchema28Keys)", app)
+        self.assertIn('{"keybind_a", "LMB,Space"}', keys)
+        self.assertIn('{"keybind_right_trigger", "W"}', keys)
         # Schemas 1..24 migrate; the current schema is accepted unchanged.
         self.assertIn("schema < 1 || schema >= kConfigSchema", app)
         self.assertNotIn('"fh1_renderer = \\"native\\"\\n"', app)
@@ -505,8 +623,8 @@ catch { [Console]::Error.Write($_.Exception.Message); exit 2 }
         ):
             self.assertIn(f'"{retired}"', retired_block)
         graphics_tool = (ROOT / "tools/set-graphics-experiment.ps1").read_text(encoding="utf-8")
-        self.assertIn("pinyon_shift_config_schema = 27", graphics_tool)
-        self.assertIn("-gt 27", graphics_tool)
+        self.assertIn("pinyon_shift_config_schema = 29", graphics_tool)
+        self.assertIn("-gt 29", graphics_tool)
         self.assertNotIn("-gt 23", graphics_tool)
         # Apply writes the current schema and so bypasses the game's
         # migration: it must drop every setting that migration retires.
@@ -575,9 +693,10 @@ catch { [Console]::Error.Write($_.Exception.Message); exit 2 }
         self.assertNotIn("AnisotropyComboBox", launcher_xaml)
         self.assertNotIn('"-Anisotropy"', launcher)
         self.assertIn('"-ResolutionScale", SelectedTag(ResolutionComboBox)', launcher)
-        # Schema 27: the graphics API (Vulkan by default) is chosen before start.
-        self.assertIn('"-GraphicsApi", SelectedTag(GraphicsApiComboBox)', launcher)
-        self.assertIn("GraphicsApiComboBox", launcher_xaml)
+        # Schema 28: player settings use Vulkan exclusively.
+        self.assertIn('"-GraphicsApi", "vulkan"', launcher)
+        self.assertNotIn("GraphicsApiComboBox", launcher_xaml)
+        self.assertIn('Text="Vulkan"', launcher_xaml)
         # The output scaling, with the rendered and shown sizes beside it.
         self.assertIn('"-OutputScaling", SelectedTag(OutputScalingComboBox)', launcher)
         self.assertIn("ResolutionLineText", launcher_xaml)
@@ -663,13 +782,16 @@ catch { [Console]::Error.Write($_.Exception.Message); exit 2 }
             (state / "crashes").mkdir(parents=True)
             private_path = str(root / "private" / getpass.getuser())
             (state / "logs" / "runtime.log").write_text(
-                f"game path: {private_path}\nlast useful line\n", encoding="utf-8"
+                f"[2099-01-01 00:00:00.000] game path: {private_path}\nlast useful line\n", encoding="utf-8"
             )
-            (state / "logs" / "session.jsonl").write_text(
-                json.dumps({"event": "process.start", "path": private_path}) + "\n",
+            (state / "logs" / "test.jsonl").write_text(
+                json.dumps({"event": "process.start", "path": private_path, "pid": "7",
+                            "utc": "2000-01-01T00:00:00Z", "session": "test"}) + "\n" +
+                json.dumps({"event": "logging.ready", "pid": "7", "session": "test",
+                            "renderer": "vulkan"}) + "\n",
                 encoding="utf-8",
             )
-            (state / "logs" / "session.perf.csv").write_text(
+            (state / "logs" / "test.perf.csv").write_text(
                 "frame_time_us,xma_no_space_stalls,xma_no_progress_stalls,xma_stall_recoveries\n"
                 "10000,2,1,0\n20000,3,0,1\n",
                 encoding="utf-8",
