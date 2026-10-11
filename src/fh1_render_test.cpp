@@ -36,6 +36,7 @@
 #include <rex/ui/window.h>
 #include <rex/ui/windowed_app_context.h>
 
+#include "guest_native/guest_native.h"
 #include "pinyon_shift_diagnostics.h"
 
 REXCVAR_DEFINE_BOOL(fh1_render_test_log_file_opens, false, "Pinyon Shift",
@@ -1143,6 +1144,7 @@ bool ObserveOutput(
                        : sequence >= g_test.stop_frame + 1) &&
       g_test.next_capture == g_test.captures.size() && !g_test.stopping) {
     g_test.stopping = true;
+    guest_native::RecordSummary();
     diagnostics::RecordEvent(
         "fh1.render_test.complete",
         {{"frame", std::to_string(g_test.stop_frame)},
