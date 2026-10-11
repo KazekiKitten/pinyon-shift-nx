@@ -211,6 +211,13 @@ class HostUi final : public rex::ui::UIDrawer, public rex::ui::WindowInputListen
   // Closed, waiting for held buttons and keys to be released.
   bool draining_ = false;
   std::chrono::steady_clock::time_point drain_started_;
+  // What the input being handled came from, and what closed the menu, for
+  // the hostui.closed event (#429).
+  const char* input_source_ = "app";
+  const char* closed_via_ = "app";
+  // An open menu that could not draw is reported once per open (#429).
+  bool draw_skip_reported_ = false;
+  bool drawn_since_open_ = false;
   std::vector<int> held_keys_;
   // Expires with this object, for deferred work queued from Draw.
   std::shared_ptr<bool> alive_ = std::make_shared<bool>(true);

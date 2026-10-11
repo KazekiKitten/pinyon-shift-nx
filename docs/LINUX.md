@@ -35,7 +35,9 @@ password, no `pacman`, no developer mode.
 ### Playing on the Deck
 
 - The built-in controls work as an Xbox 360 pad through Steam Input. Open the
-  game's settings from the pause menu.
+  game's settings from the pause menu (SETTINGS), or anywhere by pressing
+  View and Menu together (BACK + START, changeable under CONTROLS >
+  CONTROLLER BUTTONS > SETTINGS MENU).
 - **F6 > GRAPHICS > SCENE SHADING > COARSE** shades the scene once per 2 × 2
   pixels: a little softer, and about 8 % of the GPU's frame saved on the
   Deck.

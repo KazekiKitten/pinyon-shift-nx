@@ -93,6 +93,16 @@ std::unique_ptr<ImmediateTexture> LoadTexture(rex::ui::ImmediateDrawer& drawer,
                               image->rgba.data());
 }
 
+// Names the input an event handler is serving until it returns.
+class ScopedInputSource {
+ public:
+  ScopedInputSource(const char*& slot, const char* source) : slot_(slot) { slot_ = source; }
+  ~ScopedInputSource() { slot_ = "app"; }
+
+ private:
+  const char*& slot_;
+};
+
 }  // namespace
 
 HostUi::HostUi(rex::ReXApp& app, rex::ui::Presenter& presenter, rex::ui::ImmediateDrawer& drawer,
@@ -224,6 +234,8 @@ bool HostUi::Open(std::unique_ptr<MenuScreen> screen) {
   diagnostics::RecordEvent("hostui.open", {{"screen", screens_.back()->title()}});
   pad_.Reset();
   draining_ = false;
+  draw_skip_reported_ = false;
+  drawn_since_open_ = false;
   if (!registered_) {
     registered_ = true;
     SetGuestUiActive(true);
@@ -260,6 +272,7 @@ void HostUi::Close() {
   if (!registered_) {
     return;
   }
+  closed_via_ = input_source_;
   // Stay registered, drawing nothing, until the input is released.
   draining_ = true;
   drain_started_ = std::chrono::steady_clock::now();
@@ -281,7 +294,9 @@ void HostUi::FinishClose() {
   }
   // Unregistered: the drawer, the input listener and the guest input
   // capture are all released.
-  diagnostics::RecordEvent("hostui.closed");
+  diagnostics::RecordEvent("hostui.closed",
+                           {{"via", closed_via_}, {"drawn", drawn_since_open_ ? "1" : "0"}});
+  closed_via_ = "app";
   RequestPaint();
 }
 
@@ -418,9 +433,11 @@ void HostUi::PollPad() {
         if (alive.expired()) {
           return;
         }
+        input_source_ = "pad";
         for (NavCommand command : commands) {
           Apply(command);
         }
+        input_source_ = "app";
       });
 }
 
@@ -428,7 +445,10 @@ HostUi::Canvas HostUi::ComputeCanvas(rex::ui::UIDrawContext& context) const {
   float x = 0.0f, y = 0.0f;
   float width = float(context.render_target_width());
   float height = float(context.render_target_height());
-  if (auto rect = presenter_.GetPaintedGuestOutputRectFromUIThread()) {
+  // An empty guest image falls back to the whole render target, so the menu
+  // never draws at zero size.
+  if (auto rect = presenter_.GetPaintedGuestOutputRectFromUIThread();
+      rect && rect->width && rect->height) {
     x = float(rect->x);
     y = float(rect->y);
     width = float(rect->width);
@@ -875,8 +895,17 @@ void HostUi::DrawToasts(rex::ui::UIDrawContext& context) {
 
 void HostUi::DrawMenu(rex::ui::UIDrawContext& context) {
   if (!PrepareCanvas(context)) {
+    if (!draw_skip_reported_) {
+      draw_skip_reported_ = true;
+      diagnostics::RecordEvent(
+          "hostui.draw_skipped",
+          {{"screen", screens_.back()->title()},
+           {"target", std::to_string(context.render_target_width()) + "x" +
+                          std::to_string(context.render_target_height())}});
+    }
     return;
   }
+  drawn_since_open_ = true;
   const MenuScreen& screen = *screens_.back();
 
   drawer_.Begin(context, float(context.render_target_width()),
@@ -995,6 +1024,7 @@ void HostUi::OnKeyDown(rex::ui::KeyEvent& e) {
     return;
   }
   e.set_handled(true);
+  const ScopedInputSource source(input_source_, "key");
   if (screens_.back()->captures_keys()) {
     if (!e.prev_state()) {
       CaptureKey(int(key));
@@ -1089,6 +1119,7 @@ void HostUi::OnMouseDown(rex::ui::MouseEvent& e) {
     return;
   }
   e.set_handled(true);
+  const ScopedInputSource source(input_source_, "mouse");
   if (screens_.back()->captures_keys()) {
     switch (e.button()) {
       case rex::ui::MouseEvent::Button::kLeft:
@@ -1151,6 +1182,7 @@ void HostUi::OnMouseWheel(rex::ui::MouseEvent& e) {
     return;
   }
   e.set_handled(true);
+  const ScopedInputSource source(input_source_, "mouse");
   if (e.scroll_y() > 0) {
     Apply(NavCommand::kUp);
   } else if (e.scroll_y() < 0) {
