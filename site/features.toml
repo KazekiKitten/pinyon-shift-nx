@@ -169,7 +169,7 @@ cells = ["yes", "yes", "yes", "not yet"]
 [[platform]]
 feature = "Asset and texture mods"
 link = "modding.md"
-cells = ["yes", "yes", "yes", "yes"]
+cells = ["partly: texture replacement not on the Vulkan renderer yet ([#518](https://github.com/arcanite24/pinyon-shift/issues/518))", "partly: texture replacement not on the Vulkan renderer yet ([#518](https://github.com/arcanite24/pinyon-shift/issues/518))", "partly: texture replacement not on the Vulkan renderer yet ([#518](https://github.com/arcanite24/pinyon-shift/issues/518))", "partly: texture replacement not on the Vulkan renderer yet ([#518](https://github.com/arcanite24/pinyon-shift/issues/518))"]
 
 [[platform]]
 feature = "Forza Horizon XE"
