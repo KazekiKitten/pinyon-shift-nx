@@ -21,6 +21,7 @@ sdk/
 private/
 /docs/*
 !/docs/BUILDING.md
+!/docs/REVERSE_ENGINEERING.md
 !/docs/LEGAL.md
 !/docs/TROUBLESHOOTING.md
 !/docs/INSTALLING.md
