@@ -615,6 +615,10 @@ yet: the recorder needs about 7 ms (PB-2.12 or a pass-rate trade).
 
 ## Final pass: lessons from other recomps (PB-6 to PB-10)
 
+A second pass on 2026-10-11 (#456), about the guest CPU and the runtime,
+is in [RECOMP_OPTIMIZATION_SURVEY.md](RECOMP_OPTIMIZATION_SURVEY.md),
+with a ranked experiment shortlist.
+
 Researched 2026-09-30 against local checkouts: UnleashedRecomp `cf829a9`
 with XenosRecomp `990d03b` (hedge-dev), skate3recomp `f6e0ae8` with its SDK
 submodule, Rayman Origins, Kameo, Nocturne, TiP, reNut, SVR07, the Yukes SDK
