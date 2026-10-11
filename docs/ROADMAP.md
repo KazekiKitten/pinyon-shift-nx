@@ -62,6 +62,12 @@ In progress:
   in free roam (#416), resuming after quitting before the first festival
   event (#447), the trainer not opening (#450) and the Steam Deck settings
   menu (#429)
+- [ ] Setup that needs only the launcher zip and your dump (#393): free
+  space, download sites, the Vulkan driver and the install path are checked
+  up front; Build Tools, Ninja and the C++ runtime are provided; Visual
+  Studio is repaired and setup resumes after a required restart. All
+  implemented; it closes once it is verified on a clean PC and the Android
+  Wi-Fi install on a real network
 - [ ] Faster Android rendering on tiled GPUs (#414), and the Odin's GPU
   savings measured on desktop, the Steam Deck and macOS (#427)
 - [ ] Hand-optimize the hottest recompiled guest functions (#431)
@@ -70,9 +76,6 @@ In progress:
 
 Next, in priority order:
 
-- [ ] Make setup more reliable and the first build faster: the launcher
-  installs every requirement, validates the toolchain before building and
-  recovers from interrupted setup (#393)
 - [ ] Qualify AMD and Intel GPUs, including low-end integrated graphics
   (#388), and publish tested hardware, drivers, settings and performance
   results

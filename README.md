@@ -155,10 +155,11 @@ command line.
 
 ## Roadmap
 
-In progress: crash, stutter and rendering fixes, faster Android rendering
-on tiled GPUs, and documenting the game's code. Next: easier setup, AMD and
-Intel qualification, and draw distance and world detail settings. The full
-list, with what's done, is in the [roadmap](docs/ROADMAP.md).
+In progress: one-zip setup (implemented, being verified), crash, stutter and
+rendering fixes, faster Android rendering on tiled GPUs, and documenting the
+game's code. Next: AMD and Intel qualification, and draw distance and world
+detail settings. The full list, with what's done, is in the
+[roadmap](docs/ROADMAP.md).
 
 ## Project boundaries
 
