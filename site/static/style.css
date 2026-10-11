@@ -398,6 +398,14 @@ h2:hover .anchor, h3:hover .anchor, .anchor:focus-visible { opacity: 1; }
   white-space: nowrap;
 }
 .prose td[align="right"], .prose th[align="right"] { text-align: right; white-space: nowrap; }
+/* The Features page's platform cells (site/features.toml). */
+.prose table:has(th:nth-child(5)) { min-width: 52rem; }
+.prose table:has(th:nth-child(5)) td:not(:first-child) { min-width: 8.5rem; }
+.prose .state { font-weight: 600; white-space: nowrap; }
+.prose .state-yes { color: var(--accent); }
+.prose .state-partly { color: var(--amber); }
+.prose .state-not-yet { color: var(--muted); }
+.prose .state-na { color: var(--faint); }
 
 .prose blockquote {
   margin: 0 0 1.25rem;

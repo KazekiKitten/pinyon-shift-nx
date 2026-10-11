@@ -1,0 +1,222 @@
+# The feature tables on the site's Features page (site/pages/features.md,
+# #455). site/build.py turns this file into the two tables where the page
+# says {{features}}. Update it with the CHANGELOG.
+#
+# Each platform cell starts with one of:
+#   "yes"      supported
+#   "partly"   supported with a limit, explained after a colon
+#   "not yet"  planned or missing; put a link to its issue after the colon
+#   "n/a"      does not apply
+# Text after the colon is Markdown. Links to other site pages are .md links.
+
+platforms = ["Windows", "Linux and Steam Deck", "macOS", "Android"]
+
+# Table 1: Pinyon Shift compared with the original on Xbox 360.
+[[original]]
+feature = "Resolution"
+link = "playing.md#graphics-presets"
+xbox = "1280 × 720"
+pinyon = "1x to 4x internal resolution; bilinear, CAS or FSR 1 output scaling; ultrawide with a 16:9 HUD"
+
+[[original]]
+feature = "Frame rate"
+link = "playing.md#graphics-presets"
+xbox = "30 fps"
+pinyon = "60 or 120 fps at the correct game speed"
+
+[[original]]
+feature = "Graphics"
+link = "playing.md#graphics-presets"
+xbox = "Fixed"
+pinyon = "Presets, MSAA up to 4x, anisotropic filtering, optional bloom, motion blur and depth of field"
+
+[[original]]
+feature = "HDR"
+link = "playing.md#hdr"
+xbox = "No"
+pinyon = "HDR output with paper white, highlights and a calibration screen"
+
+[[original]]
+feature = "Textures"
+link = "modding.md#asset-mods"
+xbox = "Fixed"
+pinyon = "Replacement textures up to 8 times larger, reloaded in game"
+
+[[original]]
+feature = "Camera"
+link = "playing.md#immersive-camera"
+xbox = "Stock cameras"
+pinyon = "Optional immersive camera: G-forces, lean, speed shake and head motion"
+
+[[original]]
+feature = "Music"
+link = "playing.md#your-music"
+xbox = "Three stations; a dashboard soundtrack replaces them"
+pinyon = "Your own music files in game, and up to three [custom radio stations](playing.md#custom-radio-stations) with their own names and logos"
+
+[[original]]
+feature = "Mods"
+link = "modding.md"
+xbox = "No"
+pinyon = "Asset, database, texture and native mods; the Forza Horizon XE mod installs from the launcher"
+
+[[original]]
+feature = "DLC and title update"
+link = "dlc.md"
+xbox = "Bought on Xbox Live"
+pinyon = "Your own packages, verified and imported; Treasure Map included; Horizon Rally and 1000 Club on the optional title update v4 build"
+
+[[original]]
+feature = "Controls"
+link = "playing.md#controllers"
+xbox = "Xbox 360 controller"
+pinyon = "XInput and SDL controllers with button mapping, keyboard driving with rebindable keys"
+
+[[original]]
+feature = "Saves"
+link = "playing.md#saves"
+xbox = "Console storage"
+pinyon = "Automatic save backups, PNG photos, saves imported from Xenia"
+
+[[original]]
+feature = "Online services"
+link = "dlc.md"
+xbox = "Xbox Live (closed)"
+pinyon = "None; the 1000 Club challenges run offline on the v4 build"
+
+[[original]]
+feature = "Installing and updating"
+link = "install.md#updating"
+xbox = "Disc"
+pinyon = "The launcher verifies your disc, builds the game and updates itself"
+
+# Table 2: features by platform.
+[[platform]]
+feature = "Renderer"
+link = "how-it-works.md#rendering"
+cells = [
+  "yes: Vulkan",
+  "yes: Vulkan (RADV or NVIDIA)",
+  "yes: Vulkan on Metal through MoltenVK",
+  "yes: Vulkan; the bundled Turnip driver on Adreno 7xx",
+]
+
+[[platform]]
+feature = "Installing"
+link = "install.md"
+cells = [
+  "yes: launcher ZIP",
+  "yes: launcher archive; **Add to Steam** for Game Mode",
+  "partly: launcher app; not notarized, so it is approved once in System Settings",
+  "partly: an APK built by the Windows launcher, installed over Wi-Fi or USB",
+]
+
+[[platform]]
+feature = "Updates"
+link = "install.md#updating"
+cells = [
+  "yes: in the launcher",
+  "yes: in the launcher",
+  "yes: in the launcher",
+  "partly: rebuild the APK on the PC",
+]
+
+[[platform]]
+feature = "Resolution scale and output scaling"
+link = "playing.md#graphics-presets"
+cells = ["yes", "yes", "yes", "yes"]
+
+[[platform]]
+feature = "Frame rate"
+link = "playing.md#graphics-presets"
+cells = [
+  "yes: up to 120 fps",
+  "yes: up to 120 fps; 60 on the Steam Deck",
+  "yes: up to 120 fps",
+  "partly: SMOOTH 60 or QUALITY 30",
+]
+
+[[platform]]
+feature = "Graphics presets"
+link = "playing.md#graphics-presets"
+cells = ["yes", "yes", "yes", "partly: two presets of their own"]
+
+[[platform]]
+feature = "HDR"
+link = "playing.md#hdr"
+cells = [
+  "yes",
+  "partly: offered when the driver has an HDR swapchain; not tested",
+  "partly: offered when the driver has an HDR swapchain; not tested",
+  "n/a",
+]
+
+[[platform]]
+feature = "Immersive camera"
+link = "playing.md#immersive-camera"
+cells = ["yes", "yes", "yes", "not yet"]
+
+[[platform]]
+feature = "Your music"
+link = "playing.md#your-music"
+cells = ["yes: MP3 and WAV", "yes: MP3 and WAV", "partly: WAV only", "partly: WAV only"]
+
+[[platform]]
+feature = "Custom radio stations"
+link = "playing.md#custom-radio-stations"
+cells = ["yes", "yes", "yes", "not yet"]
+
+[[platform]]
+feature = "Asset and texture mods"
+link = "modding.md"
+cells = ["yes", "yes", "yes", "yes"]
+
+[[platform]]
+feature = "Forza Horizon XE"
+link = "modding.md#the-xe-mod"
+cells = ["yes", "yes", "yes", "not yet"]
+
+[[platform]]
+feature = "DLC import"
+link = "dlc.md"
+cells = [
+  "yes",
+  "not yet: [Linux backlog](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/LINUX_PORT_BACKLOG.md)",
+  "not yet",
+  "partly: imported on the PC, copied with the game",
+]
+
+[[platform]]
+feature = "Title update v4"
+link = "dlc.md#title-update-v4"
+cells = [
+  "yes",
+  "not yet: [Linux backlog](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/LINUX_PORT_BACKLOG.md)",
+  "not yet",
+  "partly: built on the PC",
+]
+
+[[platform]]
+feature = "Controllers and button mapping"
+link = "playing.md#controllers"
+cells = ["yes", "yes: Steam Input on the Deck", "yes", "yes: and touch controls"]
+
+[[platform]]
+feature = "Keyboard driving"
+link = "playing.md#driving-on-a-keyboard"
+cells = ["yes", "yes", "yes: Cmd shortcuts for the F-keys", "n/a"]
+
+[[platform]]
+feature = "Racing wheels"
+link = "playing.md#controllers"
+cells = [
+  "not yet: [#337](https://github.com/arcanite24/pinyon-shift/issues/337)",
+  "not yet: [#337](https://github.com/arcanite24/pinyon-shift/issues/337)",
+  "not yet: [#337](https://github.com/arcanite24/pinyon-shift/issues/337)",
+  "not yet: [#337](https://github.com/arcanite24/pinyon-shift/issues/337)",
+]
+
+[[platform]]
+feature = "Save backups and photos"
+link = "playing.md#saves"
+cells = ["yes", "yes", "yes", "yes"]

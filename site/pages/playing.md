@@ -52,6 +52,10 @@ Keys can be rebound in **F6 > CONTROLS**, and **RESET KEYS** returns to this lay
 
 1x is the console's 1280 × 720; up to 4x is available. Output scaling is bilinear, CAS or FSR 1. Ultrawide displays get a wider field of view with the HUD kept at 16:9. Bloom, motion blur and depth of field are optional. **TEXTURE GAMMA > FAST** makes terrain and foliage a little darker and saves about 8 % of the GPU's frame on a Mac; it makes no difference on a desktop GPU. On Linux, **SCENE SHADING > COARSE** shades the scene once per 2 × 2 pixels: a little softer, and about 8 % of the GPU's frame saved on a Steam Deck.
 
+## HDR
+
+On an HDR display, turn on HDR in the system first (on Windows, **Settings > Display > Use HDR**), then **F6 > DISPLAY > HDR**. **HDR PAPER WHITE** sets the brightness of white menus and the HUD, **HDR HIGHLIGHTS** how far bright highlights reach, and **HDR CALIBRATION** sets both from test patterns. **HDR COMPARE** shows SDR and HDR side by side. Every HDR setting applies at once. HDR is tested on Windows; on Linux and macOS it's offered when the driver provides an HDR output.
+
 ## Immersive camera
 
 **F6 > DISPLAY > IMMERSIVE CAMERA** makes the camera react to the car: it is pushed back under acceleration and thrown forward under braking, jolts when the throttle or brake goes on, leans into corners, shakes a little at speed and under hard braking, and moves with slow breathing and head sway in the cockpit. The cockpit view gets the full effect, the hood view a little less, and the chase and bumper views only the G-forces. Choose OFF, SUBTLE, DEFAULT or STRONG, or set G-force, lean, speed shake and head motion on their own rows (CUSTOM). Changes apply at once and keep your own save. The immersive camera isn't available on Android or with the v4 title update yet.

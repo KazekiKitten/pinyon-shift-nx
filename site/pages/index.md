@@ -11,7 +11,7 @@ The Xbox 360 release of *Forza Horizon*, recompiled ahead of time into native co
 
 {{release}}
 
-The download is the launcher. It doesn't contain the game: the launcher verifies your disc image, then builds the game on your machine. Start with [Install on Windows](install.md), [Linux and Steam Deck](linux.md) or [macOS](macos.md).
+The download is the launcher. It doesn't contain the game: the launcher verifies your disc image, then builds the game on your machine. Start with [Install on Windows](install.md), [Linux and Steam Deck](linux.md) or [macOS](macos.md). [Features](features.md) compares it with the original game and between platforms.
 
 ## Requirements
 

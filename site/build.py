@@ -18,6 +18,7 @@ import os
 import re
 import shutil
 import sys
+import tomllib
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -128,6 +129,40 @@ def channel_note(release: dict | None) -> str:
             f'list what the download contains.</p>')
 
 
+CELL_STATES = {"yes": "Yes", "partly": "Partly", "not yet": "Not yet", "n/a": "—"}
+
+
+def feature_cell(cell: str) -> str:
+    """One platform cell: its state, then the note after the colon."""
+    state, _, note = cell.partition(":")
+    state = state.strip()
+    if state not in CELL_STATES:
+        raise SystemExit(f"features.toml: unknown state {state!r} in {cell!r}")
+    note = note.strip().replace("|", r"\|")
+    label = CELL_STATES[state]
+    css = state.replace(" ", "-").replace("/", "")
+    return f'<span class="state state-{css}">{label}</span>' + (f" {note}" if note else "")
+
+
+def features_markdown() -> str:
+    """The Features page's two tables, from site/features.toml (#455)."""
+    data = tomllib.loads((SITE / "features.toml").read_text(encoding="utf-8"))
+    platforms = data["platforms"]
+    lines = ["## Compared with the original", "",
+             "| Feature | Xbox 360 | Pinyon Shift |", "| --- | --- | --- |"]
+    for row in data["original"]:
+        lines.append(f"| [{row['feature']}]({row['link']}) | {row['xbox']} | {row['pinyon']} |")
+    lines += ["", "## By platform", "",
+              "| Feature | " + " | ".join(platforms) + " |",
+              "| --- |" + " --- |" * len(platforms)]
+    for row in data["platform"]:
+        if len(row["cells"]) != len(platforms):
+            raise SystemExit(f"features.toml: {row['feature']} needs {len(platforms)} cells")
+        lines.append(f"| [{row['feature']}]({row['link']}) | " +
+                     " | ".join(feature_cell(c) for c in row["cells"]) + " |")
+    return "\n".join(lines) + "\n"
+
+
 def render_markdown(text: str) -> tuple[str, list[dict]]:
     converter = markdown.Markdown(
         extensions=["tables", "fenced_code", "codehilite", "toc", "attr_list", "md_in_html"],
@@ -232,6 +267,8 @@ def build(out: Path) -> None:
 
     for page in pages:
         text = page.body.replace("{{release}}", release_block(release))
+        if "{{features}}" in text:
+            text = text.replace("{{features}}", features_markdown())
         body, toc = render_markdown(text)
         body = rewrite_links(body, page, slugs)
         body = body.replace("<table>", '<div class="table-wrap"><table>').replace("</table>", "</table></div>")
