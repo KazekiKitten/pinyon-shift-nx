@@ -8,9 +8,10 @@
 // path back to back: on the Odin it then retired six times the instructions
 // of a run without the wait, mostly clock reads, guest memcpy and the gamma
 // path. With pinyon_shift_render_idle_sleep_us above zero (200 by default), a
-// sleep from that call site first sleeps that long on the host, alertably,
-// then runs the original, so APC delivery and the title's view of the call
-// are unchanged. In-run A/B on the Odin (fh1-race-sustained, 30 fps limit):
+// sleep from that call site first waits that long on a host timer (Windows'
+// own alertable SleepEx cannot sleep under a millisecond), then runs the
+// original, which delivers any APC that arrived meanwhile, so the title's
+// view of the call is unchanged. In-run A/B on the Odin (fh1-race-sustained, 30 fps limit):
 // the render thread's CPU fell from 477-839 to 242-253 ms a second, other
 // threads unchanged, and frames over 40 ms from 8-13 to 3-4 a run.
 //
@@ -43,7 +44,7 @@ constexpr uint32_t kRenderIdleReturn =
 bool SleepIdle(PPCContext& ctx, uint8_t*) {
   const uint32_t sleep_us = REXCVAR_GET(pinyon_shift_render_idle_sleep_us);
   if (sleep_us && ctx.r3.u32 == 0 && static_cast<uint32_t>(ctx.lr) == kRenderIdleReturn) {
-    rex::thread::AlertableSleep(std::chrono::microseconds(sleep_us));
+    rex::thread::WaitUntil(std::chrono::steady_clock::now() + std::chrono::microseconds(sleep_us));
   }
   return false;
 }
