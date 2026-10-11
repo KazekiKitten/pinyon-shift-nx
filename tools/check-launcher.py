@@ -42,7 +42,9 @@ class Check {
         var resolver = typeof(MainWindow).GetMethod("ResolveRepositoryRootAsync", flags)!;
         string Resolve(string selected) => ((Task<string>)resolver.Invoke(window, [selected])!).GetAwaiter().GetResult();
         bool CanChoose() => (bool)typeof(MainWindow).GetField("_canChooseInstallRoot", flags)!.GetValue(window)!;
-        var root = AppContext.BaseDirectory;
+        // The launcher expands 8.3 short names (C:\Users\RUNNER~1) in the
+        // paths it resolves; compare against the same long form.
+        var root = Path.GetFullPath(AppContext.BaseDirectory);
         using (var zip = ZipFile.Open(Path.Combine(root, "pinyon-shift-source.zip"), ZipArchiveMode.Create)) {
             foreach (var name in new[] { "config/supported-dumps.json", "tools/setup-preview.ps1", "CMakeLists.txt",
                 "src/main.cpp", "src/config/host_config.cpp", "src/ui/settings_menu.cpp", "src/save/profile_body.cpp" }) {
@@ -358,7 +360,7 @@ class Check {
         Directory.CreateDirectory(Path.Combine(root, "src"));
         File.WriteAllText(Path.Combine(root, "CMakeLists.txt"), "");
         File.WriteAllText(Path.Combine(root, "src/main.cpp"), "");
-        Require(Path.TrimEndingDirectorySeparator(Resolve(selected)) == Path.TrimEndingDirectorySeparator(root)
+        Require(Path.TrimEndingDirectorySeparator(Path.GetFullPath(Resolve(selected))) == Path.TrimEndingDirectorySeparator(root)
             && !CanChoose(), "Checkout relocated");
         File.WriteAllText(Path.Combine(root, ".pinyon-source-sha256"), "managed source");
         Require(Resolve(selected) == installed && CanChoose(), "Managed source bypasses payload checks");
