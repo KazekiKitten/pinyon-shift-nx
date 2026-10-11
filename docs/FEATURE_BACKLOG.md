@@ -352,15 +352,16 @@ Zelda64Recomp, Ship of Harkinian, 2 Ship 2 Harkinian, SpaghettiKart, Banjo:
 Recompiled) and what FH1 players complain about (GTPlanet, forza.net,
 reviews; Reddit and ModDB comments were not reachable). Guest findings are
 in [REVERSE_ENGINEERING.md](REVERSE_ENGINEERING.md) (Developer options and
-leftover systems); none has been confirmed at run time.
+leftover systems); only the launch options have been checked at run time (FB-12.0).
 
-**The main lever.** The retail executable still parses about 300
-developer launch options (`launch`, `trackname`, `numaicars`,
-`allowskipvoiceover`, `chooseillegalcarforevent`, `splitscreenlaunch`, ...)
-from its command line and `GAME:\cmdline.txt`. The SDK's `cl` cvar already
-appends text to the guest command line and nothing uses it. One probe run
-decides which options retail still honours, and with it the cost of
-FB-12.1 to FB-12.4. FB-12.0 comes first for that reason.
+**The main lever.** The retail executable still has about 300 developer
+launch options (`launch`, `trackname`, `numaicars`, `allowskipvoiceover`,
+`chooseillegalcarforevent`, `splitscreenlaunch`, ...) as byte flags in one
+object built at boot. FB-12.0 found that retail never fills them from the
+command line or `cmdline.txt`, but a host or mod that writes a flag at boot
+changes the game: `nohud` removed the whole HUD. So each option costs one
+write and one check, through the mod API's `write_guest`, and the string and
+number options behind FB-12.2 need their storage traced first.
 
 **What players ask for** (most to least often in the sources found):
 solid barriers and little off-road freedom; no tuning; repetitive events
@@ -374,8 +375,8 @@ Effort as above; "route" names the cheapest path found.
 
 | Rank | ID | Enhancement | Route | Effort | Confidence |
 | --- | --- | --- | --- | --- | --- |
-| - | FB-12.0 | **Launch-option probe.** One seeded run per batch of options through `cl`, recording which ones still work in retail | `cl` cvar, render-test route | S | Parsing confirmed |
-| 1 | FB-12.1 | **Quality-of-life switches** as F6 toggles: skip voice-over and tutorials, no splash or attract video, clean HUD, hide cockpit glass, zoomed-out minimap, no camera vibration, auto-reset off (`NoHandOfGodReset`) | Launch options, or `GameTunableSettings.ini` merges | S each | Probable |
+| - | FB-12.0 | **Launch-option probe.** Find how to set the options in retail and check them | Probe mod on the free-roam route | S | Done 2026-10-11: the `cl` cvar and `cmdline.txt` do nothing (retail never parses them); writing the flag bytes at boot works (`nohud` hides the HUD; `showframerate` shows nothing). Addresses and offsets in [REVERSE_ENGINEERING.md](REVERSE_ENGINEERING.md) |
+| 1 | FB-12.1 | **Quality-of-life switches** as F6 toggles: skip voice-over and tutorials, no splash or attract video, clean HUD, hide cockpit glass, zoomed-out minimap, no camera vibration, auto-reset off (`NoHandOfGodReset`) | Flag writes at boot (FB-12.0), or `GameTunableSettings.ini` merges | S each | Confirmed for the clean HUD; the others need one check each |
 | 2 | FB-12.2 | **Free Race.** A host menu that builds any race FH1 never offered: route, laps, opponents and their cars, AI skill, time of day, traffic. 145 active tracks, 85 used by events | `launch`, `trackname`, `ribbon`, `numlaps`, `numaicars`, `aicar%d`, `aiskill`, `timeofdayindex`, `numtrafficcars` | S-M | Probable |
 | 3 | FB-12.3 | **Any car in any event** (a new route to FB-10.1 and NP-8.7) | `chooseillegalcarforevent`, `eventrestrictions`; else `EventRestrictions` SQL | S | Probable |
 | 4 | FB-12.4 | **Split-screen spike.** The code survives: `CSplitscreenLobby`, `CHudSplitscreen`, `948_HUD_Split_Screen`, `Splitscreen_Race.xml`, per-car split-screen camera offsets. Two-player local races would answer the strongest demand (multiplayer) without a network | `splitscreenlaunch`; the second pad through the input layer | S spike, L to ship | Code present; working unknown |
