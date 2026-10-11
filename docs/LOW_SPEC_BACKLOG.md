@@ -307,7 +307,7 @@ alone.
 
 | ID | Item | Expected | Effort | Status |
 | --- | --- | --- | --- | --- |
-| LS-5.1 | **Guest profile on the constrained CPU.** The thread sampler with `--lines 1` and `tools/map-generated-lines.py`, per guest thread (simulation, render, others). | The hot set for LS-5.2-5.4 | S | Not started |
+| LS-5.1 | **Guest profile on the constrained CPU.** The thread sampler with `--lines 1` and `tools/map-generated-lines.py`, per guest thread (simulation, render, others). | The hot set for LS-5.2-5.4. Done (simulated, 4 cores, siblings loaded): flat; no guest function above 2.3 % of the simulation thread or 7 % of a job worker. See PB-3.12 candidates. | S | Done |
 | LS-5.2 | **Profile-guided register locality.** `non_volatile_as_local`, `cr_as_local` and `non_argument_as_local` per function for the hot set, rather than a global switch. State syncs back to the guest context at calls, hooks, exceptional exits, fiber boundaries and interior resume points. Functions that must share register state (exception funclets) stay excluded, as the SDK's config already handles. | 15-30 % of guest CPU (PB-3.2's estimate) on the hot set | L | Not started |
 | LS-5.3 | **Offset-free stack and TLS accesses** (PB-3.3). | 4-10 % | M | Not started |
 | LS-5.4 | **Runtime overheads on guest threads** (PB-3.11, PB-4.5). Count write-watch faults (60-70 `VirtualProtect` a race frame) and global-lock contention (149 a frame, 0.34 ms) on T1, where each costs more. | Unknown until counted | S to count, M to fix | Not started |

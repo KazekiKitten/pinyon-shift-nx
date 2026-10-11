@@ -498,8 +498,20 @@ on `fh1-race-retire`.
 
 Profiles: the Odin before and after each change are under
 `.local/android/p431/` (not committed). The 8 Elite tablet and the Steam
-Deck were not reachable for this pass, and no low-spec PC profile was
-taken; their columns stay open.
+Deck were not reachable for this pass, so their profiles stay open.
+
+Low-spec PC (simulated, LS-5.1): `fh1-race-sustained` with
+`--host-cpus 0,2,4,6 --sibling-load 1,3,5,7` and the thread sampler
+(`--lines 1`, cycles weight, race window). No single guest function
+stands out on the constrained CPU either. The simulation thread
+(2.5-2.9 G cycles a second) is busy 71 % of its wall time, and its top
+leaf (`sub_823F4B30`) is 2.3 %. The render thread (1.4-2.6 G cycles)
+waits 52 % of the time, and its largest leaf is the clock read (3.9 %,
+the fence spin). The audio thread sleeps 72 % of the time, with the
+reverb at 4.3 %. The job workers (`sub_82C0C8C8`) run in bursts of
+1.3-3 G cycles, spread over the `sub_82D2xxxx` and `sub_82CB6xxx`
+families, none above 7 %. Further gains on low-spec CPUs need broad
+codegen changes (LS-5.2-5.5) rather than more single-function ports.
 
 ## PB-4 Frame pipeline, pacing and HFR
 
