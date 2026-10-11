@@ -52,6 +52,9 @@ Done since 0.1:
 - [x] Install the Forza Horizon XE mod from your own ModDB downloads, playing
   its own save (#426)
 - [x] Keyboard rebinding and a controller mapping assistant (#401, #432)
+- [x] Setup that needs only the launcher zip and your dump: free space,
+  download sites, the Vulkan driver and the install path checked up front,
+  Visual Studio repaired, and setup resumed after a required restart (#393)
 - [x] Vulkan as the single supported renderer on every platform, lighter at
   2x to 4x internal resolution
 
@@ -62,12 +65,6 @@ In progress:
   in free roam (#416), resuming after quitting before the first festival
   event (#447), the trainer not opening (#450) and the Steam Deck settings
   menu (#429)
-- [ ] Setup that needs only the launcher zip and your dump (#393): free
-  space, download sites, the Vulkan driver and the install path are checked
-  up front; Build Tools, Ninja and the C++ runtime are provided; Visual
-  Studio is repaired and setup resumes after a required restart. All
-  implemented; it closes once it is verified on a clean PC and the Android
-  Wi-Fi install on a real network
 - [ ] Faster Android rendering on tiled GPUs (#414), and the Odin's GPU
   savings measured on desktop, the Steam Deck and macOS (#427)
 - [ ] Hand-optimize the hottest recompiled guest functions (#431)
