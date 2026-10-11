@@ -344,7 +344,9 @@ folded clears (A60-1).
 - **Internal resolution below 1x.** The scale is an integer and baked into the
   translated shaders, and 1x is the console's resolution.
 - **A simulation slower than the source rate with interpolated frames.** Frame
-  interpolation was rejected (its setting is removed by config migration).
+  generation is now planned (#523-#526) as an opt-in on top of a
+  steady base rate, not as a way to run the simulation slower; the old
+  interpolation setting stays removed by config migration.
 - **Repeating measured knobs without a new hypothesis.** PGO and AVX2 builds,
   priority boosts and MMCSS, broad sleep changes on Windows, constant
   coalescing and compare-before-upload, speculative shader shortcuts (fast
