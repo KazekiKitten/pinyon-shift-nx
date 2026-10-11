@@ -24,6 +24,9 @@ on Linux (LX-5.10); see tools/pinyon_steam.py.
 `xe` installs the Forza Horizon XE mod from the player's own downloads
 (XE-1); see tools/pinyon_xe.py.
 
+`assets` exports the player's own game files to standard formats (#446):
+WAV, DDS/PNG, JSON/CSV and SQLite dumps; see tools/pinyon_assets.py.
+
 `android` builds, installs and runs the game on an Android device from this
 PC (AP-6.1); see tools/pinyon_android.py. `deck` copies a Linux build and the
 game to a Steam Deck and runs it there over SSH (LX-2.1); see
@@ -44,6 +47,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import pinyon_android  # noqa: E402
+import pinyon_assets  # noqa: E402
 import pinyon_deck  # noqa: E402
 import pinyon_setup  # noqa: E402
 import pinyon_steam  # noqa: E402
@@ -228,6 +232,7 @@ def main(argv: list[str] | None = None) -> int:
     start.add_argument("--json", action="store_true", help="print the result as JSON")
     start.add_argument("game_arguments", nargs="*", help="after --, passed to the game")
     pinyon_android.add_parser(commands)
+    pinyon_assets.add_parser(commands)
     pinyon_deck.add_parser(commands)
     pinyon_setup.add_parser(commands)
     pinyon_steam.add_parser(commands)
@@ -237,6 +242,8 @@ def main(argv: list[str] | None = None) -> int:
         return pinyon_setup.main(args)
     if args.command == "shortcuts":
         return pinyon_steam.main(args)
+    if args.command == "assets":
+        return pinyon_assets.main(args)
     if args.command == "android":
         return pinyon_android.main(args)
     if args.command == "deck":

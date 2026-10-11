@@ -37,6 +37,8 @@ class Fh1Archive {
   std::optional<std::vector<uint8_t>> Read(std::string_view name) const;
   bool Contains(std::string_view name) const;
   size_t member_count() const { return members_.size(); }
+  // The members' names as the directory spells them, in directory order.
+  const std::vector<std::string>& names() const { return names_; }
 
  private:
   struct Member {
@@ -49,6 +51,7 @@ class Fh1Archive {
 
   std::filesystem::path path_;
   std::unordered_map<std::string, Member> members_;
+  std::vector<std::string> names_;
 };
 
 }  // namespace pinyon_shift::hostui

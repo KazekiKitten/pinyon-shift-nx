@@ -219,6 +219,14 @@ endif()
 target_include_directories(pinyon_shift_fh1_archive_extract PRIVATE
     src ${REXSDK_DIR}/include)
 target_link_libraries(pinyon_shift_fh1_archive_extract PRIVATE rex::runtime)
+
+# FSB4 banks to WAV for the asset export (#446), with the SDK's FFmpeg (MP3
+# and the XMA frame decoder the game's audio runs on).
+add_executable(pinyon_shift_fh1_audio_decode EXCLUDE_FROM_ALL
+    tools/fh1_audio_decode.cpp
+    ${REXSDK_DIR}/src/core/bit_stream.cpp)
+target_include_directories(pinyon_shift_fh1_audio_decode PRIVATE ${REXSDK_DIR}/include)
+target_link_libraries(pinyon_shift_fh1_audio_decode PRIVATE libavcodec libavutil)
 if(WIN32)
     # Non-elevated sampling profiler for named threads (CPU_HOTSPOT_PROFILING.md).
     add_executable(pinyon_shift_thread_sampler EXCLUDE_FROM_ALL tools/thread_sampler.cpp)

@@ -38,6 +38,41 @@ int main(int argc, char** argv) {
     output.close();
     return output ? 0 : 1;
   }
+  // Every member of an archive under a new folder, for the asset export
+  // (#446): one line per member, "ok <name>" or "skip <name>" (deflated,
+  // oversized or corrupt members; the export reads deflated ones itself).
+  if (argc == 4 && std::string(argv[1]) == "--archive-all") {
+    const auto archive = pinyon_shift::hostui::Fh1Archive::Open(argv[2]);
+    if (!archive) {
+      std::cerr << "not an FH1 archive\n";
+      return 1;
+    }
+    const std::filesystem::path root = std::filesystem::absolute(argv[3]).lexically_normal();
+    for (const std::string& name : archive->names()) {
+      std::string portable = name;
+      std::replace(portable.begin(), portable.end(), '\\', '/');
+      std::filesystem::path relative =
+          std::filesystem::path(std::u8string(portable.begin(), portable.end())).lexically_normal();
+      if (name.empty() || name.back() == '/' || name.back() == '\\') continue;
+      if (relative.is_absolute() || relative.has_root_name() ||
+          relative.native().starts_with(std::filesystem::path("..").native())) {
+        std::cout << "skip " << name << "\n";
+        continue;
+      }
+      const auto member = archive->Read(name);
+      if (!member) {
+        std::cout << "skip " << name << "\n";
+        continue;
+      }
+      const std::filesystem::path target = root / relative;
+      std::filesystem::create_directories(target.parent_path());
+      std::ofstream output(target, std::ios::binary);
+      output.write(reinterpret_cast<const char*>(member->data()), member->size());
+      output.close();
+      std::cout << (output ? "ok " : "skip ") << name << "\n";
+    }
+    return 0;
+  }
   // Used only after the importer has checked the whole package against the
   // pinned catalog. Stage in a fresh root; the importer publishes it atomically.
   if (argc == 5 && std::string(argv[1]) == "--dlc-files") {
