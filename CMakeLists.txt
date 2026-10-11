@@ -34,6 +34,8 @@ set(PINYON_SHIFT_HOST_SOURCES
     src/dlc_token_unlocks.cpp
     src/dlc_treasure_map.cpp
     src/guest_native/guest_native.cpp
+    src/guest_native/crt_math.cpp
+    src/guest_native/lzx_decoder.cpp
     src/dlc/rally_progress.cpp
     src/dlc/rally_pace_notes.cpp
     src/dlc/rally_audio_probe.cpp

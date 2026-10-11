@@ -59,3 +59,22 @@ below gave a visible gain.
 | `MyProfile.str` `0xA29E`, `0xA31E`, `0xA39E` | same | station names | HORIZON BASS ARENA, HORIZON PULSE and HORIZON ROCKS, the RADIO STATION option's values (`0x7693` is the row's label). | Reading the string tables. | Confirmed in the tables; probable on the option screen (not seen on screen) |
 | `Tips.str` `0x0B3A`/`0xE484`, `0xF203`/`0x0063`, `0x9730`/`0x94AE` | same | station tips | The loading tips' title and text for Bass Arena, Pulse and Rocks. `Livery_Decals.str` `0x6AF9`, `0x328D` and `0xAEF9` name the station decals. | Reading the string tables. | Confirmed |
 | `Radio_Music.fsb` | same | music bank | The FSB4 layout, sync points and the info file. | See [FEATURE_BACKLOG.md](FEATURE_BACKLOG.md) FB-1.3. | Confirmed |
+
+## Hot guest CPU functions
+
+Found while porting hot recompiled functions to native code (#431,
+[PERFORMANCE_BACKLOG.md](PERFORMANCE_BACKLOG.md) PB-3.12). The ports live in
+`src/guest_native/`; each checks a hash of the guest code before it runs. v4
+addresses come from the same code shape in the v4 tree and are probable until
+a v4 build confirms the hash.
+
+| Base | v4 | Name | What it is | Established by | Confidence |
+| --- | --- | --- | --- | --- | --- |
+| `sub_82438EA8` | `sub_82468E50` | CRT `pow` | The C runtime's double `pow`, 1,252 bytes: special cases, an integral-exponent path by repeated squaring, and a table-driven log2/exp2 path with sixteenth splits. Called about 11 million times in `fh1-race-retire`, almost all while loading. | Call sites and constants; a native port compared bit for bit on every call of a route (0 mismatches in 10.9 million). | Confirmed |
+| `sub_82A80B78` | `sub_82B3DF18` | CRT natural log helper | Used by `pow` when the table index lands next to 1. | Port compared through `pow`. | Confirmed |
+| `sub_8244A250` | `sub_82479910` | classify integral | Says whether a double is an integer, and if so odd or even; `pow` uses it for negative bases and zero. | Same. | Confirmed |
+| `sub_823EF7E8` | `sub_8241F8C0` | `frexp` | Splits a double into mantissa and exponent. | Same. | Confirmed |
+| `sub_82A84E48`, `sub_82A84EE8` | `sub_82B43BC0`, `sub_82B43C60` | exponent, `copysign` | Small CRT helpers of `pow`. | Same. | Confirmed |
+| `sub_82469188` | `sub_824989D0` | `ldexp` | Scales by a power of two with overflow and underflow handling. | Same. | Confirmed |
+| `sub_82A7F7B8` | `sub_82B3CD58` | CRT math error handler | Reached by `pow` for domain errors (negative base with a non-integral exponent); the port leaves those calls to the original. | Same. | Probable |
+| `sub_830F2210` | `sub_831B4090` | LZX block decoder | Decodes LZX symbols into a sliding window until the requested length is produced; one of the asset worker's three hot functions (about 20 % of `sub_82E4B2D0`'s time). Decoder state: `+0` window, `+8` window mask, `+12/16/20` repeated offsets R0-R2, `+24` main symbol table, `+2072` length table, `+2584` main code lengths, `+3256` length code lengths, `+3508` aligned table, `+3636` aligned lengths, `+3644` and `+9020` overflow trees, `+11012` input pointer, `+11016` input end, `+11952` bit buffer, `+11956` bits left (signed byte), `+11960` window position, `+12004` extra bits per position slot, `+12056` position slot bases. Copies of 16 or more bytes use 16-byte chunks that may write up to 16 bytes past the match; the last store keeps destination bytes through a select constant (`0x822D5360`, v4 `0x822E8480`). | Reading the generated code; a native port compared on every call of a route, window, state and return value (0 mismatches in 17,535 calls). | Confirmed |
