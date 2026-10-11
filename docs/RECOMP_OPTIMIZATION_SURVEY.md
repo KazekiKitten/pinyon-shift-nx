@@ -225,15 +225,16 @@ locking (no hard-fault evidence), pipeline prediction from asset loads
 
 ## Follow-up issues
 
-Drafted here; not filed yet.
+Filed 2026-10-11. ShiftGlue has no issue tracker, so its items are filed
+here with a `ShiftGlue:` prefix.
 
 - **Pinyon Shift:**
-  - E2: measure LTO and PGO of the generated code on guest-thread CPU.
-  - E3: map more FH1 CRT functions through `[rexcrt]`.
-  - E5: register locals with liveness for the hot set (extends LS-5.2).
-  - E6: native guest allocator.
+  - E2: LTO and PGO of the generated code on guest threads, #464.
+  - E3: more FH1 CRT functions through `[rexcrt]`, #465.
+  - E5: register locals with liveness for the hot set (extends LS-5.2), #467.
+  - E6: native guest allocator, #468.
 - **ShiftGlue:**
-  - E1: event-driven POSIX `WaitMultiple`.
-  - E4: propagate the flush mode across labels and calls.
-  - E7: optional per-guest-function Tracy zones.
-  - E8: 64 KiB write-watch granularity.
+  - E1: event-driven POSIX `WaitMultiple`, #463.
+  - E4: carry the flush mode across labels and calls, #466.
+  - E7: optional per-guest-function Tracy zones, #469.
+  - E8: 64 KiB write-watch granularity, #470.
