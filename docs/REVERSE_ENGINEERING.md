@@ -65,8 +65,9 @@ below gave a visible gain.
 Found while porting hot recompiled functions to native code (#431,
 [PERFORMANCE_BACKLOG.md](PERFORMANCE_BACKLOG.md) PB-3.12). The ports live in
 `src/guest_native/`; each checks a hash of the guest code before it runs. v4
-addresses come from the same code shape in the v4 tree and are probable until
-a v4 build confirms the hash.
+addresses come from the same code shape in the v4 tree; for `pow`, the LZX
+decoder and the `SleepEx` wrapper a v4 build confirmed the code hash and
+the ports' results (0 mismatches on `fh1-race-sustained`).
 
 | Base | v4 | Name | What it is | Established by | Confidence |
 | --- | --- | --- | --- | --- | --- |
