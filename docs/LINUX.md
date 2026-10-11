@@ -36,6 +36,9 @@ password, no `pacman`, no developer mode.
 
 - The built-in controls work as an Xbox 360 pad through Steam Input. Open the
   game's settings from the pause menu.
+- **F6 > GRAPHICS > SCENE SHADING > COARSE** shades the scene once per 2 × 2
+  pixels: a little softer, and about 8 % of the GPU's frame saved on the
+  Deck.
 - In our tests the race and free roam hold 60 fps at 1x (1280 × 720) under the
   Deck's default 15 W limit.
 - **Leave Manual GPU Clock off** in the Quick Access menu's Performance

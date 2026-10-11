@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Steam Deck and Linux: about 3 % faster rendering by default, and a new
+  F6 > GRAPHICS > SCENE SHADING > COARSE that shades once per 2 x 2
+  pixels for about 8 % more on the Deck, a little softer (#427).
 - Expose the screen correctly at any time of day above 1x resolution;
   mornings were overexposed until about noon in game (#444).
 - Make up to three radio stations from your own music in the launcher's

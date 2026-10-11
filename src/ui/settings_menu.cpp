@@ -695,9 +695,22 @@ std::unique_ptr<MenuScreen> SettingsPages::Graphics() {
   // FAST samples the game's gamma textures through sRGB views: terrain and
   // foliage a little darker. The frame-600 replay at 1x goes from 12.3-12.7
   // to 11.3-11.7 ms on an M4 Pro (MoltenVK); no change on an RTX 4080 (#427).
-  // Applies at the next start.
+  // On the Steam Deck 11.2 to 11.0 ms. Applies at the next start.
   rows.push_back(Setting("TEXTURE GAMMA", {{"ACCURATE", {{"texture_gamma_host_srgb", "false"}}},
                                            {"FAST", {{"texture_gamma_host_srgb", "true"}}}}));
+#if defined(__linux__)
+  // COARSE shades the scene and the shadow mask once per 2x2 pixels, as on
+  // Android: surfaces a little softer, geometry edges unchanged. The
+  // frame-600 replay on the Steam Deck goes from 11.2 to 10.3 ms (#427).
+  // Linux enables VK_KHR_fragment_shading_rate; without it the row does
+  // nothing. Applies on the next frame.
+  rows.push_back(Setting(
+      "SCENE SHADING",
+      {{"FULL", {{"fh1_coarse_shading", "\"\""}, {"fh1_coarse_shading_alpha_test", "false"}}},
+       {"COARSE",
+        {{"fh1_coarse_shading", "\"1024/32/4x/d1+0/32/4x/c3=2x2,0/16/1x/d1+720/16/1x/c0=2x2\""},
+         {"fh1_coarse_shading_alpha_test", "true"}}}}));
+#endif
 #endif
   std::vector<Choice> scales;
   // Android renders at 1x: higher scales need resolve buffers a phone's

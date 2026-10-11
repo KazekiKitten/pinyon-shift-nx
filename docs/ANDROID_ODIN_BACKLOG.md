@@ -1047,7 +1047,41 @@ Decided:
   the 4080 and stay on.
 - `spirv_implicit_lod_2d_uniform_turnip` was not tried: it works around a
   Turnip compiler issue and changes nothing the other drivers need.
-- Not measured: the Steam Deck (offline), an AMD desktop GPU (none
-  available) and D3D12, where only the shared resolve and transfer
-  changes apply and the replay's draws fail in the backend ("Failed in
-  backend"), so its 1.3 ms means nothing.
+- Not measured: an AMD desktop GPU (none available) and D3D12, where only
+  the shared resolve and transfer changes apply and the replay's draws
+  fail in the backend ("Failed in backend"), so its 1.3 ms means nothing.
+
+### The Steam Deck (2026-10-11)
+
+The same replay at 1x on the Steam Deck LCD (RADV, Mesa 24.3), started
+from Steam so the GPU runs at its game clocks (1.5 to 1.6 GHz, 100 %
+busy; a start over SSH leaves it at 200 MHz). Two passes, GPU median
+over the last 1,080 or so repeats. RADV reports `maxTexelBufferElements`
+2^32 - 1 and `VK_KHR_fragment_shading_rate`. The image column compares
+each run's replayed front buffer with the default's.
+
+| Switch | Pass 1 | Pass 2 | Image |
+| --- | --- | --- | --- |
+| Default (quads converted) | 11.19 ms | 11.24 ms | |
+| `force_convert_quad_lists_to_triangle_lists=false` | 11.29 ms | 11.37 ms | differs |
+| `vulkan_shared_memory_texel_buffer` | 11.21 ms | 11.24 ms | identical |
+| `vulkan_fragment_shading_rate` + `fh1_coarse_shading` | 10.42 ms | 10.45 ms | softer |
+| and `fh1_coarse_shading_alpha_test` | 10.23 ms | 10.29 ms | softer |
+| `fh1_direct_resolve_outdated_partial` | 10.87 ms | 10.90 ms | identical |
+| `texture_gamma_host_srgb` | 10.98 ms | 11.01 ms | darker |
+| `fh1_specialize_edram_passes=false` | 11.71 ms | 11.76 ms | identical |
+
+Decided for the Deck:
+
+- The partial resolve is now on by default on every Linux build
+  (`REX_PLATFORM_LINUX`, which includes Android): 3 % of the frame for an
+  identical image.
+- Coarse shading saves 7 to 9 %. Linux builds enable the shading-rate
+  extension, and F6 > GRAPHICS offers SCENE SHADING (FULL by default),
+  as on Android.
+- TEXTURE GAMMA FAST saves 2 % and stays a choice; quads stay converted
+  (1 %); the texel buffer gains nothing; specialized EDRAM passes stay on.
+- With the Khronos validation layer (on Windows; RADV has none on the
+  Deck), a replay with the shading rate, coarse shading with alpha test,
+  the partial resolve and the texel buffer together reports nothing but
+  the known `ShaderOutputNotConsumed` warning of depth-only passes.
