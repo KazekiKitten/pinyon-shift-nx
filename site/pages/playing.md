@@ -58,7 +58,7 @@ Keys can be rebound in **F6 > CONTROLS**, and **RESET KEYS** returns to this lay
 
 ## Your music
 
-**F6 > AUDIO > YOUR MUSIC** plays your own MP3 and WAV files instead of the game's music, as a soundtrack from the Xbox 360 dashboard did: the game silences its radio and menu music by itself and keeps its effects. Put the files in the `music` folder of the install's state folder (`%LOCALAPPDATA%\PinyonShift\source\<version>\.local\preview\music`, created when you turn it on), in subfolders if you like; they play in name order or shuffled. The AUDIO page also has MUSIC VOLUME, SHUFFLE, NEXT TRACK and PREVIOUS TRACK and shows what is playing; <kbd>F9</kbd> and <kbd>Shift</kbd>+<kbd>F9</kbd> skip forward and back. On macOS and ARM builds only WAV files play for now.
+**F6 > AUDIO > YOUR MUSIC** plays your own MP3 and WAV files instead of the game's radio once you are in the festival, as a soundtrack from the Xbox 360 dashboard did: the game silences its radio by itself and keeps its effects. The title screen keeps the game's own music. Put the files in the `music` folder of the install's state folder (`%LOCALAPPDATA%\PinyonShift\source\<version>\.local\preview\music`, created when you turn it on), in subfolders if you like; they play in name order or shuffled. The AUDIO page also has MUSIC VOLUME, SHUFFLE, NEXT TRACK and PREVIOUS TRACK and shows what is playing; <kbd>F9</kbd> and <kbd>Shift</kbd>+<kbd>F9</kbd> skip forward and back. On macOS and ARM builds only WAV files play for now.
 
 ## Language
 

@@ -46,6 +46,7 @@
 #include "cheats_map.h"
 #include "dlc_token_unlocks.h"
 #include "dlc_treasure_map.h"
+#include "ui/music.h"
 #include "dlc/rally_progress.h"
 #include "dlc/rally_audio_probe.h"
 #include "dlc/rally_pace_notes.h"
@@ -6242,6 +6243,14 @@ void PinyonShiftTraceFrameTelemetry(PPCRegister& r28, PPCRegister& r31) {
   pinyon_shift::dlc::UpdateTreasureMap();
   UpdateMapView();
   pinyon_shift::dlc::UpdateTokenUnlocks();
+  // Your music waits for a world (#445).
+  {
+    static uint32_t music_frames = 0;
+    if (++music_frames >= 30) {
+      music_frames = 0;
+      pinyon_shift::music::SetInGame(pinyon_shift::dlc::GameModeReady());
+    }
+  }
   QueueRallyRaceTrace();
   // frame.tick for mods: their guest tasks, then the hook.
   pinyon_shift::mod::RunGuestTasks();

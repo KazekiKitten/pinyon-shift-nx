@@ -1,6 +1,7 @@
 #include "ui/music.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 
 #include <rex/audio/host_music.h>
@@ -53,6 +54,10 @@ std::string ShortFolder() {
 }
 
 std::filesystem::path g_playing_folder;
+// Whether the title has a world: the music waits for the game's radio, so the
+// title screen and its menus keep their own music (#445).
+std::atomic<bool> g_in_game{false};
+std::function<void(std::function<void()>)> g_post_to_ui;
 constexpr const char* kSettings[] = {"pinyon_shift_music", "pinyon_shift_music_folder",
                                      "pinyon_shift_music_shuffle", "pinyon_shift_music_volume"};
 
@@ -60,7 +65,7 @@ void Apply() {
   auto& player = rex::audio::HostMusicPlayer::Get();
   player.SetVolume(float(REXCVAR_GET(pinyon_shift_music_volume)) / 100.0f);
   player.SetShuffle(REXCVAR_GET(pinyon_shift_music_shuffle));
-  if (!REXCVAR_GET(pinyon_shift_music)) {
+  if (!REXCVAR_GET(pinyon_shift_music) || !g_in_game.load(std::memory_order_acquire)) {
     if (!g_playing_folder.empty()) {
       player.Stop();
       g_playing_folder.clear();
@@ -87,6 +92,7 @@ std::filesystem::path Folder() {
 }
 
 void Install(std::function<void(std::function<void()>)> post_to_ui) {
+  g_post_to_ui = post_to_ui;
   rex::audio::HostMusicPlayer::Get().SetActiveCallback([](bool active) {
     if (auto* xmp = rex::kernel::xam::apps::XmpApp::Get()) {
       xmp->SetHostPlayback(active);
@@ -101,7 +107,14 @@ void Install(std::function<void(std::function<void()>)> post_to_ui) {
   Apply();
 }
 
+void SetInGame(bool in_game) {
+  if (g_in_game.exchange(in_game, std::memory_order_acq_rel) == in_game) return;
+  diagnostics::RecordEvent("music.in_game", {{"in_game", in_game ? "1" : "0"}});
+  if (g_post_to_ui) g_post_to_ui(Apply);
+}
+
 void Shutdown() {
+  g_post_to_ui = nullptr;
   for (const char* name : kSettings) rex::cvar::UnregisterChangeCallbacks(name);
   auto& player = rex::audio::HostMusicPlayer::Get();
   player.SetActiveCallback(nullptr);
@@ -112,6 +125,9 @@ void Shutdown() {
 std::string StatusLine() {
   if (!REXCVAR_GET(pinyon_shift_music)) {
     return Fit("MP3 AND WAV FILES FROM " + ShortFolder());
+  }
+  if (!g_in_game.load(std::memory_order_acquire)) {
+    return Fit("PLAYS IN GAME, FROM " + ShortFolder());
   }
   const auto status = rex::audio::HostMusicPlayer::Get().GetStatus();
   if (!status.count) {

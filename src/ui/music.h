@@ -14,6 +14,10 @@ namespace pinyon_shift::music {
 // Applies the pinyon_shift_music* settings now and whenever they change;
 // `post_to_ui` runs a task on the UI thread.
 void Install(std::function<void(std::function<void()>)> post_to_ui);
+// Whether the title has a world (free roam, events, the festival's menus).
+// The music plays only then, so the title screen keeps the game's own music
+// (#445); called from the title's frame.
+void SetInGame(bool in_game);
 // Stops the music and drops the callbacks, before the kernel goes away.
 void Shutdown();
 
