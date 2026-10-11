@@ -86,6 +86,26 @@ REXCVAR_DEFINE_DOUBLE(pinyon_shift_fov_scale, 1.0, "Display",
                       "Multiply the cameras' vertical field of view (0.8 to 1.3)")
     .range(0.8, 1.3)
     .lifecycle(rex::cvar::Lifecycle::kHotReload);
+// The built-in immersive camera's effect groups (#443), applied at once.
+REXCVAR_DEFINE_DOUBLE(pinyon_shift_camera_gforce, 1.0, "Display",
+                      "Immersive camera: G-force push, pitch and jolt (0 off, 1 default, "
+                      "up to 2)")
+    .range(0.0, 2.0)
+    .lifecycle(rex::cvar::Lifecycle::kHotReload);
+REXCVAR_DEFINE_DOUBLE(pinyon_shift_camera_lean, 1.0, "Display",
+                      "Immersive camera: cockpit lean into corners (0 off, 1 default, up to 2)")
+    .range(0.0, 2.0)
+    .lifecycle(rex::cvar::Lifecycle::kHotReload);
+REXCVAR_DEFINE_DOUBLE(pinyon_shift_camera_shake, 1.0, "Display",
+                      "Immersive camera: cockpit speed shake and braking vibration (0 off, 1 "
+                      "default, up to 2)")
+    .range(0.0, 2.0)
+    .lifecycle(rex::cvar::Lifecycle::kHotReload);
+REXCVAR_DEFINE_DOUBLE(pinyon_shift_camera_head, 1.0, "Display",
+                      "Immersive camera: cockpit breathing and head sway (0 off, 1 default, "
+                      "up to 2)")
+    .range(0.0, 2.0)
+    .lifecycle(rex::cvar::Lifecycle::kHotReload);
 REXCVAR_DEFINE_BOOL(pinyon_shift_pause_settings, true, "Pinyon Shift",
                     "Turn the offline pause menu's MULTIPLAYER row into SETTINGS, which opens "
                     "the in-game settings screen (takes effect at the next start)");
@@ -6877,6 +6897,43 @@ void PinyonShiftSetViewportAspectScale(float scale) {
 void PinyonShiftCameraFieldOfView(PPCRegister& f1) {
   const double scale = REXCVAR_GET(pinyon_shift_fov_scale);
   if (scale != 1.0) f1.f64 = double(float(f1.f64 * scale));
+}
+
+// sub_82857B00 (v4 sub_82907F88) updates one camera physics layer at r31
+// and has stored the factor for its Param at [r1+96] (#443). The built-in
+// immersive camera's layers carry their effect group in the fraction of
+// SpringK (sprung) or NoiseSeed (noise): 0.0419 + 0.0002 * group, as
+// tools/build-immersive-camera.py writes them. No stock layer has such a
+// fraction. Scaling the factor eases a sprung layer to its new strength.
+void PinyonShiftImmersiveCameraLayer(PPCRegister& r1, PPCRegister& r31) {
+  const double scales[] = {REXCVAR_GET(pinyon_shift_camera_gforce),
+                           REXCVAR_GET(pinyon_shift_camera_lean),
+                           REXCVAR_GET(pinyon_shift_camera_shake),
+                           REXCVAR_GET(pinyon_shift_camera_head)};
+  if (std::all_of(std::begin(scales), std::end(scales), [](double s) { return s == 1.0; })) {
+    return;
+  }
+  const uint32_t layer = r31.u32;
+  // Sprung (+248), SpringK (+252); NoiseSeed (+156).
+  const float tagged = LoadGuestF32(layer + (LoadGuestU8(layer + 248) ? 252u : 156u));
+  if (!(tagged > 0.0f && tagged < 100000.0f)) return;
+  const double fraction = double(tagged) - std::floor(double(tagged));
+  const double group = (fraction - 0.0419) / 0.0002;
+  const double nearest = std::round(group);
+  if (nearest < 1.0 || nearest > 4.0 || std::abs(group - nearest) > 0.25) return;
+  const size_t index = size_t(nearest) - 1;
+  const double scale = scales[index];
+  if (scale == 1.0) return;
+  // Once per group, so a log shows the layers were found.
+  static std::atomic<uint32_t> reported{};
+  if (!(reported.fetch_or(1u << index, std::memory_order_relaxed) & (1u << index))) {
+    static constexpr const char* kGroups[] = {"gforce", "lean", "shake", "head"};
+    pinyon_shift::diagnostics::RecordEvent("camera.immersive.scaled",
+                                           {{"group", kGroups[index]},
+                                            {"scale", std::to_string(scale)}});
+  }
+  const uint32_t factor = r1.u32 + 96u;
+  StoreGuestF32(factor, float(LoadGuestF32(factor) * scale));
 }
 
 void PinyonShiftViewportAspect(PPCContext& context, [[maybe_unused]] uint8_t* base,

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <optional>
 #include <memory>
@@ -13,6 +14,7 @@
 #include <vector>
 
 #include <filesystem>
+#include <fstream>
 
 #include <rex/audio/downmix.h>
 #include <rex/input/pad_remap.h>
@@ -67,6 +69,20 @@ std::optional<double> Number(std::string_view text) {
     return std::nullopt;
   }
   return value;
+}
+
+// An installed built-in mod (tools/build-mod-patches.py's marker) whose
+// mod.toml says `always_enabled = true`; the launcher keeps it enabled.
+bool AlwaysEnabledBuiltin(const std::filesystem::path& mod) {
+  std::error_code error;
+  if (!std::filesystem::is_regular_file(mod / ".pinyon-builtin", error)) return false;
+  std::ifstream manifest(mod / "mod.toml");
+  for (std::string line; std::getline(manifest, line);) {
+    if (line.rfind("always_enabled", 0) == 0 && line.find("true") != std::string::npos) {
+      return true;
+    }
+  }
+  return false;
 }
 
 bool SameValue(std::string_view a, std::string_view b) {
@@ -144,9 +160,9 @@ class SettingsPages : public std::enable_shared_from_this<SettingsPages> {
   // enabled_mods as saved (applied at the next start), and one mod switched.
   std::vector<std::string> EnabledMods() const;
   void SetModEnabled(const std::string& name, bool enabled);
-  // A row switching one of the built-in mods (mods_src/builtin), when the
-  // launcher installed it.
-  std::optional<MenuRow> BuiltinModToggle(std::string label, std::string name);
+  // One of the built-in mods (mods_src/builtin), when the launcher
+  // installed it.
+  bool BuiltinModInstalled(const std::string& name) const;
 
   std::unique_ptr<MenuScreen> Display();
   std::unique_ptr<MenuScreen> Graphics();
@@ -355,10 +371,32 @@ std::unique_ptr<MenuScreen> SettingsPages::Display() {
     rows.push_back(Setting("FIELD OF VIEW", std::move(fov)));
   }
   // G-forces, lean, speed shake and head motion layered on the game's own
-  // camera physics (#419), from the built-in immersive_camera mod. It keeps
-  // the player's save.
-  if (auto row = BuiltinModToggle("IMMERSIVE CAMERA", "immersive_camera")) {
-    rows.push_back(std::move(*row));
+  // camera physics (#419), from the built-in immersive_camera mod, which
+  // always loads. Its effect groups scale while the game runs (#443): a
+  // preset sets all four, and changing one shows CUSTOM. Lean, shake and
+  // head motion are on the cockpit and hood cameras only.
+  if (BuiltinModInstalled("immersive_camera")) {
+    const std::string_view groups[] = {"pinyon_shift_camera_gforce", "pinyon_shift_camera_lean",
+                                       "pinyon_shift_camera_shake", "pinyon_shift_camera_head"};
+    std::vector<Choice> presets;
+    for (const auto& [label, value] : {std::pair{"OFF", "0.0"}, std::pair{"SUBTLE", "0.5"},
+                                       std::pair{"DEFAULT", "1.0"}, std::pair{"STRONG", "1.5"}}) {
+      Choice preset{label, {}};
+      for (const auto group : groups) preset.values.push_back({std::string(group), value});
+      presets.push_back(std::move(preset));
+    }
+    rows.push_back(Setting("IMMERSIVE CAMERA", std::move(presets)));
+    const char* labels[] = {"CAMERA G-FORCE", "CAMERA LEAN", "CAMERA SPEED SHAKE",
+                            "CAMERA HEAD MOTION"};
+    for (size_t i = 0; i < std::size(groups); ++i) {
+      std::vector<Choice> amounts;
+      for (int percent = 0; percent <= 200; percent += 25) {
+        char value[16];
+        std::snprintf(value, sizeof(value), "%.2f", percent / 100.0);
+        amounts.push_back({std::to_string(percent) + "%", {{std::string(groups[i]), value}}});
+      }
+      rows.push_back(Setting(labels[i], std::move(amounts)));
+    }
   }
   rows.push_back(Toggle("VSYNC", "vsync"));
   rows.push_back(Setting("FRAME RATE LIMIT",
@@ -1073,24 +1111,10 @@ void SettingsPages::SetModEnabled(const std::string& name, bool enabled) {
   Save();
 }
 
-std::optional<MenuRow> SettingsPages::BuiltinModToggle(std::string label, std::string name) {
+bool SettingsPages::BuiltinModInstalled(const std::string& name) const {
   std::error_code error;
-  if (services_.mods_root.empty() ||
-      !std::filesystem::is_regular_file(services_.mods_root / name / "mod.toml", error)) {
-    return std::nullopt;
-  }
-  MenuRow row;
-  row.label = std::move(label);
-  row.restart_required = true;
-  row.value = [this, name] {
-    const auto list = EnabledMods();
-    return std::string(std::find(list.begin(), list.end(), name) != list.end() ? "ON" : "OFF");
-  };
-  row.adjust = [this, name](int) {
-    const auto list = EnabledMods();
-    SetModEnabled(name, std::find(list.begin(), list.end(), name) == list.end());
-  };
-  return row;
+  return !services_.mods_root.empty() &&
+         std::filesystem::is_regular_file(services_.mods_root / name / "mod.toml", error);
 }
 
 std::unique_ptr<MenuScreen> SettingsPages::Mods() {
@@ -1100,7 +1124,11 @@ std::unique_ptr<MenuScreen> SettingsPages::Mods() {
   std::error_code error;
   for (auto it = std::filesystem::directory_iterator(services_.mods_root, error);
        !error && it != std::filesystem::directory_iterator(); it.increment(error)) {
-    if (it->is_directory(error)) names.push_back(it->path().filename().string());
+    // A built-in mod that always loads (the immersive camera) has its own
+    // settings instead of a row here.
+    if (it->is_directory(error) && !AlwaysEnabledBuiltin(it->path())) {
+      names.push_back(it->path().filename().string());
+    }
   }
   std::sort(names.begin(), names.end());
   std::vector<MenuRow> rows;

@@ -894,6 +894,16 @@ address = 0x828FF264
 name = "PinyonShiftCameraFieldOfView"
 registers = ["f1"]
 
+# #443: sub_82857B00 (v4 sub_82907F88) updates one camera physics layer
+# (r31) each frame: it stores the layer's input through its curve and noise
+# at [r1+96], then multiplies the layer's Param by it. The immersive camera
+# setting scales that factor for the built-in mod's tagged layers, so a
+# sprung layer eases to its new strength and 0 switches the effect off.
+[[midasm_hook]]
+address = 0x82908120
+name = "PinyonShiftImmersiveCameraLayer"
+registers = ["r1", "r31"]
+
 # sub_828E2898 is about to read the non-durable per-profile career eligibility
 # byte through sub_8252AA48. Repair the actual byte for a valid durable
 # checkpoint so later progression gates observe the restored eligibility too.

@@ -9,7 +9,9 @@
   restarts, keeping saves, settings and game files. Works on Windows,
   Linux and macOS and in portable installs; `PINYON_SHIFT_UPDATE_CHECK=0`
   turns the check off.
-- Offer the optional immersive camera on F6 > DISPLAY (#419).
+- Offer the optional immersive camera on F6 > DISPLAY (#419), with
+  SUBTLE, DEFAULT and STRONG presets and G-force, lean, speed shake and
+  head motion rows, all applied without a restart (#443).
 - Start when the Windows user folder has an accent or other non-ASCII
   characters, such as C:\Users\Júnior; the game closed at once (#436).
 - Build a radio station from a folder of music with

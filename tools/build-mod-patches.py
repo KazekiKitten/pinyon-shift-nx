@@ -99,7 +99,8 @@ def _tree(root: Path) -> dict[str, bytes]:
 def install_builtin_mods(state: Path, source: Path = BUILTIN) -> list[str]:
     """Copy the project's own optional mods (such as the immersive camera)
     into <state>/mods, replacing an older copy, so the player can switch them
-    on in the MODS or CAMERA settings. They are not enabled here."""
+    on in the MODS settings. They are not enabled here (see
+    enable_builtin_mods)."""
     installed = []
     if not source.is_dir():
         return installed
@@ -121,6 +122,42 @@ def install_builtin_mods(state: Path, source: Path = BUILTIN) -> list[str]:
         staging.rename(target)
         installed.append(mod.name)
     return installed
+
+
+def _manifest(state: Path, mod: str) -> str:
+    manifest = state / "mods" / mod / "mod.toml"
+    return manifest.read_text(encoding="utf-8") if manifest.is_file() else ""
+
+
+def enable_builtin_mods(state: Path) -> list[str]:
+    """Enable each installed built-in mod whose mod.toml says
+    `always_enabled = true` (the immersive camera, whose strength is a
+    setting since #443). A player who had it switched off gets its
+    `off_settings` ("key = value" lines, written only where the settings
+    file has no such key), so the game looks as before. Returns the mods
+    enabled here."""
+    config = state / "config" / "pinyon_shift.toml"
+    mods = enabled_mods(config)
+    added = []
+    for marker in sorted((state / "mods").glob(f"*/{BUILTIN_MARKER}")):
+        mod = marker.parent.name
+        text = _manifest(state, mod)
+        if mod in mods or not re.search(r"^always_enabled[ \t]*=[ \t]*true[ \t]*(#.*)?$", text,
+                                        re.MULTILINE):
+            continue
+        settings = config.read_text(encoding="utf-8") if config.exists() else ""
+        match = re.search(r"^off_settings[ \t]*=[ \t]*\[([^\]]*)\]", text, re.MULTILINE)
+        for line in re.findall(r'"([A-Za-z0-9_]+[ \t]*=[^"]*)"', match.group(1) if match else ""):
+            key = line.split("=", 1)[0].strip()
+            if not re.search(rf"^{key}[ \t]*=", settings, re.MULTILINE):
+                settings = settings.rstrip("\n") + ("\n" if settings else "") + line + "\n"
+        config.parent.mkdir(parents=True, exist_ok=True)
+        config.write_text(settings, encoding="utf-8", newline="\n")
+        mods.append(mod)
+        added.append(mod)
+    if added:
+        set_enabled_mods(config, mods)
+    return added
 
 
 def shares_save(state: Path, mod: str) -> bool:
@@ -176,8 +213,10 @@ def main() -> int:
     args = parser.parse_args()
     (args.state_root / "mods").mkdir(parents=True, exist_ok=True)
     installed = install_builtin_mods(args.state_root.resolve())
+    enabled = enable_builtin_mods(args.state_root.resolve())
     result = build(args.state_root.resolve(), args.game_root.resolve())
     result["builtin_installed"] = installed
+    result["builtin_enabled"] = enabled
     print(json.dumps(result, indent=2))
     return 0
 

@@ -54,7 +54,7 @@ Keys can be rebound in **F6 > CONTROLS**, and **RESET KEYS** returns to this lay
 
 ## Immersive camera
 
-**F6 > DISPLAY > IMMERSIVE CAMERA** makes the camera react to the car: it is pushed back under acceleration and thrown forward under braking, jolts when the throttle or brake goes on, leans into corners, shakes a little at speed and under hard braking, and moves with slow breathing and head sway in the cockpit. The cockpit view gets the full effect, the hood view a little less, and the chase and bumper views only the G-forces. It applies at the next start, keeps your own save, and isn't available on Android yet.
+**F6 > DISPLAY > IMMERSIVE CAMERA** makes the camera react to the car: it is pushed back under acceleration and thrown forward under braking, jolts when the throttle or brake goes on, leans into corners, shakes a little at speed and under hard braking, and moves with slow breathing and head sway in the cockpit. The cockpit view gets the full effect, the hood view a little less, and the chase and bumper views only the G-forces. Choose OFF, SUBTLE, DEFAULT or STRONG, or set G-force, lean, speed shake and head motion on their own rows (CUSTOM). Changes apply at once and keep your own save. The immersive camera isn't available on Android or with the v4 title update yet.
 
 ## Your music
 

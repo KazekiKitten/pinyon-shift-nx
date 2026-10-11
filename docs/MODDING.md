@@ -101,12 +101,23 @@ DLC copies under `user-modded` are left in place but are not enumerated.
 The project's own optional mods live in `mods_src/builtin/<name>`. Before
 each start, `tools/build-mod-patches.py` copies each one into
 `<state>/mods/<name>` (replacing an older copy, and never a player's own mod
-of the same name), with a `.pinyon-builtin` marker; they are not enabled.
+of the same name), with a `.pinyon-builtin` marker. They are not enabled,
+except one whose `mod.toml` sets `always_enabled = true`: it is added to
+`enabled_mods`, and a player who had it switched off gets its
+`off_settings` (only for settings not already in their file), so nothing
+looks different. Such a mod is not listed on F6 > MODS.
 `immersive_camera` (#419) appends Pinyon Shift's own camera layers to
 `media/camera.zip`'s `CameraPhysics.xml` (G-forces, the throttle and brake
 jolt, corner lean, speed shake, braking vibration, breathing and head sway),
-written by `tools/build-immersive-camera.py`, and sets `shares_save`. F6 >
-DISPLAY > IMMERSIVE CAMERA switches it in `enabled_mods`.
+written by `tools/build-immersive-camera.py`, and sets `shares_save`. It
+always loads (#443): each layer carries its effect group in the fraction of
+its `SpringK` or `NoiseSeed`, and the game's per-frame layer update scales
+the group by `pinyon_shift_camera_gforce`, `_lean`, `_shake` and `_head`
+(0 to 2, applied at once). F6 > DISPLAY > IMMERSIVE CAMERA sets all four
+(OFF 0, SUBTLE 0.5, DEFAULT 1, STRONG 1.5), and the four CAMERA rows below it
+set each one (CUSTOM). On the v4 build the title update's own
+`media.zip` carries `camera/cameraphysics.xml`, which the game reads instead,
+so the layers do not load there yet.
 
 ## Asset mods
 

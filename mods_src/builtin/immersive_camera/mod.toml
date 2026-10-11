@@ -1,5 +1,11 @@
 name = "immersive_camera"
-version = "1.0.0"
+version = "1.1.0"
 abi = 1
 # Changes only the camera, never saved data: the player keeps their own save.
 shares_save = true
+# Always loaded (#443): the IMMERSIVE CAMERA setting scales its layers while
+# the game runs, and 0 turns them off. A player who had the mod switched off
+# keeps the camera as it was.
+always_enabled = true
+off_settings = ["pinyon_shift_camera_gforce = 0.0", "pinyon_shift_camera_lean = 0.0",
+                "pinyon_shift_camera_shake = 0.0", "pinyon_shift_camera_head = 0.0"]

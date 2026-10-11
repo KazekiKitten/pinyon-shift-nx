@@ -10,8 +10,17 @@ as a merge that appends them (`pinyon-add`) and raises each camera's
 NumLayers. The stock counts below are the disc's; nothing else from the disc
 is used. Edit the tuning here and run it again.
 
+The layers always load; the IMMERSIVE CAMERA setting scales each effect
+group at run time (#443). The game's per-frame layer update
+(PinyonShiftImmersiveCameraLayer) finds a layer's group by its tag, the
+fractional part of its SpringK (sprung layers) or NoiseSeed (noise
+layers): TAG + TAG_STEP * group, replacing the value's own fraction. That
+is a stiffness or seed change too small to see, and no stock value has
+such a fraction. Keep these in step with the hook.
+
   build-immersive-camera.py [output]
 """
+import math
 import sys
 from pathlib import Path
 
@@ -20,6 +29,9 @@ DEFAULT = (ROOT / "mods_src" / "builtin" / "immersive_camera" / "merge" / "media
            / "camera.zip" / "CameraPhysics.xml")
 
 STOCK = {"FollowCam": 74, "FollowCam2": 69, "DriverCam": 51, "Hood": 47, "BumperHigh": 46}
+
+TAG, TAG_STEP = 0.0419, 0.0002
+GFORCE, LEAN, SHAKE, HEAD = 1, 2, 3, 4
 
 
 def f(v):
@@ -36,8 +48,10 @@ def curve(prefix, points):
     return attrs
 
 
-def layer(input_type, output, param, points=None, clamp=None, noise=None, spring=None,
+def layer(group, input_type, output, param, points=None, clamp=None, noise=None, spring=None,
           derivative=False):
+    tag = TAG + TAG_STEP * group
+    assert bool(noise) != bool(spring), "a layer is tagged through its spring or its noise"
     a = {"Enabled": "1", "InputType": input_type,
          "NoiseType": noise[0] if noise else "None", "OutputType": output,
          "InputTakeDerivative": "1" if derivative else "0"}
@@ -47,7 +61,7 @@ def layer(input_type, output, param, points=None, clamp=None, noise=None, spring
     if noise:
         _, freq, seed = noise
         a["InputToNoiseFreqMapping"] = "Linear"
-        a["NoiseFreq"], a["NoiseSeed"] = f(freq), f(seed)
+        a["NoiseFreq"], a["NoiseSeed"] = f(freq), f(math.floor(seed) + tag)
         a["NoiseOutputRangeMin"], a["NoiseOutputRangeMax"] = f(-1), f(1)
     if points is None:
         a["InputToParamMapping"] = "ConstantOne" if input_type == "ConstantOne" else "Linear"
@@ -56,7 +70,7 @@ def layer(input_type, output, param, points=None, clamp=None, noise=None, spring
     for axis, v in zip("xyzw", list(param) + [0] * (4 - len(param))):
         a[f"Param.{axis}"] = f(v)
     if spring:
-        a["Sprung"], a["SpringK"], a["SpringDPercent"] = "1", f(spring[0]), f(spring[1])
+        a["Sprung"], a["SpringK"], a["SpringDPercent"] = "1", f(math.floor(spring[0]) + tag), f(spring[1])
     else:
         a["Sprung"] = "0"
     return a
@@ -67,15 +81,15 @@ def camera_layers(s, cockpit):
     out = []
     # G-forces: pushed back under acceleration, thrown forward and down
     # under braking, sprung so it settles with a little overshoot.
-    out.append(layer("Gs_Longitudinal", "CarSpaceXYZOffset", (0, 0, -0.035 * s),
+    out.append(layer(GFORCE, "Gs_Longitudinal", "CarSpaceXYZOffset", (0, 0, -0.035 * s),
                      [(0, 0), (0.3, 0.5), (1.0, 1.0)], (0, 1.0), spring=(140, 0.55)))
-    out.append(layer("Gs_Longitudinal", "CarSpaceXYZOffset", (0, 0.008 * s, -0.045 * s),
+    out.append(layer(GFORCE, "Gs_Longitudinal", "CarSpaceXYZOffset", (0, 0.008 * s, -0.045 * s),
                      [(-1.5, -1.2), (-1.0, -1.0), (0, 0)], (-1.5, 0), spring=(120, 0.5)))
-    out.append(layer("Gs_Longitudinal", "CarSpaceYPROffset", (0, -0.9 * s, 0),
+    out.append(layer(GFORCE, "Gs_Longitudinal", "CarSpaceYPROffset", (0, -0.9 * s, 0),
                      [(-1.5, -1.2), (-1.0, -1.0), (0, 0)], (-1.5, 0), spring=(120, 0.5)))
     # The jolt when throttle or brake goes on: the change in g, quickly
     # damped.
-    out.append(layer("Gs_Longitudinal", "CarSpaceYPROffset", (0, 0.6 * s, 0),
+    out.append(layer(GFORCE, "Gs_Longitudinal", "CarSpaceYPROffset", (0, 0.6 * s, 0),
                      [(-6, -1), (0, 0), (6, 1)], (-6, 6), spring=(300, 0.35), derivative=True))
     if not cockpit:
         return out
@@ -83,23 +97,23 @@ def camera_layers(s, cockpit):
     for side in (-1, 1):
         clamp = (-1.2, 0) if side < 0 else (0, 1.2)
         pts = [(-1.2, -1), (-0.6, -0.5), (-0.1, 0)] if side < 0 else [(0.1, 0), (0.6, 0.5), (1.2, 1)]
-        out.append(layer("Gs_Lateral", "CarSpaceYPROffset", (0, 0, -0.9 * s), pts, clamp,
+        out.append(layer(LEAN, "Gs_Lateral", "CarSpaceYPROffset", (0, 0, -0.9 * s), pts, clamp,
                          spring=(200, 0.6)))
-        out.append(layer("Gs_Lateral", "CarSpaceXYZOffset", (0.02 * s, 0, 0), pts, clamp,
+        out.append(layer(LEAN, "Gs_Lateral", "CarSpaceXYZOffset", (0.02 * s, 0, 0), pts, clamp,
                          spring=(200, 0.6)))
     # High-speed shake, from 40 mph up (stock starts at 140).
-    out.append(layer("SpeedMPH", "CameraSpaceYPROffset", (0.10 * s, 0.14 * s, 0.08 * s),
+    out.append(layer(SHAKE, "SpeedMPH", "CameraSpaceYPROffset", (0.10 * s, 0.14 * s, 0.08 * s),
                      [(40, 0), (80, 0.3), (120, 0.6), (160, 0.85), (200, 1)], (0, 240),
                      noise=("Simplex", 18, 3.1)))
     # Hard braking at the limit: a fine vibration.
-    out.append(layer("Gs_Longitudinal", "CameraSpaceYPROffset", (0.05 * s, 0.12 * s, 0),
+    out.append(layer(SHAKE, "Gs_Longitudinal", "CameraSpaceYPROffset", (0.05 * s, 0.12 * s, 0),
                      [(-1.3, 1), (-1.0, 0.6), (-0.7, 0)], (-1.5, 0), noise=("Simplex", 38, 7.7)))
     # Breathing and head sway: slow layers at unrelated rates.
-    out.append(layer("ConstantOne", "CarSpaceXYZOffset", (0, 0.0025 * s, 0),
+    out.append(layer(HEAD, "ConstantOne", "CarSpaceXYZOffset", (0, 0.0025 * s, 0),
                      noise=("Sin", 1.6, 0.0)))
-    out.append(layer("ConstantOne", "CarSpaceXYZOffset", (0, 0.0012 * s, 0),
+    out.append(layer(HEAD, "ConstantOne", "CarSpaceXYZOffset", (0, 0.0012 * s, 0),
                      noise=("Sin", 2.9, 1.3)))
-    out.append(layer("ConstantOne", "CameraSpaceYPROffset", (0.12 * s, 0, 0.08 * s),
+    out.append(layer(HEAD, "ConstantOne", "CameraSpaceYPROffset", (0.12 * s, 0, 0.08 * s),
                      noise=("Simplex", 0.7, 5.3)))
     return out
 
