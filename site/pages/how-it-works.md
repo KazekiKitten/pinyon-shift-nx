@@ -9,6 +9,8 @@ description: How Pinyon Shift recompiles Forza Horizon's PowerPC code and render
 
 Pinyon Shift isn't an emulator. The game's PowerPC code is translated ahead of time into C++, compiled for the host CPU, and linked with a runtime that stands in for the Xbox 360's kernel, file system, input, audio and GPU.
 
+This page is a summary. The [Internals](internals.md) pages go into detail on the recompiler, the runtime, the renderer and the optimizations for each platform, as notes for other recompilation projects.
+
 ## Recompilation
 
 [ShiftGlue](https://github.com/arcanite24/shiftglue-sdk), our fork of ReXGlue, reads `default.xex` from your disc and emits C++ for every function in it. The generated code calls other functions directly, so nothing is interpreted or JIT-compiled at run time. Guest memory stays big-endian, as the game expects.
