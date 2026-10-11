@@ -491,10 +491,11 @@ on `fh1-race-retire`.
 | LZX block decoder | `sub_830F2210` / `sub_831B4090` | about 20 % of the asset worker | Bit-identical, 1.8x (Odin) to 2.2x (desktop), about 1 s of CPU a route on the Odin | Kept, `pinyon_shift_native_lzx_decoder` |
 | Physical-heap offset read once a function (codegen) | all | one load per guest access on Linux/Android | `libmain.so` 3.6 MB smaller; per-thread instructions unchanged within noise | Measured and not kept |
 | Array release walk | `sub_8282EA80` | about 20 % of the asset worker (desktop) | Already skipped by the `PinyonShiftArrayReleaseWalk` hook | Done earlier |
-| Inflate loop | `sub_83108C08` | about 20 % of the asset worker (desktop) | Not ported: loading only, and its error paths call a non-returning handler | Open |
+| Inflate loop | `sub_83108C08` | about 20 % of the asset worker while loading (desktop); one sample in about 1,160 over the low-spec race route | Not ported: loading only, and its error paths call a non-returning handler | Not ported |
 | Audio reverb | `sub_8300D580` | 11.7 % of the audio thread (about 35 ms a second) | Hot spots are loads from its delay lines; a bit-exact port of 2,230 lines would save at most about 2 % of a core | Not ported |
 | Audio six-channel biquad | `sub_82FC6CC0` | 8.5 % of the audio thread | Cost spread over the whole function, no line above 6 %; same bound as the reverb | Not ported |
-| GPU fence spin | `PinyonShiftGpuFenceWait` (host hook) | 2.6 % of the render thread in clock reads after the idle fix | Bounded to 20 us a wait | Open |
+| GPU fence spin | `PinyonShiftGpuFenceWait` (host hook) | 2.6 % of the render thread in clock reads (Odin); all render-thread clock reads on the simulated low-spec run (3.9 %) | In-run A/B of `pinyon_shift_gpu_fence_spin_us` 20 against 0: Odin render thread 248 / 242 ms a second, median frame 33.3 ms both; desktop low-spec median frame 12.9 / 13.0 ms, title thread 686 / 692 ms a second (about 18 waits a frame). No difference | Measured and not changed; spin kept at 20 us, cvar added for tuning |
+| CRT printf engine, heap allocator, `sub_8307EDA8` | `sub_82452358`, `sub_82470CB0`, `sub_8307EDA8` | 11-12 % each of background thread `830C6918`, about 1 % of a core each in a race (low-spec run) | Too small for a bit-exact port | Not ported |
 
 Profiles: the Odin before and after each change are under
 `.local/android/p431/` (not committed). The 8 Elite tablet and the Steam
