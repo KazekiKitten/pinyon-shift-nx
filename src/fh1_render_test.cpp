@@ -43,6 +43,10 @@ REXCVAR_DEFINE_BOOL(fh1_render_test_log_file_opens, false, "Pinyon Shift",
                     "Record every guest file open as a render-test event")
     .lifecycle(rex::cvar::Lifecycle::kRequiresRestart);
 
+#ifdef PINYON_SHIFT_PGO_GENERATE
+extern "C" int __llvm_profile_dump(void);
+#endif
+
 namespace pinyon_shift::fh1_render_test {
 namespace {
 
@@ -1149,6 +1153,12 @@ bool ObserveOutput(
         "fh1.render_test.complete",
         {{"frame", std::to_string(g_test.stop_frame)},
          {"captures", std::to_string(g_test.next_capture)}});
+#ifdef PINYON_SHIFT_PGO_GENERATE
+    // Device scripts stop the app once the route completes, before its exit
+    // path dumps the profile, so instrumented builds dump here too.
+    diagnostics::RecordEvent("pgo.profile.dump",
+                             {{"result", std::to_string(__llvm_profile_dump())}});
+#endif
     g_test.condition.notify_all();
     RequestClose();
   }
