@@ -155,11 +155,10 @@ command line.
 
 ## Roadmap
 
-In progress: title update v4 builds from your own update,
-and complete DLC support. Next:
-stability fixes, AMD and Intel qualification and Android frame
-pacing. The full list, with what's done, is in the
-[roadmap](docs/ROADMAP.md).
+In progress: crash, stutter and rendering fixes, faster Android rendering
+on tiled GPUs, and documenting the game's code. Next: easier setup, AMD and
+Intel qualification, and draw distance and world detail settings. The full
+list, with what's done, is in the [roadmap](docs/ROADMAP.md).
 
 ## Project boundaries
 

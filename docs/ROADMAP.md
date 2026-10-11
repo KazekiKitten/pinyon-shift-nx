@@ -1,6 +1,6 @@
 # Roadmap
 
-Public priorities, updated 2026-10-04 from community feedback and the current
+Public priorities, updated 2026-10-10 from community feedback and the current
 development work. Gameplay-blocking bugs and save safety take priority within
 each phase. These are priorities, not release dates; ports need validation on
 their target hardware before they are ready for players.
@@ -33,40 +33,70 @@ Done since 0.1:
 - [x] One-click setup: nothing to install by hand on Windows, and Android
   installed over Wi-Fi without adb
   ([backlog](ONE_CLICK_SETUP_BACKLOG.md))
-
 - [x] Native Linux and Steam Deck support: a launcher for Linux, Add to
   Steam, 60 fps on the Deck ([Linux and Steam Deck](LINUX.md))
-
 - [x] macOS on Apple silicon, with Vulkan on Metal through MoltenVK
   ([macOS](MACOS.md))
+- [x] FH1 v4 title-update support, built from your USA disc and your own
+  update: Horizon Rally and 1000 Club run their original code, 1000 Club
+  offline ([title update v4 backlog](TITLE_UPDATE_V4_BACKLOG.md))
+- [x] DLC support from your own Xbox 360 content: every car pack, VIP and
+  the expansions ([below](#dlc-packages))
+- [x] Update from inside the launcher while preserving saves and settings
+- [x] HDR output, with calibration, a side-by-side comparison and a runtime
+  toggle (#417, #442)
+- [x] An optional immersive camera: G-forces, lean, speed shake and head
+  motion, with presets (#419, #443)
+- [x] Your own music in game, and custom radio stations with their own name,
+  logo and songs, managed from the launcher (#420, #445)
+- [x] Install the Forza Horizon XE mod from your own ModDB downloads, playing
+  its own save (#426)
+- [x] Keyboard rebinding and a controller mapping assistant (#401, #432)
+- [x] Vulkan as the single supported renderer on every platform, lighter at
+  2x to 4x internal resolution
 
 In progress:
-- [ ] FH1 v4 title-update support, built from your USA disc and your own
-  update ([title update v4 backlog](TITLE_UPDATE_V4_BACKLOG.md))
-- [ ] DLC support from your own Xbox 360 content, including car packs and
-  the Horizon Rally expansion
+
+- [ ] Fix remaining crashes, loading failures, rendering regressions and
+  recurring stutter: hills seen through (#424), hitching (#381), frame drops
+  in free roam (#416), resuming after quitting before the first festival
+  event (#447), the trainer not opening (#450) and the Steam Deck settings
+  menu (#429)
+- [ ] Faster Android rendering on tiled GPUs (#414), and the Odin's GPU
+  savings measured on desktop, the Steam Deck and macOS (#427)
+- [ ] Hand-optimize the hottest recompiled guest functions (#431)
+- [ ] Document FH1's guest code in a symbol database
+  ([reverse-engineering records](REVERSE_ENGINEERING.md), #448)
 
 Next, in priority order:
 
-- [ ] Fix remaining crashes, loading failures, rendering regressions and
-  recurring stutter, including intro, showcase and free-roam transitions
-- [ ] Make setup more reliable and the first build faster; validate the
-  toolchain before building and recover from interrupted setup
-- [ ] Qualify AMD and Intel GPUs and publish tested hardware, drivers,
-  settings and performance results
+- [ ] Make setup more reliable and the first build faster: the launcher
+  installs every requirement, validates the toolchain before building and
+  recovers from interrupted setup (#393)
+- [ ] Qualify AMD and Intel GPUs, including low-end integrated graphics
+  (#388), and publish tested hardware, drivers, settings and performance
+  results
+- [ ] Draw distance and world detail settings (#421), and an atmosphere and
+  effects pack: clouds, fog, particles and backfire (#422)
 - [ ] Expose FSR 1 quality presets and sharpening controls in settings,
   with the rendered and output resolutions shown clearly
 - [ ] Validate Steam Deck and SteamOS: controls, Steam Input, suspend and
   resume, and performance presets
 - [ ] Improve sustained Android frame pacing and thermals on supported
   devices; measure long sessions as well as startup performance
-- [x] Update from inside the launcher while preserving saves and settings
 - [ ] Safely import saves from Xenia and Xbox 360, and transfer profiles
   between supported platforms
 - [ ] Support more disc regions
+- [ ] A feature comparison table on the website, by platform and against the
+  original (#455)
 
 Mid term, in priority order:
 
+- [ ] Add radio stations alongside the stock ones instead of replacing them
+  (#453), with a logo preview, a playlist editor and YouTube sources in the
+  launcher (#454)
+- [ ] Export your own game files to standard formats from the launcher:
+  audio, textures, models, strings and data (#446)
 - [ ] Let the trainer toggle AI driving for the player's own car, with an
   immediate return to manual control
 - [ ] Reuse player-car AI driving in automated gameplay and performance tests
@@ -77,13 +107,13 @@ Mid term, in priority order:
   background streaming; speed up saves while preserving atomic writes and backups
 - [ ] Better Android performance on lower-end hardware, with published
   device requirements and sustainable graphics presets
+- [ ] An Android launcher that builds the game on the device, without a PC
+  (#451)
 - [ ] Nintendo Switch support, starting with hardware feasibility and
   performance validation
-- [ ] macOS support through MoltenVK
 - [ ] Racing wheel, pedal and force feedback support
-- [ ] Install, enable and order mods from the launcher, with compatibility
+- [ ] Install, enable and order any mod from the launcher, with compatibility
   guidance for existing FH1 mods
-- [ ] Custom radio stations and music replacement from local files
 - [ ] Verify DualSense and variable refresh rate displays
 - [ ] Sign the launcher and preview executables
 
