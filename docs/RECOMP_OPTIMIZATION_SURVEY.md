@@ -51,7 +51,8 @@ of unknown age, and are marked *unverified*.
 3. **The large lever we don't use is register locality.** UnleashedRecomp
    and re:Blue enable it; neither has measured it. It is blocked for us by
    interior-PC re-entry (PB-3.2), and #431 showed that naive CR
-   synchronization does not pay.
+   synchronization does not pay. #467 made the CR part pay by following
+   the PowerPC ABI at calls (see [Shortlist results](#shortlist-results)).
 4. **The cheap, measurable gaps:**
    - POSIX `WaitMultiple` polls in fixed 1 ms sleeps (the Odin, the Deck,
      macOS);
@@ -89,12 +90,12 @@ Column notes:
 
 | Technique | Projects and source | What it changes | Reported gain and method | Have it | Effort | Risk |
 | --- | --- | --- | --- | --- | --- | --- |
-| Flush-mode toggles only on scalar/VMX class change | XenonRecomp README (per-instruction toggling); SV emits 21,479 `disableFlushMode()` calls | Fewer `ldmxcsr`/FPCR writes | none | Each toggle skips the write when the mode already matches (`include/rex/ppc/context.h:180-197`), but state is forgotten across labels and calls. PB-3.5 and DR-5.1 propose propagating it. | S-M | low |
+| Flush-mode toggles only on scalar/VMX class change | XenonRecomp README (per-instruction toggling); SV emits 21,479 `disableFlushMode()` calls | Fewer `ldmxcsr`/FPCR writes | none | **Yes** (#466): each toggle skips the write when the mode already matches (`include/rex/ppc/context.h:180-197`), and the mode now carries across labels (ShiftGlue `99b7966`). Calls still reset it. | S-M | low |
 | FTZ/DAZ permanently on in scalar mode | S3 (`SDK/include/rex/ppc/context.h:202-230`); comment blames denormal stalls for reverb crackle | Removes toggles; changes double-denormal results | none | No. Reverb is 12 % of the 8 Elite audio thread (#431), so the denormal question is worth a measurement. | S | medium |
 | Fused multiply-add for `vmaddfp` | Canary `x64_extension_mask` (*unverified*) | One rounding as VMX defines it | none | PB-3.4, deferred | S | medium |
 | Wider CPU baseline (`-march=sandybridge`, `x86-64-v3`) | U `CMakeLists.txt:37-40`; S3 optional `SKATE3_ENABLE_X86_64_V3`; SDK presets `x86-64-v2` | AVX/BMI2 code in generated units | none | Pinyon presets `-msse4.1`; an AVX2 GPU plugin was measured and not kept (PB-3.9). An `out/build/win-amd64-fma` tree exists but has no recorded result. | S | low |
-| LTO of the generated code | U Release presets (`CMakePresets.json:58,114,166`) | Inlining across the 263 generated units and the runtime | none | Opt-in `PINYON_SHIFT_RECOMP_IPO`, never measured on guest threads | S (build time is the cost) | low |
-| PGO | none outside ShiftGlue | — | — | Opt-in `PINYON_SHIFT_RECOMP_PGO`; measured on frame time, not guest CPU (PB-3.9) | S | low |
+| LTO of the generated code | U Release presets (`CMakePresets.json:58,114,166`) | Inlining across the 263 generated units and the runtime | none | Opt-in `PINYON_SHIFT_RECOMP_IPO`; neutral on Odin guest threads (#464), left off | S (build time is the cost) | low |
+| PGO | none outside ShiftGlue | — | — | Opt-in `PINYON_SHIFT_RECOMP_PGO`; PGO trained on `fh1-race-retire` and measured on `fh1-race-sustained` over CR locals and the flush pass (4 runs each, medians): simulation 0.775 to 0.732 G (-5.5 %), audio 1.781 to 1.701 G (-4.5 %), render 0.650 to 0.641 G (-1.4 %), process 5.85 to 5.72 G. It pays, but shipping it needs a profile kept in step with the generated code, so it stays opt-in. | S | low |
 | `-ffp-model=strict`, `-fno-strict-aliasing` | U, YK, S3, RO | Keeps results bit-exact | — | Same | — | — |
 | `-mcmodel=small` on AArch64 | SDK default | Shorter address materialization | — | Yes (AP-0.3); x86 Linux uses `large` | done | — |
 
@@ -104,8 +105,8 @@ Column notes:
 | --- | --- | --- | --- | --- | --- | --- |
 | No `/proc/self/maps` parse on write-watch faults | ReXGlue [#441](https://github.com/rexglue/rexglue-sdk/issues/441), [PR #498](https://github.com/rexglue/rexglue-sdk/pull/498) (open, `PROCMAP_QUERY` ioctl) | No 1,800-line parse under the global lock per fault | Forza Horizon race, about 28 s runs, `frame_rate=60`: 41.4 and 42.4 → 49.3 fps, p99 32.8 → 26.8 ms; GPU command processor about 17 % waiting on the global lock | **Yes**, a different fix: the maps are read only for unhandled faults (`abdc0b2`, `38dc8c9`, `04252ca`) | done | — |
 | Heap mutex separate from the global critical region | ReXGlue [#214](https://github.com/rexglue/rexglue-sdk/issues/214) (0.7.0 lock decomposition) | Less global-lock contention | none | Inherited from upstream | done | — |
-| Coarser write-watch granularity | none; Canary records MMIO-faulting stores and emits non-trapping ones later (*unverified*) | Fewer faults and TLB shootdowns | none | PB-3.11 counts 60-70 `VirtualProtect` per race frame and proposes 64 KiB | M | medium |
-| Native allocator (o1heap) | U `kernel/heap.cpp:11-48`; ReXGlue `[rexcrt]` heap ([Memory wiki](https://github.com/rexglue/rexglue-sdk/wiki/Memory)); RB maps the Rtl heap functions | O(1) host allocation in place of guest heap code | none | No. The guest allocator `sub_82470CB0` was profiled in #431 and not ported. | M | medium (heap layout visible to save/load) |
+| Coarser write-watch granularity | none; Canary records MMIO-faulting stores and emits non-trapping ones later (*unverified*) | Fewer faults and TLB shootdowns | none | No. Not worth it on FH1 (#470): about 7 write-watch triggers a race frame on the Odin | M | medium |
+| Native allocator (o1heap) | U `kernel/heap.cpp:11-48`; ReXGlue `[rexcrt]` heap ([Memory wiki](https://github.com/rexglue/rexglue-sdk/wiki/Memory)); RB maps the Rtl heap functions | O(1) host allocation in place of guest heap code | none | No. The guest allocator `sub_82470CB0` is 0.05 % of the Odin race inclusive (#468), so it is not ported. | M | medium (heap layout visible to save/load) |
 | Executable locked in RAM | U `preload_executable.cpp:84,93` (Windows) | No page-ins of the 100 MB executable on first use | none | No. Useful only if hitches correlate with hard faults. | S | low |
 | Fastmem through fault patching | none found | — | — | — | — | — |
 
@@ -125,7 +126,7 @@ Column notes:
 | Technique | Projects and source | What it changes | Reported gain and method | Have it | Effort | Risk |
 | --- | --- | --- | --- | --- | --- | --- |
 | CRT memory functions as host code | U (`misc_impl.cpp:35-56`); RB `[rexcrt]` (`config/hooks/crt.toml`); ReXGlue [Function Overrides wiki](https://github.com/rexglue/rexglue-sdk/wiki/Function-Overrides) | memcpy/memmove/memset at host speed | none | **Yes**, PB-8.1: with PB-8.2, simulation thread 11-14 % fewer cycles a second | done | — |
-| Wider `[rexcrt]` table: XMemCpy, XMemSet128, memset_vmx, memchr, str*, lstr* | RB `config/hooks/crt.toml`, `src/core/guest_crt.cpp:30-36` (atan2, atof) | More CRT at host speed | none | No. Our SDK supplies the natives (plus `wcs*`); FH1 addresses are unmapped. | S | low (`guest_native` verify covers it) |
+| Wider `[rexcrt]` table: XMemCpy, XMemSet128, memset_vmx, memchr, str*, lstr* | RB `config/hooks/crt.toml`, `src/core/guest_crt.cpp:30-36` (atan2, atof) | More CRT at host speed | none | No. Our SDK supplies the natives (plus `wcs*`). The FH1 candidates are under 0.05 % each in the race (#465), so they stay unmapped. | S | low (`guest_native` verify covers it) |
 | Hand-ported hot functions with verification | none outside ShiftGlue; U hand-replaces about 45 D3D device functions | Native bodies for profiled leaves | — | **Yes**, #431 `guest_native`: crt `pow` 2.1x, LZX 1.8x, 0 mismatches in verify runs | done | low |
 | Native decompression or XAudio | none found | — | — | LZX native in #431; inflate (`sub_83108C08`) profiled and not ported | M | low |
 | Pipelines precompiled from the game's asset load path | U README (streaming workers); RB `config/hooks/pso_predictor.toml` | No first-use pipeline stutter | U: "no shader stutter", qualitative | No. Our pipelines come from the driver cache (`1b278fd`) and a worker (`d7bdbba`, `fea02aa`). | M | low |
@@ -154,7 +155,7 @@ Column notes:
 
 | Technique | Projects and source | What it changes | Have it |
 | --- | --- | --- | --- |
-| Tracy zone in every guest function | YK `include/rex/ppc/context.h:86-100` (`REXGLUE_PROFILE_GUEST_FUNCTIONS`); ReXGlue PR [#261](https://github.com/rexglue/rexglue-sdk/pull/261), [#271](https://github.com/rexglue/rexglue-sdk/pull/271) | Inclusive times per guest function | Dropped in our fork. A profiling build would complement the sampler and simpleperf, which give leaf shares only. |
+| Tracy zone in every guest function | YK `include/rex/ppc/context.h:86-100` (`REXGLUE_PROFILE_GUEST_FUNCTIONS`); ReXGlue PR [#261](https://github.com/rexglue/rexglue-sdk/pull/261), [#271](https://github.com/rexglue/rexglue-sdk/pull/271) | Inclusive times per guest function | Kept in the SDK template (`pch_h.inja`, `REXGLUE_PROFILE_GUEST_FUNCTIONS`), but Pinyon forces `REXGLUE_ENABLE_TRACY` off. Not needed: `simpleperf record --call-graph fp` gives inclusive times on the Odin (#469). |
 | Missed-pipeline recorder and replay | RB (CSV of misses) | Builds a precompile list per route | No |
 | In-game profiler overlay | U (F1) | Live GPU, present, fence and pipeline counts | Partly (thread sampler, JSON events) |
 | Frame dump and offline replay | RO (`98f614b`), S3 (`2ad56d2`) | Renderer regression tests | **Yes** (`replay-fh1-frame.py`, `test-fh1-frame-replays.py`) |
@@ -184,6 +185,22 @@ method).
 | E6 | **Native guest allocator** (`sub_82470CB0`) or o1heap behind `[rexcrt]` | Profiled in #431 and on the render thread; U and RB replace their heaps | `guest_native` verify for equivalence of returned blocks, then per-thread instructions | all | M |
 | E7 | **Profiling build with Tracy zones per guest function** | Inclusive times would rank callers, not only leaves | Tooling, no frame metric; overhead budget under 2x | desktop | S |
 | E8 | **Write-watch at 64 KiB** (PB-3.11) | Faults and the global lock are the measured cost in PR #498 and #416 | Faults per frame, global-lock contentions per frame (wait-log cvar), p95 and p99 frame time on the Odin and the Deck | all; Android most | M |
+
+### Shortlist results
+
+Measured 2026-10-11 on the Odin, 30 fps limit, medians of per-interval
+guest instructions a second, alternating builds.
+
+| Rank | Issue | Result | Outcome |
+| --- | --- | --- | --- |
+| E1 | #463 | See the table above | Kept, ShiftGlue `4b8df95` |
+| E2 | #464 | ThinLTO: `libmain.so` 0.3 % smaller; render 0.72-0.82 against 0.73-0.74 G, simulation 0.84-0.87 against 0.83-0.86 G, audio 1.85-1.93 against 1.84-1.86 G, 4 runs each. PGO trained on `fh1-race-retire` and measured on `fh1-race-sustained` over CR locals and the flush pass (4 runs each, medians): simulation 0.775 to 0.732 G (-5.5 %), audio 1.781 to 1.701 G (-4.5 %), render 0.650 to 0.641 G (-1.4 %), process 5.85 to 5.72 G. It pays, but shipping it needs a profile kept in step with the generated code, so it stays opt-in. | Neither kept; both stay opt-in |
+| E3 | #465 | Census from call-graph profiles: the CRT candidates (`_stricmp`, `strstr`) are 0.02 % each, and 2,207 small byte-loop leaves add up to 1.98 % with none above 0.23 % (`docs/REVERSE_ENGINEERING.md`) | Not mapped |
+| E4 | #466 | Bound: making every toggle a no-op saves about 5-8 % of guest instructions. Carrying the mode across labels drops 12,233 of 42,445 conditional disables and 207 of 2,153 enables: audio thread 1.87-2.00 to 1.76-1.86 G, render and simulation unchanged (3 runs each). FTZ in scalar mode not tried. | Kept, ShiftGlue `99b7966` |
+| E5 | #467 | CR locals synchronized by the PowerPC ABI: calls, returns and tail calls write back only cr2-cr4 and reload nothing; hooks, setjmp, longjmp and SEH keep a full sync. Render 0.73-0.80 to 0.64-0.68 G (-11 %), simulation 0.85-0.90 to 0.74-0.79 G (-12 %), audio -3 %, process -7 %; desktop executable 9 % smaller. Combined with the flush pass (4 runs each): render 0.747 to 0.678 G, simulation 0.849 to 0.786 G, audio 1.926 to 1.796 G, process 6.27 to 6.02 G (medians). `ctr_as_local` not tried. | Kept, ShiftGlue `da39f62` |
+| E6 | #468 | `sub_82470CB0` is 0.05 % inclusive in the race (its neighbour `sub_8246F268` 0.52 %) | Not ported |
+| E7 | #469 | `simpleperf record --call-graph fp` works on the Odin with 1.2 % broken chains, so no Tracy build is needed. Audio thread: `MMIOHandler::CheckStore` 22 % inclusive, of which `XmaDecoder::WriteRegister` 15.6 % and inline `XmaContext::Work` 14.6 %. Commands thread: `ExecutePacket` 96 %, `IssueDrawImpl` 45 %. | Method recorded (PB-3.11) |
+| E8 | #470 | Per race frame on the Odin: 7 write-watch triggers, 25 protect calls, 524 pages; arming the callbacks 0.59 % and the fault path under 0.5 % of the process; about 150 global-lock contentions with a median 0.18-0.84 ms blocked | Not changed |
 
 Below the line (not scheduled): devirtualizing hot indirect calls (no hot
 `bctrl` site in any profile yet), `armv8.2-a` (AP-7.1 owns it), executable
