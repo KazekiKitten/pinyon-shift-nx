@@ -501,7 +501,24 @@ on `fh1-race-retire`.
 
 Profiles: the Odin before and after each change are under
 `.local/android/p431/` (not committed). The 8 Elite tablet and the Steam
-Deck were not reachable for this pass, so their profiles stay open.
+Deck was not reachable for this pass, so its profile stays open.
+
+8 Elite tablet (the Astra, v4 build, `simpleperf record --app`, 1 kHz,
+40 s of `fh1-race-sustained` from a private copy of its seed): the same
+shape as the Odin. The audio thread (`83075D18`, 18 % of the process) is
+the busiest guest thread; its top leaves are the reverb (v4
+`sub_830CE6C0`, 12.3 % of the thread) and the biquad (v4 `sub_83087D70`,
+8.9 %). The render thread (`8261E318`) has no leaf above 5.4 %
+(`sub_824701B8`, a branchy draw-state routine) and spends 2.3 % in
+`clock_gettime` (the fence spin). The simulation thread (`825CEC88`) is
+flat, top leaf 3.5 %. Outside guest code, the GPU Submission thread
+spends about 20 % of its samples in scudo's allocator (mutex try-lock,
+unlock, allocate, deallocate), a host-side lead for the Vulkan backend
+rather than for this item. In-run A/B of the render idle sleep (0 against
+200 us, 90 s): render thread 502 to 235 ms of CPU a second and 2.79 to
+0.78 G instructions, process 1,952 to 1,719 ms a second, median frame
+33.3 ms both (30 fps limit). Verify run: `pow` 4.24 M calls and LZX
+13,538 calls, 0 mismatches, 2.1x and 1.8x.
 
 Low-spec PC (simulated, LS-5.1): `fh1-race-sustained` with
 `--host-cpus 0,2,4,6 --sibling-load 1,3,5,7` and the thread sampler
