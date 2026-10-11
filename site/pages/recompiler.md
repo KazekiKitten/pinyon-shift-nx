@@ -61,6 +61,15 @@ void sub_82XXXXXX(PPCContext& __restrict ctx, uint8_t* base);
 
 The resume switch exists because guest threads can be re-entered: when the game calls `KeSetCurrentStackPointers`, the runtime `longjmp`s to the thread's base and dispatches again at `ctx.lr`. In the base image 56,860 functions start with that switch.
 
+**Condition registers in locals.** Generated code keeps guest registers in `ctx`, so every compare stores its CR bits to memory that a guest store might alias, and Clang can't drop or forward them. With `cr_as_local`, a function keeps the CR fields it uses in C++ locals, loaded from `ctx` on entry. Writing them all back and reloading them around every call cost what it saved: binaries grew 13–26 % for no change in instructions. What made it pay is the PowerPC calling convention:
+
+- cr2–cr4 are preserved across calls, and the other fields are dead at a call and at a return.
+- So a call, return or tail call writes back only the cr2–cr4 locals and reloads nothing.
+- Hooks that read `ctx`, the `setjmp` copy, `longjmp` and exceptions keep a full write-back and reload.
+- A function resumed mid-body loads its locals from `ctx` on entry, which is correct because only preserved fields are live at a return address.
+
+On the Odin this cut guest instructions per second by 11 % on the render thread and 12 % on the simulation thread, and the executable shrank 9 %. The other registers stay in `ctx`.
+
 Each function is defined as a weak alias, so host code can replace a guest function by defining the same symbol (Mach-O has no overridable alias; on macOS it is a weak thunk instead). The price is that Clang can't inline guest calls, even with LTO.
 
 ## Memory access
@@ -69,7 +78,7 @@ Guest memory stays big-endian. Every load and store is a `volatile` access throu
 
 ## Floating point and vectors
 
-Generated code runs FPU instructions with denormals and VMX instructions with flush-to-zero, as the Xenon does. It switches the host's MXCSR (FPCR on ARM) only when the mode changes, and forgets the tracked mode at labels and calls. The guest rounding mode maps to host rounding, and `mtfsf` honours its field mask.
+Generated code runs FPU instructions with denormals and VMX instructions with flush-to-zero, as the Xenon does. It switches the host's MXCSR (FPCR on ARM) only when the mode changes. The tracked mode used to be forgotten at every label, so the first float instruction after a label tested the register and often rewrote it. A pass over each generated function now computes the mode at every label from all the paths into it, and drops a toggle where every path has already set that mode. That removed 29 % of the conditional toggles and 6 % of the Odin audio thread's instructions. Calls still reset the tracked mode, because the callee may leave either. The guest rounding mode maps to host rounding, and `mtfsf` honours its field mask.
 
 | Behaviour | How it's matched |
 | --- | --- |
@@ -94,7 +103,7 @@ Output is split into files of at most 1 MiB, with the function-to-file assignmen
 | x86-64 baseline | SSE4.1; an FMA3 variant when the CPU has it, guarded at start |
 | Linux x86-64 | `-mcmodel=large -Wl,--no-relax` for the 300 MB of code |
 | Android | `-Wl,-Bsymbolic-functions`: PLT stubs fell from 1.6 % to 0.1 % of cycles |
-| LTO, PGO | wired up, off: ThinLTO was inconsistent over six runs, PGO gave a 2 % smaller binary and no consistent win |
+| LTO, PGO | wired up, off. ThinLTO is neutral on guest-thread instructions. PGO trained on one route and measured on another cuts 1–6 % per guest thread on the Odin, but a release would need a profile kept in step with the generated code |
 | First build | 20 to 60 minutes and about 25 GB on a PC; about 20 minutes on an M4 Pro; about 35 on the Deck |
 
 ## The title update build

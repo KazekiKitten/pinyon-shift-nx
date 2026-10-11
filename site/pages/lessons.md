@@ -29,6 +29,12 @@ The largest CPU savings outside the renderer came from how the host waits, not f
 - A spinning timer thread, a spinning render idle loop and polled multi-waits, each turned into a blocking wait.
 - Windows rounds sub-millisecond sleeps to yields; a yield that returns at once can expose a race the console's scheduler hid.
 
+## Let the calling convention bound the state you sync
+
+Keeping guest registers in host locals only pays if the syncs with the register file are cheap. Writing every local back and reloading it around each call cost as much as it saved. The guest ABI already says which state survives a call. On PowerPC that is cr2–cr4 among the condition fields, so a call or return writes back only those and reloads nothing. That turned a measured no-gain into 11–12 % fewer instructions on the hot threads. Keep the full sync only where code reads the register file directly: hooks, `setjmp`/`longjmp` and exceptions. See [Recompiler](recompiler.md#what-the-generator-emits).
+
+The same reasoning applies to tracked modes such as the float flush mode: a small dataflow pass over the generated function, meeting the state of every path into a label, removed 29 % of the toggles.
+
 ## Port to a second architecture early
 
 ARM found bugs x86 hid:
@@ -48,6 +54,9 @@ Running above 30 fps needed no engine changes beyond faster vblanks: the game al
 - **Frame replay.** A dumped frame replays deterministically on any device, to 0.02 ms. It turns "slower on device X" into a bisectable problem.
 - **Knock-outs over timestamps.** Per-phase GPU timestamps distorted the phases they measured.
 - **Validation layers in routes.** The AMD device loss in 0.4.0 was a threading bug the validation layer reported directly.
+- **Instructions, not CPU time, across builds.** CPU time per guest thread is bimodal between runs of the same build. Retired instructions a second per thread, sampled at a fixed frame-rate limit, separate builds within four runs each.
+- **Inclusive profiles from frame pointers.** `simpleperf record --call-graph fp` gives caller totals on Android without a profiling build; about 1 % of chains break. Rank callers this way before porting a leaf.
+- **Train and measure PGO on different routes**, so the profile can't fit the measured run.
 - **Never quote one GPU's saving for another.** The same switch saved 8 % on one GPU and nothing on the next.
 
 ## What didn't pay off here
@@ -56,8 +65,11 @@ Negative results, so they aren't retried without a new reason:
 
 | Idea | Result |
 | --- | --- |
-| Keeping guest registers in C++ locals | blocked: functions can be re-entered mid-body at `ctx.lr`, and hooks read `ctx`; CR fields as locals made binaries 13–26 % larger for no gain |
-| ThinLTO and PGO on the generated code | inconsistent over six runs; PGO 2 % smaller, no consistent win |
+| CR fields in C++ locals, synced at every call | binaries 13–26 % larger for no gain; syncing by the calling convention instead paid (see above) |
+| ThinLTO on the generated code | neutral on guest-thread instructions |
+| More CRT functions as native code | the remaining candidates are 0.02 % each in a race |
+| A native guest heap allocator | 0.05 % of a race, inclusive |
+| Write-watches at 64 KiB | 7 write-watch faults a frame; the fault path is under 0.5 % |
 | Reading the physical offset once per function | 3.6 MB smaller library, no runtime change |
 | Honouring guest thread affinities, MMCSS, latency-critical placement | no consistent gain |
 | Restructuring the global lock on desktop | 0.34 ms blocked per frame, not worth it; on Android, moving I/O off it was |
