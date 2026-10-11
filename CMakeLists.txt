@@ -85,6 +85,12 @@ elseif(ANDROID)
         src/crash_reporter_posix.cpp
     )
     set_target_properties(pinyon_shift PROPERTIES OUTPUT_NAME main)
+    # Every generated function is a default-visibility weak symbol, so in a
+    # shared library each call between them went through the PLT (4-6 % of
+    # the guest threads on the Odin, #431). Bind them to their definitions
+    # here; native replacements are strong definitions in this library and
+    # still win at link time.
+    target_link_options(pinyon_shift PRIVATE -Wl,-Bsymbolic-functions)
 else()
     add_executable(pinyon_shift
         ${PINYON_SHIFT_HOST_SOURCES}
