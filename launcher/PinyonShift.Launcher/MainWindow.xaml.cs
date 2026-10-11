@@ -10,6 +10,7 @@ using System.Text.RegularExpressions;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using PinyonShift.Launcher.Updates;
 
@@ -27,7 +28,7 @@ public partial class MainWindow : Window
     ];
 
     // The content area shows one of these at a time.
-    private enum View { Setup, Ready, Log, Crash, Graphics, Dlc, Android }
+    private enum View { Setup, Ready, Log, Crash, Graphics, Dlc, Android, Radio }
 
     private CancellationTokenSource? _cancellation;
     private string? _repositoryRoot;
@@ -962,18 +963,23 @@ public partial class MainWindow : Window
 
     private void ShowPanel(View panel)
     {
-        // The DLC and Android panels take the headline while open.
-        var wasSide = _panel is View.Dlc or View.Android;
-        if (panel is View.Dlc or View.Android && panel != _panel)
+        // The DLC, radio and Android panels take the headline while open.
+        var wasSide = _panel is View.Dlc or View.Android or View.Radio;
+        if (panel is View.Dlc or View.Android or View.Radio && panel != _panel)
         {
             if (!wasSide) _headlineBeforeDlc = HeadlineText.Text;
-            HeadlineText.Text = panel == View.Dlc ? "Downloadable content" : "Android";
+            HeadlineText.Text = panel switch
+            {
+                View.Dlc => "Downloadable content",
+                View.Radio => "Custom radio",
+                _ => "Android"
+            };
         }
-        else if (wasSide && panel is not (View.Dlc or View.Android)) HeadlineText.Text = _headlineBeforeDlc;
+        else if (wasSide && panel is not (View.Dlc or View.Android or View.Radio)) HeadlineText.Text = _headlineBeforeDlc;
         // The local network share serves only while its panel is open.
         if (_panel == View.Android && panel != View.Android && _androidShare is not null) StopAndroidShare();
         _panel = panel;
-        SubheadText.Visibility = panel is View.Dlc or View.Android || string.IsNullOrEmpty(SubheadText.Text)
+        SubheadText.Visibility = panel is View.Dlc or View.Android or View.Radio || string.IsNullOrEmpty(SubheadText.Text)
             ? Visibility.Collapsed : Visibility.Visible;
         SetupPanel.Visibility = panel == View.Setup ? Visibility.Visible : Visibility.Collapsed;
         LogPanel.Visibility = panel == View.Log ? Visibility.Visible : Visibility.Collapsed;
@@ -981,6 +987,7 @@ public partial class MainWindow : Window
         GraphicsPanel.Visibility = panel == View.Graphics ? Visibility.Visible : Visibility.Collapsed;
         DlcPanel.Visibility = panel == View.Dlc ? Visibility.Visible : Visibility.Collapsed;
         AndroidPanel.Visibility = panel == View.Android ? Visibility.Visible : Visibility.Collapsed;
+        RadioPanel.Visibility = panel == View.Radio ? Visibility.Visible : Visibility.Collapsed;
         // The route only tells something while there is setup left to do.
         RouteList.Visibility = panel is View.Setup or View.Log ? Visibility.Visible : Visibility.Collapsed;
         if (panel == View.Ready) UpdateSummary();
@@ -1050,17 +1057,19 @@ public partial class MainWindow : Window
     private void UpdatePrimaryButton()
     {
         ChooseInstallRootButton.IsEnabled = !_busy && _canChooseInstallRoot &&
-            _panel is not (View.Graphics or View.Dlc or View.Android);
-        PrimaryButton.IsEnabled = !_busy && _panel is not (View.Dlc or View.Android) && (_pendingReport is not null || _gameExecutable is not null ||
+            _panel is not (View.Graphics or View.Dlc or View.Android or View.Radio);
+        PrimaryButton.IsEnabled = !_busy && _panel is not (View.Dlc or View.Android or View.Radio) && (_pendingReport is not null || _gameExecutable is not null ||
             (_repositoryRoot is not null && (File.Exists(IsoPathTextBox.Text) || Directory.Exists(IsoPathTextBox.Text)) && OwnershipCheckBox.IsChecked == true));
         // The Android package is made from the game this PC built.
         AndroidButton.Visibility = _gameExecutable is not null && _pendingReport is null
             ? Visibility.Visible : Visibility.Collapsed;
-        AndroidButton.IsEnabled = !_busy && _panel != View.Dlc;
+        AndroidButton.IsEnabled = !_busy && _panel is not (View.Dlc or View.Radio);
         DlcButton.Visibility = _gameExecutable is not null && _pendingReport is null
             ? Visibility.Visible : Visibility.Collapsed;
         DlcButton.IsEnabled = !_busy;
-        GraphicsSettingsButton.IsEnabled = !_busy && _panel != View.Dlc;
+        RadioButton.Visibility = DlcButton.Visibility;
+        RadioButton.IsEnabled = !_busy;
+        GraphicsSettingsButton.IsEnabled = !_busy && _panel is not (View.Dlc or View.Radio);
     }
 
     // ---- Android (ONE_CLICK_SETUP_BACKLOG A-1 to A-5) -----------------------
@@ -1090,7 +1099,7 @@ public partial class MainWindow : Window
     private async void AndroidButton_Click(object sender, RoutedEventArgs e)
     {
         if (_busy || _repositoryRoot is null || _gameExecutable is null) return;
-        if (_panel != View.Android) _panelBeforeDlc = _panel;
+        if (_panel is not (View.Android or View.Dlc or View.Radio)) _panelBeforeDlc = _panel;
         ShowPanel(View.Android);
         RefreshAndroidPanel();
         try { _titleUpdate = await RunTitleUpdateToolAsync("status"); } catch (Exception) { }
@@ -1659,7 +1668,7 @@ public partial class MainWindow : Window
     private async void DlcButton_Click(object sender, RoutedEventArgs e)
     {
         if (_busy || _repositoryRoot is null || _stateRoot is null) return;
-        if (_panel != View.Dlc) _panelBeforeDlc = _panel;
+        if (_panel is not (View.Dlc or View.Android or View.Radio)) _panelBeforeDlc = _panel;
         ShowPanel(View.Dlc);
         await ChangeDlcAsync("list", success: "Changes apply the next time you start the game.");
         await RefreshTitleUpdateAsync();
@@ -1929,6 +1938,238 @@ public partial class MainWindow : Window
             throw new InvalidOperationException(status?.Error ?? (string.IsNullOrWhiteSpace(stderr) ? "XE management stopped." : stderr));
         // install reports what it did; read the full status afterwards.
         return action == "install" ? await RunXeToolAsync("status") : status;
+    }
+
+    // ---- Custom radio stations (#445) ----------------------------------------
+
+    private async void RadioButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy || _repositoryRoot is null || _stateRoot is null) return;
+        if (_panel is not (View.Dlc or View.Android or View.Radio)) _panelBeforeDlc = _panel;
+        ShowPanel(View.Radio);
+        await ChangeRadioAsync("list");
+    }
+
+    private void CloseRadioButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy) return;
+        ShowPanel(_panelBeforeDlc);
+        UpdatePrimaryButton();
+    }
+
+    private async void RadioNew_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy) return;
+        await ChangeRadioAsync("create", value: "My Station",
+            success: "Station added. Rename it, add a music folder or songs, then build stations.");
+    }
+
+    private async void RadioName_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is not TextBox { Tag: RadioStation station } box) return;
+        var name = box.Text.Trim();
+        if (_busy || name.Length == 0 || name == station.Name)
+        {
+            box.Text = station.Name;
+            return;
+        }
+        await ChangeRadioAsync("rename", station.Slot, name, success: $"Renamed to {name}.");
+    }
+
+    private void RadioName_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter && sender is TextBox) Keyboard.ClearFocus();
+        else if (e.Key == Key.Escape && sender is TextBox { Tag: RadioStation station } box)
+        {
+            box.Text = station.Name;
+            Keyboard.ClearFocus();
+        }
+    }
+
+    private async void RadioKeepStock_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy || sender is not CheckBox { Tag: RadioStation station } box) return;
+        var keep = box.IsChecked == true;
+        await ChangeRadioAsync("mode", station.Slot, keep ? "add" : "replace",
+            success: keep ? "Your songs join the station's own." : "Only your songs play on this station.");
+    }
+
+    private async void RadioAddFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy || (sender as Button)?.Tag is not RadioStation station) return;
+        var picker = new OpenFolderDialog { Title = $"Choose music folders for {station.Name}", Multiselect = true };
+        if (picker.ShowDialog(this) == true)
+            await ChangeRadioAsync("add", station.Slot, paths: picker.FolderNames, success: "Music added.");
+    }
+
+    private async void RadioAddFiles_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy || (sender as Button)?.Tag is not RadioStation station) return;
+        var picker = new OpenFileDialog
+        {
+            Title = $"Choose songs for {station.Name}", Multiselect = true,
+            Filter = "Music|*.mp3;*.wav;*.flac;*.ogg;*.m4a;*.aac;*.opus;*.wma|All files|*.*"
+        };
+        if (picker.ShowDialog(this) == true)
+            await ChangeRadioAsync("add", station.Slot, paths: picker.FileNames, success: "Songs added.");
+    }
+
+    private async void RadioClear_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy || (sender as Button)?.Tag is not RadioStation station || station.Sources.Count == 0) return;
+        await ChangeRadioAsync("remove", station.Slot, paths: [.. station.Sources],
+            success: "Music cleared. Your files were not touched.");
+    }
+
+    private async void RadioLogo_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy || (sender as Button)?.Tag is not RadioStation station) return;
+        if (station.Logo is not null)
+        {
+            var answer = MessageBox.Show(this, "Choose a new logo? Choose No to go back to the station's own logo.",
+                "Station logo", MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+            if (answer == MessageBoxResult.Cancel) return;
+            if (answer == MessageBoxResult.No)
+            {
+                await ChangeRadioAsync("clear-logo", station.Slot, success: "The station's own logo is back.");
+                return;
+            }
+        }
+        var picker = new OpenFileDialog { Title = $"Choose a PNG logo for {station.Name}", Filter = "PNG images|*.png" };
+        if (picker.ShowDialog(this) == true)
+            await ChangeRadioAsync("logo", station.Slot, paths: [picker.FileName],
+                success: "Logo set. It is fitted into 210 by 100 pixels.");
+    }
+
+    private async void RadioDelete_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy || (sender as Button)?.Tag is not RadioStation station) return;
+        var answer = MessageBox.Show(this, $"Delete {station.Name}? {station.Replaces} plays as on the disc again " +
+            "after you build stations. Your music files are not touched.",
+            "Delete station", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (answer == MessageBoxResult.Yes)
+            await ChangeRadioAsync("delete", station.Slot, success: "Station deleted. Build stations to apply.");
+    }
+
+    private async void RadioFfmpeg_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy) return;
+        var picker = new OpenFileDialog { Title = "Choose ffmpeg.exe", Filter = "FFmpeg|ffmpeg.exe|Programs|*.exe" };
+        if (picker.ShowDialog(this) == true)
+            await ChangeRadioAsync("ffmpeg", paths: [picker.FileName], success: "FFmpeg found. Build stations when ready.");
+    }
+
+    private async void RadioBuild_Click(object sender, RoutedEventArgs e)
+    {
+        if (_busy) return;
+        await ChangeRadioAsync("build", success: "Stations built. They play from the next start.");
+    }
+
+    private async Task ChangeRadioAsync(string action, string slot = "", string value = "",
+        IEnumerable<string>? paths = null, string? success = null)
+    {
+        _busy = true;
+        RadioControls.IsEnabled = false;
+        RadioList.IsEnabled = false;
+        UpdatePrimaryButton();
+        RadioStatusText.Text = action switch
+        {
+            "build" => "Encoding your music and building the stations. Long playlists take a few minutes…",
+            "list" => "Reading stations…",
+            _ => "Updating…"
+        };
+        try
+        {
+            var result = await RunRadioToolAsync(action, slot, value, paths);
+            // build reports what it wrote; read the stations afterwards.
+            if (action == "build") result = await RunRadioToolAsync("list");
+            ApplyRadio(result, success);
+        }
+        catch (Exception ex)
+        {
+            try { ApplyRadio(await RunRadioToolAsync("list"), ex.Message); }
+            catch { RadioStatusText.Text = ex.Message; }
+            AppendLog($"Radio: {ex.Message}");
+        }
+        finally
+        {
+            _busy = false;
+            RadioControls.IsEnabled = true;
+            RadioList.IsEnabled = true;
+            UpdatePrimaryButton();
+        }
+    }
+
+    private void ApplyRadio(RadioStatus status, string? message)
+    {
+        RadioList.ItemsSource = status.Stations;
+        RadioEmptyText.Visibility = status.Stations.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        RadioNewButton.IsEnabled = status.FreeSlots.Count > 0;
+        RadioFfmpegButton.Visibility = status.Ffmpeg is null ? Visibility.Visible : Visibility.Collapsed;
+        RadioStatusText.Text = message ?? (status.Ffmpeg is null && status.Stations.Count > 0
+            ? "Building stations needs FFmpeg to encode the music. Install it (winget install Gyan.FFmpeg) or locate ffmpeg.exe."
+            : status.OutOfDate
+                ? "Changes are not built yet. Choose Build stations."
+                : status.Stations.Count == 0 ? "" : "Built and on. The stations play from the next start.");
+    }
+
+    private async Task<RadioStatus> RunRadioToolAsync(string action, string slot = "", string value = "",
+        IEnumerable<string>? paths = null)
+    {
+        if (_repositoryRoot is null || _stateRoot is null)
+            throw new InvalidOperationException("Release source is not ready.");
+        var start = new ProcessStartInfo
+        {
+            FileName = PowerShellExecutable(), WorkingDirectory = _repositoryRoot,
+            UseShellExecute = false, CreateNoWindow = true,
+            RedirectStandardOutput = true, RedirectStandardError = true
+        };
+        foreach (var argument in new[] { "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+            Path.Combine(_repositoryRoot, "tools", "manage-radio.ps1"), "-Action", action, "-StateRoot", _stateRoot })
+            start.ArgumentList.Add(argument);
+        if (slot.Length > 0) { start.ArgumentList.Add("-Slot"); start.ArgumentList.Add(slot); }
+        if (value.Length > 0) { start.ArgumentList.Add("-Value"); start.ArgumentList.Add(value); }
+        foreach (var path in paths ?? []) start.ArgumentList.Add(path);
+        using var process = Process.Start(start) ?? throw new InvalidOperationException("Windows could not start radio management.");
+        var output = process.StandardOutput.ReadToEndAsync();
+        var error = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        var stdout = (await output).Trim();
+        var stderr = (await error).Trim();
+        var json = stdout[(stdout.LastIndexOf('\n') + 1)..];
+        var status = json.StartsWith('{')
+            ? JsonSerializer.Deserialize<RadioStatus>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+            : null;
+        if (process.ExitCode != 0 || status is null || status.Error is not null)
+            throw new InvalidOperationException(status?.Error ?? (string.IsNullOrWhiteSpace(stderr) ? "Radio management stopped." : stderr));
+        return status;
+    }
+
+    public sealed class RadioStatus
+    {
+        public List<RadioStation> Stations { get; set; } = [];
+        [JsonPropertyName("free_slots")] public List<string> FreeSlots { get; set; } = [];
+        public string? Ffmpeg { get; set; }
+        [JsonPropertyName("out_of_date")] public bool OutOfDate { get; set; }
+        public string? Error { get; set; }
+    }
+
+    public sealed class RadioStation
+    {
+        public string Slot { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string Mode { get; set; } = "replace";
+        public List<string> Sources { get; set; } = [];
+        public string? Logo { get; set; }
+        public int Tracks { get; set; }
+        public List<string> Missing { get; set; } = [];
+        public string Replaces { get; set; } = "";
+        public bool KeepStock => Mode == "add";
+        public string LogoText => Logo is null ? "Logo" : "Change logo";
+        public string StatusText =>
+            $"Instead of {Replaces} · {Tracks} {(Tracks == 1 ? "song" : "songs")}" +
+            (Missing.Count > 0 ? $" · {Missing.Count} missing" : "") +
+            (Logo is null ? "" : " · own logo");
     }
 
     public sealed class XeStatus

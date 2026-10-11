@@ -280,33 +280,46 @@ def check_bank(path: Path) -> int:
     return 0 if same else 1
 
 
-def build(args: argparse.Namespace) -> int:
-    stations = list(dict.fromkeys(args.station or ["Radio1"]))
-    game = args.game_root / RADIO
-    music = find_music(args.music)
+@dataclass
+class Station:
+    """One station's new tracks, in play order, added to or replacing it."""
+    slot: str
+    files: list[Path]
+    replace: bool = False
+
+
+class BuildError(RuntimeError):
+    pass
+
+
+def build_stations(state_root: Path, name: str, stations: list[Station], game_root: Path,
+                   ffmpeg: str | None, ffprobe: str | None, log=print,
+                   members: dict[str, bytes] | None = None) -> dict:
+    """Write one mod with every station's tracks; a file on two stations is
+    encoded once. `members` are archive members the mod also replaces, by
+    their path under members/ (station names and logos)."""
+    game = game_root / RADIO
+    music = list(dict.fromkeys(f for station in stations for f in station.files))
     if not music:
-        print(f"no audio files in {args.music}")
-        return 1
-    ffmpeg = args.ffmpeg or shutil.which("ffmpeg")
-    ffprobe = args.ffprobe or shutil.which("ffprobe")
+        raise BuildError("no audio files to add")
+    ffmpeg = ffmpeg or shutil.which("ffmpeg")
+    ffprobe = ffprobe or shutil.which("ffprobe")
     if not ffmpeg:
-        print("FFmpeg is needed to encode the music; install it or pass --ffmpeg")
-        return 1
+        raise BuildError("FFmpeg is needed to encode the music; install it or pass --ffmpeg")
     bank, _ = read_bank(game / "Radio_Music.fsb")
     stereo = [s for s in bank.samples if s.channels == 2]
     template = stereo[0] if stereo else bank.samples[0]
     taken = {s.name.lower() for s in bank.samples}
-    mod = args.state_root / "mods" / args.name
+    mod = state_root / "mods" / name
     radio = mod / "game" / RADIO
     if mod.exists():
         if not (mod / MARKER).exists():
-            print(f"{mod} exists and was not made by this tool; choose another --name")
-            return 1
+            raise BuildError(f"{mod} exists and was not made by this tool; choose another name")
         shutil.rmtree(mod)
     radio.mkdir(parents=True)
     (mod / MARKER).write_text("built by tools/build-fh1-radio.py\n", encoding="utf-8")
 
-    added, tracks, temporary = [], [], Path(tempfile.mkdtemp(prefix="fh1-radio-", dir=mod))
+    added, track_of, temporary = [], {}, Path(tempfile.mkdtemp(prefix="fh1-radio-", dir=mod))
     try:
         for number, source in enumerate(music, 1):
             found = tags(ffprobe, source) if ffprobe else {}
@@ -314,13 +327,13 @@ def build(args: argparse.Namespace) -> int:
             artist = found.get("artist") or ""
             data = encode(ffmpeg, source, 2)
             frames = mpeg_frames(data)
-            name = sample_name(number, title, taken)
-            sample = new_sample(name, len(frames), 2, template)
-            (temporary / name).write_bytes(data)
+            sample_id = sample_name(number, title, taken)
+            sample = new_sample(sample_id, len(frames), 2, template)
+            (temporary / sample_id).write_bytes(data)
             added.append(sample)
-            tracks.append((title, artist, name))
-            print(f"{name}: {title}{' - ' + artist if artist else ''}, "
-                  f"{sample.length_samples / RATE:.0f} s")
+            track_of[source] = (title, artist, sample_id)
+            log(f"{sample_id}: {title}{' - ' + artist if artist else ''}, "
+                f"{sample.length_samples / RATE:.0f} s")
 
         out = Bank(bank.version, bank.mode, bank.reserved, bank.samples + added, 0)
         with (radio / "Radio_Music.fsb").open("wb") as target:
@@ -340,19 +353,44 @@ def build(args: argparse.Namespace) -> int:
     (radio / "RadioSoundbankInfo_Music.xml").write_bytes(merge_info(info, entries).encode("utf-8"))
     system = (game / "RadioSystem.xml").read_bytes().decode("utf-8")
     for station in stations:
-        system = merge_playlist(system, station, tracks, args.replace)
+        if station.files:
+            system = merge_playlist(system, station.slot, [track_of[f] for f in station.files],
+                                    station.replace)
     (radio / "RadioSystem.xml").write_bytes(system.encode("utf-8"))
     listing = (game / "Radio_Music.lst").read_bytes().decode("utf-8", errors="replace")
     lst_newline = "\r\n" if "\r\n" in listing else "\n"
     listing = listing.rstrip("\r\n") + lst_newline + "".join(
         f"{s.name}.mp3, quality=0, fsound_loop_off{lst_newline}" for s in added)
     (radio / "Radio_Music.lst").write_bytes(listing.encode("utf-8"))
+    for path, data in (members or {}).items():
+        target = mod / "members" / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+    summary = ", ".join(f"{st.slot} {'replaced by' if st.replace else '+'} {len(st.files)}"
+                        for st in stations)
     (mod / "mod.toml").write_text(
-        f'name = "{args.name}"\nversion = "1.0.0"\nabi = 1\n'
-        f'# {len(added)} tracks {"replacing" if args.replace else "added to"} {", ".join(stations)}\n'
+        f'name = "{name}"\nversion = "1.0.0"\nabi = 1\n'
+        f'# {len(added)} tracks: {summary}\n'
         'shares_save = true\n', encoding="utf-8", newline="\n")
-    print(f"{len(added)} tracks {'replace' if args.replace else 'join'} the playlist of {", ".join(stations)} "
-          f"in {mod}")
+    return {"mod": str(mod), "tracks": len(added),
+            "stations": {st.slot: len(st.files) for st in stations}}
+
+
+def build(args: argparse.Namespace) -> int:
+    stations = list(dict.fromkeys(args.station or ["Radio1"]))
+    music = find_music(args.music)
+    if not music:
+        print(f"no audio files in {args.music}")
+        return 1
+    try:
+        result = build_stations(args.state_root, args.name,
+                                [Station(s, music, args.replace) for s in stations],
+                                args.game_root, args.ffmpeg, args.ffprobe)
+    except BuildError as error:
+        print(error)
+        return 1
+    print(f"{result['tracks']} tracks {'replace' if args.replace else 'join'} the playlist of "
+          f"{', '.join(stations)} in {result['mod']}")
     if args.enable:
         enable(args.state_root / "config" / "pinyon_shift.toml", args.name)
         print(f"enabled {args.name}")

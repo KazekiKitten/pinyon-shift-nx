@@ -60,6 +60,10 @@ Keys can be rebound in **F6 > CONTROLS**, and **RESET KEYS** returns to this lay
 
 **F6 > AUDIO > YOUR MUSIC** plays your own MP3 and WAV files instead of the game's radio once you are in the festival, as a soundtrack from the Xbox 360 dashboard did: the game silences its radio by itself and keeps its effects. The title screen keeps the game's own music. Put the files in the `music` folder of the install's state folder (`%LOCALAPPDATA%\PinyonShift\source\<version>\.local\preview\music`, created when you turn it on), in subfolders if you like; they play in name order or shuffled. The AUDIO page also has MUSIC VOLUME, SHUFFLE, NEXT TRACK and PREVIOUS TRACK and shows what is playing; <kbd>F9</kbd> and <kbd>Shift</kbd>+<kbd>F9</kbd> skip forward and back. On macOS and ARM builds only WAV files play for now.
 
+## Custom radio stations
+
+The launcher's **Radio** button turns your music into radio stations. Each one takes the place of Horizon Bass Arena, Pulse or Rocks, so you can have up to three. Give a station a name, add music folders or songs (any format FFmpeg reads), and optionally a PNG logo, which is fitted into 210 by 100 pixels for the station popup. **Keep the station's own songs too** adds your music to the station's playlist instead of replacing it. **Build stations** encodes the music and turns the stations on from the next start; the name shows in the game's radio options and loading tips in every language. Building needs [FFmpeg](https://ffmpeg.org/download.html) (on Windows, `winget install Gyan.FFmpeg`); **Locate FFmpeg** points the launcher at it. The stations copy the game's 680 MB radio bank, so they need that much disk space, and your music files are never changed. Deleting a station brings the original back after the next build.
+
 ## Language
 
 The game runs in any of the disc's 18 languages. Press <kbd>F6</kbd>, open **Profile > Language** and choose a language and region with Left and Right, then restart the game.

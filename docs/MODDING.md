@@ -264,6 +264,31 @@ The DJ lines are unchanged (FB-1.5).
 
 The bank is a copy of the player's 680 MB original plus the new tracks, so
 the mod takes that much disk space; nothing in it may be distributed.
+
+`pinyon.py radio` manages whole stations, which the launchers' Radio panels
+use (#445). A station takes over one of the three slots the executable
+names (Radio1 HORIZON BASS ARENA, Radio2 HORIZON PULSE, Radio3 HORIZON
+ROCKS) with its own name, folders or files and optional PNG logo, and
+either replaces the slot's playlist or adds to it. The stations are kept in
+`<state>/config/radio-stations.json`:
+
+```powershell
+python tools/pinyon.py radio create "Night Drive" --slot Radio2 --state-root <state>
+python tools/pinyon.py radio add Radio2 D:\Music\Night --state-root <state>
+python tools/pinyon.py radio logo Radio2 night.png --state-root <state>
+python tools/pinyon.py radio build --state-root <state>
+```
+
+`build` writes every station into the one `custom_radio` mod and enables
+it. The name replaces the station's text in each language's `MyProfile.str`
+(the RADIO STATION option) and `Tips.str` (the loading tip's title and
+text), and the logo is fitted into `Hud/Radio/RS_BassArena.xds`,
+`RS_Pulse.xds` or `RS_2Eleven.xds` (210x100 DXT5, the station popup), all
+as archive members built from the player's files. With no stations left,
+`build` removes the mod and disables it. `rename`, `delete`, `remove`,
+`mode replace|add`, `logo --clear` and `list` change or show the stations;
+`ffmpeg PATH` stores the FFmpeg to use (otherwise `PINYON_SHIFT_FFMPEG` or
+the `PATH`), and `--json` prints one JSON object for the launchers.
 `--check-bank [file]` checks that the tool reads and rebuilds a bank byte for
 byte.
 

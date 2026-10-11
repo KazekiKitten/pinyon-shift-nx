@@ -4,6 +4,11 @@
 
 - Expose the screen correctly at any time of day above 1x resolution;
   mornings were overexposed until about noon in game (#444).
+- Make up to three radio stations from your own music in the launcher's
+  Radio panel, each with its own name, logo and songs in place of Bass
+  Arena, Pulse or Rocks, adding to or replacing the playlist (#445).
+- YOUR MUSIC plays only once the festival has loaded; the title screen
+  keeps the game's own music (#445).
 - HDR output: richer colors (gamma 2.2 decode), softer highlights
   (HDR HIGHLIGHTS), brake lights expanded with their hue, no flicker on
   translucent HUD. HDR now switches without a restart, HDR COMPARE shows

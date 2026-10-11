@@ -109,6 +109,30 @@
                     </DockPanel>
                 </Border>
 
+                <!-- Custom radio stations (#445): each takes over Bass Arena, Pulse or Rocks. -->
+                <Border x:Name="RadioPanel" IsVisible="False" Margin="0,16,0,0" Padding="22,18"
+                        CornerRadius="14" Background="{StaticResource SurfaceBrush}">
+                    <StackPanel Spacing="12">
+                        <StackPanel>
+                            <TextBlock Text="Custom radio stations" FontSize="14"/>
+                            <TextBlock Margin="0,3,0,0" FontSize="12" TextWrapping="Wrap"
+                                       Foreground="{StaticResource MutedBrush}"
+                                       Text="Each station takes the place of Bass Arena, Pulse or Rocks, with your name, logo and music. Build stations when you are done; they play from the next start."/>
+                        </StackPanel>
+                        <StackPanel x:Name="RadioList" Spacing="14"/>
+                        <TextBlock x:Name="RadioStatusText" FontSize="12" TextWrapping="Wrap"
+                                   Foreground="{StaticResource MutedBrush}" Text="Checking…"/>
+                        <WrapPanel x:Name="RadioControls">
+                            <Button x:Name="RadioBuildButton" Classes="quiet" Content="Build stations"
+                                    Click="RadioBuild_Click" Margin="0,0,10,0"/>
+                            <Button x:Name="RadioNewButton" Classes="quiet" Content="New station"
+                                    Click="RadioNew_Click" Margin="0,0,10,0"/>
+                            <Button x:Name="RadioFfmpegButton" Classes="quiet" Content="Locate FFmpeg"
+                                    Click="RadioFfmpeg_Click" IsVisible="False"/>
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
+
                 <!-- Progress and the log. -->
                 <Border x:Name="ProgressPanel" IsVisible="False" Margin="0,24,0,0" Padding="22,18"
                         CornerRadius="14" Background="{StaticResource SurfaceBrush}">
