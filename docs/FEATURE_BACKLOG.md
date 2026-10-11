@@ -341,11 +341,89 @@ is unverified.
 | FB-11.4 | Android install and sustained performance | AP, A60 |
 | FB-11.5 | Nintendo Switch feasibility | ROADMAP_FEEDBACK |
 
+### FB-12 Second research round: play enhancements only a native build can offer
+
+Research pass of 2026-10-11 at `dev` `713a1c8`, not about performance:
+an inventory of shipped and proposed player features across every backlog,
+a survey of the mod API and `gamedb.slt` (221 tables), a static read of
+the base image's strings and archives, and a web survey of what made other
+recompiled and decompiled ports popular (Unleashed Recompiled,
+Zelda64Recomp, Ship of Harkinian, 2 Ship 2 Harkinian, SpaghettiKart, Banjo:
+Recompiled) and what FH1 players complain about (GTPlanet, forza.net,
+reviews; Reddit and ModDB comments were not reachable). Guest findings are
+in [REVERSE_ENGINEERING.md](REVERSE_ENGINEERING.md) (Developer options and
+leftover systems); none has been confirmed at run time.
+
+**The main lever.** The retail executable still parses about 300
+developer launch options (`launch`, `trackname`, `numaicars`,
+`allowskipvoiceover`, `chooseillegalcarforevent`, `splitscreenlaunch`, ...)
+from its command line and `GAME:\cmdline.txt`. The SDK's `cl` cvar already
+appends text to the guest command line and nothing uses it. One probe run
+decides which options retail still honours, and with it the cost of
+FB-12.1 to FB-12.4. FB-12.0 comes first for that reason.
+
+**What players ask for** (most to least often in the sources found):
+solid barriers and little off-road freedom; no tuning; repetitive events
+and wristband grind; too few cars; event car restrictions; a quiet engine
+mix. Other ports were best received for new ways to play (randomizers,
+track editors, co-op), drag-and-drop mods, restored original content and
+control options.
+
+Ranked by player value for the cost, then by how much is already in place.
+Effort as above; "route" names the cheapest path found.
+
+| Rank | ID | Enhancement | Route | Effort | Confidence |
+| --- | --- | --- | --- | --- | --- |
+| - | FB-12.0 | **Launch-option probe.** One seeded run per batch of options through `cl`, recording which ones still work in retail | `cl` cvar, render-test route | S | Parsing confirmed |
+| 1 | FB-12.1 | **Quality-of-life switches** as F6 toggles: skip voice-over and tutorials, no splash or attract video, clean HUD, hide cockpit glass, zoomed-out minimap, no camera vibration, auto-reset off (`NoHandOfGodReset`) | Launch options, or `GameTunableSettings.ini` merges | S each | Probable |
+| 2 | FB-12.2 | **Free Race.** A host menu that builds any race FH1 never offered: route, laps, opponents and their cars, AI skill, time of day, traffic. 145 active tracks, 85 used by events | `launch`, `trackname`, `ribbon`, `numlaps`, `numaicars`, `aicar%d`, `aiskill`, `timeofdayindex`, `numtrafficcars` | S-M | Probable |
+| 3 | FB-12.3 | **Any car in any event** (a new route to FB-10.1 and NP-8.7) | `chooseillegalcarforevent`, `eventrestrictions`; else `EventRestrictions` SQL | S | Probable |
+| 4 | FB-12.4 | **Split-screen spike.** The code survives: `CSplitscreenLobby`, `CHudSplitscreen`, `948_HUD_Split_Screen`, `Splitscreen_Race.xml`, per-car split-screen camera offsets. Two-player local races would answer the strongest demand (multiplayer) without a network | `splitscreenlaunch`; the second pad through the input layer | S spike, L to ship | Code present; working unknown |
+| 5 | FB-12.5 | **Telemetry out.** UDP in a "Data Out"-style layout for SimHub, dashboards and motion rigs; then the game's own telemetry pages (`CTelemetryHud`, `968_TELEMETRY`), whose data sources lead to RPM, gear and slip | Native mod; v1 from the pose hook, v2 needs vehicle-sim offsets | M | Probable |
+| 6 | FB-12.6 | **Fair AI.** No rubber-banding, and a level above Unbeatable | `AIRubberbands`, `AISkills`, `AITemperaments` SQL; `[DynamicDifficulty]` merge | S | Probable |
+| 7 | FB-12.7 | **Day length.** "A day lasts N minutes", real-time clock, golden-hour loop; today the trainer only holds an hour | `time_of_day.request` takes a rate; needs `call_guest_fp` (float arguments) in the mod ABI | S | Confirmed |
+| 8 | FB-12.8 | **Drive traffic and hidden cars.** 23 cars are drivable but not selectable (tour bus, trucks, Leaf, Prius, showcase variants) | `Data_Car.IsSelectable` SQL, then showroom and garage checks | S-M | Probable |
+| 9 | FB-12.9 | **Teleport, fast travel anywhere and a custom GPS waypoint** through the game's own fade-and-stream path, which avoids FB-10.1's physics-body blocker | `CTeleportCarToFastTravelDestination`, `fast_travel.xml`; `CSetSatNavDestinationPos` | M | Probable |
+| 10 | FB-12.10 | **Atmosphere presets**: clear, misty morning, the game's own fog templates and colour grades (merges #422) | `dynamicpost.zip` fog, bloom, vignette and grading templates | S-M | Probable |
+| 11 | FB-12.11 | **Audio mixer**: engine, tyres, wind, ambience and music sliders, and a dynamic-range option (the game has a TV compressor set). Answers the quiet-engine complaint; extends FB-1.6 | `AudioEngineConfig.xml` category levels, `AudioMixerSnapshots.xml` | S-M | Probable |
+| 12 | FB-12.12 | **Camera editor**: chase height, distance and FOV sliders, the wheel and car-relative replay cameras while driving, per-car fixes; and the immersive camera on v4 (today it does not load there) | `CameraSettings.ini`, `CarRelativeCams.xml`, `CameraOverrides`; v4's `camera/cameraphysics.xml` member | S-M | Probable |
+| 13 | FB-12.13 | **Photo mode unlocks**: camera through walls, wider aperture and zoom, larger free-camera bounds (a cheaper start on FB-10.3) | `disablephotomodecollisiondetection`, `allowhighzoomaperture`; `PhotoModeCam`, `FreeCam` sections | S | Probable |
+| 14 | FB-12.14 | **Head tracking** from OpenTrack or TrackIR, fed into the game's Kinect head-tracking path (sensitivities and inputs survive) | `HeadTracking/*` settings, `HeadTrackingX..Pitch` inputs; host UDP receiver | M | Probable |
+| 15 | FB-12.15 | **Rally map in free roam.** The UDLC mod already does this on consoles and Xenia, so the data allows it | Mod using the Rally DLC the player imported; fast travel in and out | M | Probable (prior art) |
+| 16 | FB-12.16 | **Festival pacing pack**: cheaper cars and upgrades, larger payouts, a shorter XP curve; answers the grind complaint | `Data_Car.BaseCost`, `List_Upgrade*`, `Events.CashPrize`, `PlayerLevelDef` SQL; check an existing save recomputes its level | S | Probable |
+| 17 | FB-12.17 | **Saved replays and video export.** Keep replays as host files, and render one offline at a fixed time step at any resolution, which only a native build can do | `CWatchReplay`, `IDS_SaveReplay`, `ReplayTheater`, `savewmvtodevkit`, `WMV_Export` | L | Probable |
+| 18 | FB-12.18 | **Triple screens.** Three angle-correct views from one PC, from the game's linked-console mode | `CMultiscreenServer`/`Client`, `MultiscreenView`, `MultiscreenDegreesBetweenScreens` | M-L | Probable |
+| 19 | FB-12.19 | **Second-screen map**: a LAN web page with the live map, position, collectibles and markers (FH1 had a SmartGlass map) | Pose hook, collectible offsets, a small host HTTP server | S-M | Confirmed inputs |
+| 20 | FB-12.20 | **Breakable barriers spike.** The most common FH1 complaint is solid fences and walls. Find whether scenery objects carry a solid or breakable flag in data or code; ship only as an option | Unknown; start from the physics props and NP's destructible-scenery note | S spike | Guess |
+
+Also considered, kept out of the 20: tuning menu (second most common
+complaint; no evidence yet that FM4's tuning code survives; check in
+FB-12.0's string pass), debug menus (`forceEnableDebugMenus`, likely
+compiled out), an E3 demo mode, the Forza 4 party modes (Car Soccer,
+Bowling: code only, no ball or pin assets), tyre and fuel wear, the
+offline Auction House (needs FB-7.3's server emulation), a randomizer
+(after FB-12.2 and FB-12.3 exist), and a drag-and-drop in-game mod list
+(FB-9.1; XE's crash reports show added cars need a check before loading).
+
+ABI work that unlocks several rows: `call_guest_fp` (FB-12.7, FB-12.9),
+HUD rectangles and images (FB-12.5 pages, lap deltas), vehicle-sim symbols
+for speed, RPM and gear (FB-12.5, FB-6.2), and a built-in mod with
+selectable variants (FB-12.6, FB-12.10, FB-12.16).
+
+Working order: FB-12.0, then FB-12.1 to FB-12.3 from what it finds;
+FB-12.4's spike in parallel because it can reopen split-screen; the data
+mods (FB-12.6, FB-12.8, FB-12.10, FB-12.11, FB-12.16) as one built-in pack;
+then `call_guest_fp` and FB-12.5, FB-12.7, FB-12.9.
+
 ## Not to build
 
 - **Weather.** FH1 has no rain or snow assets, shaders or simulation, even in
-  Rally; adding it is new content, not restoration.
-- **Split-screen.** FH1 shipped none, and it means two open-world renders.
+  Rally; adding it is new content, not restoration. Confirmed again
+  2026-10-11: the only wet strings are tyre friction scales, and
+  `realtimesky.zip` holds one cloud set.
+- **Split-screen as new work.** FH1 shipped none, and it means two
+  open-world renders. Its code survives, though (FB-12.4): revisit only if
+  that spike shows it running.
 - **Frame generation.** Already rejected (config migration removes it).
 - **Connecting to Xbox LIVE or Forza services**, or anything presented as
   them. Replacements are local or self-hosted under the project's name.

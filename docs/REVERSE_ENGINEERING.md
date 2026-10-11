@@ -60,6 +60,34 @@ below gave a visible gain.
 | `Tips.str` `0x0B3A`/`0xE484`, `0xF203`/`0x0063`, `0x9730`/`0x94AE` | same | station tips | The loading tips' title and text for Bass Arena, Pulse and Rocks. `Livery_Decals.str` `0x6AF9`, `0x328D` and `0xAEF9` name the station decals. | Reading the string tables. | Confirmed |
 | `Radio_Music.fsb` | same | music bank | The FSB4 layout, sync points and the info file. | See [FEATURE_BACKLOG.md](FEATURE_BACKLOG.md) FB-1.3. | Confirmed |
 
+## Developer options and leftover systems
+
+Found in the second feature research round (2026-10-11,
+[FEATURE_BACKLOG.md](FEATURE_BACKLOG.md) FB-12) by string and
+cross-reference scans of the base image, archive listings and read-only
+`gamedb.slt` queries. Nothing here has been run yet; FB-12.0 is the probe.
+
+| Base | v4 | Name | What it is | Established by | Confidence |
+| --- | --- | --- | --- | --- | --- |
+| `0x8200F000`-`0x82010DA0`, `sub_824F8150`, `sub_82C096E0` | — | launch-option table | About 300 developer option names, all read in `sub_824F8150` (reached only through a function-pointer entry at `0x8200E734`), which calls the option reader `sub_82C096E0` about 246 times and stores each result as a byte flag. Includes race setup (`launch`, `launchtype`, `trackname`, `ribbon`, `numlaps`, `numaicars`, `aicar%d`, `aiskill`, `timeofdayindex`, `numtrafficcars`), QoL (`allowskipvoiceover`, `skiptutorials`, `disablesplashintro`, `noattractvideo`, `nohud`, `hidecockpitglass`, `zoomoutminimap`, `nocameravibration`, `NoHandOfGodReset`), restrictions (`chooseillegalcarforevent`, `eventrestrictions`, `showallcars`), photo mode (`disablephotomodecollisiondetection`, `allowhighzoomaperture`) and modes (`splitscreenlaunch`, `MultiscreenView`). | String xrefs. | Parsing confirmed; retail effect of each option unknown |
+| `0x8214323B` `GAME:\cmdline.txt`, `sub_82C0A420`, `sub_824E4228`; `0x820E01E8` `d:\DebugOptions.ini` | — | command-line sources | The game reads extra options from `cmdline.txt` (switches `loadcmdlinedottxt`, `ignorecmdlinedottxt`) as well as the kernel command line. The SDK's `cl` cvar appends to the latter (`xboxkrnl_module.cpp:42,160-170`); nothing in the repository sets it. | String xrefs; SDK source. | Probable |
+| `forceEnableDebugMenus`, `debugmenudescriptions` (read at `824F81FC`, `824F81E8`); `CConsole`, `CDebugSkip`; `UI.zip` scenes `DEBUG_TEMPLATE`, `DEV_IMPORT_PROFILE`, `DEV_REPLAY_HUD_TRIAL` | — | debug menus | Option flags and scenes for developer menus; the menus themselves may be compiled out. | Strings; archive listing. | Guess |
+| `HeadTracking/Enabled`, sensitivities at `0x8200DEC0`-`0x8200DFBC`, inputs `HeadTrackingX`..`HeadTrackingPitch` at `0x82073DD4`-`0x82073E18`, `CHeadTrackingSetup` | — | Kinect head tracking | The settings, input channels and setup class of the console's head-tracking feature survive; a host tracker could feed the inputs. | Strings. | Probable |
+| `CMultiscreenServer`, `CMultiscreenClient`, `CHudMultiscreenClient`, scene `835_C_MULTISCREEN_SETUP`, `MultiscreenDegreesBetweenScreens`, `CameraSettings.ini Driver\TripleScreenAdditionalZOffset` | — | linked-console triple screen | The three-console side-view mode and its angle settings. | Strings; camera archive. | Probable |
+| `CSplitscreenLobby`, `CHudSplitscreen`, `CPauseSplitscreen`, scene `948_HUD_Split_Screen`, `Splitscreen_Race.xml`, `Splitscreen_321_and_PostRace.xml`, `CameraOverrides.SplitscreenCamCockpitOffset*` | — | split-screen | Lobby, HUD, pause, render scenarios and per-car camera offsets for two-player split-screen survive, although FH1 shipped none. | Strings; archive listing; `gamedb`. | Code present; working unknown |
+| `CTelemetryHud`, `IDS_Telemetry`, scene `968_TELEMETRY`; references at `827AC92C`, `827ACC7C`, `827B892C` | — | telemetry pages | Forza's car telemetry screens; their data sources should lead to RPM, gear, slip and suspension values. | Strings and xrefs. | Probable |
+| `CTeleportCarToFastTravelDestination`; `gamemodes.zip` `fast_travel.xml`, `map.xml` (`is_fast_travel_enabled`) | — | fast-travel teleport | Moves the car through the game's fade-and-stream path; a candidate for teleport that does not fight the physics body (NP-8.1). | Strings; archive listing. | Probable |
+| `CSetSatNavDestinationPos`, `CSatNavDestinationManager`, `CLockSatNavDestination`, `0x8207BC58` `satnav_arrows_enabled` | — | GPS destination | Sets and locks the sat-nav route target. | Strings. | Probable |
+| `CWatchReplay`, `CReplayDVRControls`, `watch_replay_flow.xml`, `IDS_SaveReplay`, `ReplayTheater`, `savereplaytodevkit`, `savewmvtodevkit`, `040_D_WMV_Exporter` | — | replays | The post-race replay player, strings for saved replays and a developer WMV exporter. | Strings; archive listing. | Probable |
+| `time_of_day.request` `0x825C7DD0` | — | time-of-day rate | Besides the hour, takes a rate (game seconds per real second) in a float register; the trainer only uses it to hold an hour. | Existing symbol; argument use. | Confirmed |
+| `Data_Car` `IsSelectable=0`, `IsDrivable=1` (23 rows) | same | hidden drivable cars | Traffic cars (tour bus, trucks, Leaf, Prius) and showcase variants, each with its media archive. | `gamedb` query. | Probable that they drive |
+| `AIRubberbands` (24 rows), `AISkills` (87), `AITemperaments`; `GameTunableSettings.ini` `[DynamicDifficulty]`, `[AIAutoUpgrades]`, `[HandOfGodReset]` | same | AI and reset tuning | Catch-up behaviour, AI skill levels and the automatic off-track reset are data. | `gamedb` and ini reads. | Probable |
+| `dynamicpost.zip` `Tracks/Colorado/Fog_Templates.xml` and grading maps | same | atmosphere templates | Six fog templates (`NoFog` to `Mountains`), bloom, vignette and colour settings, and 21 grading maps. | Archive listing. | Probable |
+| `AudioEngineConfig.xml`, `AudioMixerSnapshots.xml`, `audio/cars/CarModelTuning.zip` | same | audio mix | Per-category levels (player engine, opponents, tyres, wind, music, ambience), a normal and a TV compressor set, per-state ducking, and the car-to-engine-bank map. | Archive listing. | Probable |
+| `Environments` `TestBed`, `DebugTrack`, `TuningTrack`, `BVT` | same | dev tracks: not loadable | Named in the database, but only `colorado` and the UI tracks ship under `media/tracks`. | Directory listing. | Confirmed |
+| `CSoccerComponent`, `[CarSoccer]`, `[ConesScoring]`, `PittingProfiles`, `TiresAndFuel` | same | Forza 4 modes: code only | Car Soccer, Bowling and pit or wear code and tunables remain; no ball or pin assets ship. | Strings; `gamedb`; media listing. | Guess that the code runs |
+| tyre `WetFriction*`, `realtimesky.zip` | same | no weather | The only wet strings are tyre friction scales; the sky has one cloud set. | Strings; archive listing. | Confirmed |
+
 ## Hot guest CPU functions
 
 Found while porting hot recompiled functions to native code (#431,
