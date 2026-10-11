@@ -19,19 +19,21 @@ $rootInfo = Get-Item -LiteralPath $resolvedRoot
 if (-not $rootInfo.PSIsContainer -or ($rootInfo.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
     throw 'Choose a real extracted game directory, without links or junctions.'
 }
-$prefix = $resolvedRoot.TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
 $files = [Collections.Generic.Dictionary[string,object]]::new([StringComparer]::OrdinalIgnoreCase)
-$pending = [Collections.Generic.Queue[string]]::new()
-$pending.Enqueue($resolvedRoot)
+# Relative paths are built from item names: Get-ChildItem expands 8.3 short
+# names (C:\Users\RUNNER~1), so its FullName need not start with the root.
+$pending = [Collections.Generic.Queue[object[]]]::new()
+$pending.Enqueue(@($resolvedRoot, ''))
 while ($pending.Count -gt 0) {
-    foreach ($item in Get-ChildItem -LiteralPath $pending.Dequeue() -Force) {
-        $relative = $item.FullName.Substring($prefix.Length).Replace('\', '/')
+    $directory, $parent = $pending.Dequeue()
+    foreach ($item in Get-ChildItem -LiteralPath $directory -Force) {
+        $relative = $parent + $item.Name
         # The disc's system update is not part of the extracted game input.
         if ($relative -eq '$SystemUpdate') { continue }
         if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
             throw "Linked game input is unsupported: $relative"
         }
-        if ($item.PSIsContainer) { $pending.Enqueue($item.FullName) }
+        if ($item.PSIsContainer) { $pending.Enqueue(@($item.FullName, "$relative/")) }
         else { $files.Add($relative, $item) }
     }
 }
