@@ -444,7 +444,7 @@ def build(state: Path, game_root: Path, extractor: Path | None = None) -> dict:
     (staging / "archives.json").write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
     if target.exists():
         shutil.rmtree(target)
-    staging.rename(target)
+    patches.rename_written_directory(staging, target)
     patches.set_enabled_mods(config, [GENERATED] + mods)
     return {"patched": True, "archives": results}
 

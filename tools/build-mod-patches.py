@@ -22,6 +22,7 @@ import re
 import shutil
 import sqlite3
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -96,6 +97,19 @@ def _tree(root: Path) -> dict[str, bytes]:
             for path in sorted(root.rglob("*")) if path.is_file() and path.name != BUILTIN_MARKER}
 
 
+def rename_written_directory(source: Path, target: Path) -> None:
+    """Rename a directory just written. On Windows a scanner can still hold
+    the new files for a moment, and the rename is then denied."""
+    for attempt in range(20):
+        try:
+            source.rename(target)
+            return
+        except PermissionError:
+            if attempt == 19:
+                raise
+            time.sleep(0.25)
+
+
 def install_builtin_mods(state: Path, source: Path = BUILTIN) -> list[str]:
     """Copy the project's own optional mods (such as the immersive camera)
     into <state>/mods, replacing an older copy, so the player can switch them
@@ -119,7 +133,7 @@ def install_builtin_mods(state: Path, source: Path = BUILTIN) -> list[str]:
                                               encoding="utf-8", newline="\n")
         if target.exists():
             shutil.rmtree(target)
-        staging.rename(target)
+        rename_written_directory(staging, target)
         installed.append(mod.name)
     return installed
 
