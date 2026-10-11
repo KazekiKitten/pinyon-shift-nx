@@ -62,3 +62,26 @@ a read-only snapshot of the AppData save with `tools/create-render-seed.py`
 run routes through `tools/run-fh1-render-test.py` with that seed as
 `--state-root`. The runner copies the seed into a private per-run directory,
 so neither the seed nor the AppData save is ever written.
+
+## Record reverse-engineering findings
+
+Whenever work identifies something about the game by reverse engineering
+(a guest function's purpose, a global, a struct layout or field offset, a
+vtable, a file format, a cvar's effect on guest code, or a base-to-v4
+address mapping), write it down in the same change, before moving on:
+
+- Name it in the repository's records, not only in a code comment or a
+  commit message: semantic symbols and offsets mod code uses go in
+  `config/mod/fh1-symbols.toml` (v4 offsets in
+  `config/mod/fh1-offsets-v4.toml`); everything else gets a row in
+  `docs/REVERSE_ENGINEERING.md` (create it if it does not exist yet; see
+  issue #448).
+- Record the base address (and v4 address when known), a short name, what
+  it does, how it was established (hook, trace, xref, string, experiment)
+  and a confidence: confirmed, probable or guess.
+- Findings that explain a subsystem (a file format, a render pass, a save
+  layout) also go in that subsystem's doc or backlog, linked from the row.
+- Negative results count too: record what an address or option was found
+  not to do, so the next investigation does not repeat it.
+- Write only our own analysis: no disassembly listings, decompiled code or
+  game data (docs/LEGAL.md).
