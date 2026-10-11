@@ -500,8 +500,8 @@ on `fh1-race-retire`.
 | CRT printf engine, heap allocator, `sub_8307EDA8` | `sub_82452358`, `sub_82470CB0`, `sub_8307EDA8` | 11-12 % each of background thread `830C6918`, about 1 % of a core each in a race (low-spec run) | Too small for a bit-exact port | Not ported |
 
 Profiles: the Odin before and after each change are under
-`.local/android/p431/` (not committed). The 8 Elite tablet and the Steam
-Deck was not reachable for this pass, so its profile stays open.
+`.local/android/p431/` (not committed). The Steam Deck was not reachable
+for this pass, so its profile stays open.
 
 8 Elite tablet (the Astra, v4 build, `simpleperf record --app`, 1 kHz,
 40 s of `fh1-race-sustained` from a private copy of its seed): the same
