@@ -203,6 +203,11 @@ catch { [Console]::Error.Write($_.Exception.Message); exit 2 }
         launch = (ROOT / "tools/launch-preview.ps1").read_text(encoding="utf-8")
         sources += ["tools/" + name for name in
                     re.findall(r"Join-Path \$PSScriptRoot '([^'.][^']*)'", launch)]
+        # The modules pinyon.py imports, and the scripts the launchers run.
+        pinyon = (ROOT / "tools/pinyon.py").read_text(encoding="utf-8")
+        sources += [f"tools/{name}.py" for name in re.findall(r"^import (pinyon_\w+)", pinyon, re.MULTILINE)]
+        launcher = (ROOT / "launcher/PinyonShift.Launcher/MainWindow.xaml.cs").read_text(encoding="utf-8")
+        sources += ["tools/" + name for name in set(re.findall(r'"(manage-[\w-]+\.ps1)"', launcher))]
         self.assertTrue(sources)
         for source in sources:
             self.assertTrue((ROOT / source).is_file(), source)

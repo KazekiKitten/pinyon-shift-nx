@@ -79,6 +79,10 @@ $include = @(
     'tools/launch-preview.ps1', 'tools/prepare-rexglue.ps1',
     'tools/build-mod-patches.py', 'tools/build-mod-archives.py', 'tools/install-sample-mod.py',
     'tools/pinyon.py', 'tools/pinyon_android.py', 'tools/build-android.ps1',
+    # pinyon.py's other commands and the launchers' content panels: the XE mod,
+    # asset export (#446) and custom radio stations (#445).
+    'tools/pinyon_xe.py', 'tools/manage-xe.ps1', 'tools/pinyon_assets.py', 'tools/fh1_audio_decode.cpp',
+    'tools/pinyon_radio.py', 'tools/manage-radio.ps1', 'tools/build-fh1-radio.py',
     # Linux, the Steam Deck and macOS (docs/LINUX.md, docs/MACOS.md).
     'tools/pinyon_setup.py', 'tools/pinyon_steam.py', 'tools/pinyon_deck.py', 'config/steam',
     'config/android-toolchain.json', 'android',
