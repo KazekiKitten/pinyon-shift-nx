@@ -1,4 +1,5 @@
 """Exercise setup's real compiler against supported and incompatible headers."""
+import json
 import os
 from pathlib import Path
 import shutil
@@ -7,10 +8,12 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
+LLVM = ROOT / json.loads((ROOT / "config/release-toolchain.json").read_text(encoding="utf-8"))["llvm"]["install_path"]
 
 
 class BuildCapabilityTests(unittest.TestCase):
     @unittest.skipUnless(os.name == "nt" and shutil.which("powershell"), "Windows build tools required")
+    @unittest.skipUnless((LLVM / "bin/clang++.exe").is_file(), "pinned LLVM not provisioned")
     def test_selected_library_sdk_and_failure_diagnostics(self):
         with tempfile.TemporaryDirectory(prefix="pinyon-capability-test-") as directory:
             root = Path(directory) / "headers (ñ)"

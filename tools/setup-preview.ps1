@@ -106,7 +106,9 @@ try {
             throw 'The local game destination must not be a link or junction.'
         }
         if ($folderInput) {
-            $sourcePrefix = $resolvedSource.TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
+            # GetFullPath expands 8.3 short names (C:\Users\RUNNER~1) as it did
+            # for the destination; Resolve-Path keeps them, hiding the nesting.
+            $sourcePrefix = [IO.Path]::GetFullPath($resolvedSource).TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
             $targetPrefix = $checkedGameRoot + [IO.Path]::DirectorySeparatorChar
             if ($sourcePrefix.StartsWith($targetPrefix, [StringComparison]::OrdinalIgnoreCase) -or
                 $targetPrefix.StartsWith($sourcePrefix, [StringComparison]::OrdinalIgnoreCase)) {
