@@ -165,6 +165,7 @@ class SettingsPages : public std::enable_shared_from_this<SettingsPages> {
   bool BuiltinModInstalled(const std::string& name) const;
 
   std::unique_ptr<MenuScreen> Display();
+  std::unique_ptr<MenuScreen> HdrCalibration();
   std::unique_ptr<MenuScreen> Graphics();
   std::unique_ptr<MenuScreen> Audio();
   std::unique_ptr<MenuScreen> Controls();
@@ -412,25 +413,47 @@ std::unique_ptr<MenuScreen> SettingsPages::Display() {
                          {{"BILINEAR", {{"present_effect", "\"bilinear\""}}},
                           {"CAS", {{"present_effect", "\"cas\""}}},
                           {"FSR 1", {{"present_effect", "\"fsr\""}}}}));
-  // HDR output (#417): the image on an HDR (scRGB) swapchain with its white
-  // at the paper white, so an HDR desktop does not wash it out, and the
-  // scene's highlights (not the HUD or menus) expanded towards the peak.
-  // Offered when the display has HDR on, or while it is set.
+  // HDR output (#417, #442): the image on an HDR (scRGB) swapchain with its
+  // white at the paper white, so an HDR desktop does not wash it out, and the
+  // scene's highlights (not the HUD or menus) expanded towards the display's
+  // peak. All of it applies at once. Offered when the display has HDR on, or
+  // while it is set.
   const rex::ui::vulkan::HdrOutputState hdr = rex::ui::vulkan::GetHdrOutputState();
   if (hdr.offered || hdr.active || SameValue(Unquote(Saved("present_hdr")), "true")) {
     rows.push_back(Toggle("HDR", "present_hdr"));
     std::vector<Choice> paper_white;
-    for (const char* nits : {"100", "150", "200", "250", "300"}) {
+    for (const char* nits : {"100", "150", "200", "250", "300", "400"}) {
       paper_white.push_back(
           {std::string(nits) + " NITS", {{"present_hdr_paper_white_nits", nits}}});
     }
     rows.push_back(Setting("HDR PAPER WHITE", std::move(paper_white)));
-    // At or below the paper white nothing is expanded.
-    std::vector<Choice> peak = {{"OFF", {{"present_hdr_peak_nits", "80"}}}};
-    for (const char* nits : {"400", "600", "800", "1000", "1500"}) {
-      peak.push_back({std::string(nits) + " NITS", {{"present_hdr_peak_nits", nits}}});
+    // How far SDR white in the scene goes from the paper white towards the
+    // display's peak (set by the calibration).
+    rows.push_back(Setting("HDR HIGHLIGHTS", {{"OFF", {{"present_hdr_highlights", "0.0"}}},
+                                              {"LOW", {{"present_hdr_highlights", "0.25"}}},
+                                              {"MEDIUM", {{"present_hdr_highlights", "0.5"}}},
+                                              {"HIGH", {{"present_hdr_highlights", "1.0"}}}}));
+    // 2.2 matches what an SDR monitor shows; sRGB's linear toe lifts the
+    // blacks and washes the colors out.
+    rows.push_back(Setting("HDR GAMMA", {{"2.2", {{"present_hdr_gamma", "2.2"}}},
+                                         {"2.4", {{"present_hdr_gamma", "2.4"}}},
+                                         {"SRGB", {{"present_hdr_gamma", "0.0"}}}}));
+    // The SDR image on the left, the HDR one on the right; not saved.
+    {
+      MenuRow compare;
+      compare.label = "HDR COMPARE";
+      compare.value = [] {
+        return std::string(rex::cvar::GetFlagByName("present_hdr_compare") == "true"
+                               ? "SDR | HDR"
+                               : "OFF");
+      };
+      compare.adjust = [](int) {
+        const bool on = rex::cvar::GetFlagByName("present_hdr_compare") == "true";
+        rex::cvar::SetFlagByName("present_hdr_compare", on ? "false" : "true");
+      };
+      rows.push_back(std::move(compare));
     }
-    rows.push_back(Setting("HDR HIGHLIGHTS", std::move(peak)));
+    rows.push_back(Page("HDR CALIBRATION", &SettingsPages::HdrCalibration));
   }
   // The rate the game simulates and renders at, which sets every CPU cost
   // (LS-1.4). DISPLAY follows the refresh rate: 144 Hz and faster displays
@@ -459,6 +482,67 @@ std::unique_ptr<MenuScreen> SettingsPages::Display() {
     return ResolutionLine();
   };
   return std::make_unique<MenuScreen>("DISPLAY", std::move(rows), std::move(note));
+}
+
+std::unique_ptr<MenuScreen> SettingsPages::HdrCalibration() {
+  // Test patterns the HDR pass draws under the menu (#442), in three steps:
+  // the TV's own brightness for the blacks, then the paper white, then the
+  // display's peak, which the highlights expand towards. The pattern is
+  // never saved; leaving the page removes it.
+  auto step = std::make_shared<int>(1);
+  const auto show = [](int pattern) {
+    rex::cvar::SetFlagByName("present_hdr_test_pattern", std::to_string(pattern));
+  };
+  show(*step);
+  std::vector<MenuRow> rows;
+  {
+    MenuRow pattern;
+    pattern.label = "STEP";
+    pattern.value = [step] {
+      static constexpr const char* kSteps[] = {"1 BLACK LEVEL", "2 PAPER WHITE", "3 PEAK"};
+      return std::string(kSteps[*step - 1]);
+    };
+    pattern.adjust = [step, show](int direction) {
+      *step = (*step - 1 + (direction < 0 ? 2 : 1)) % 3 + 1;
+      show(*step);
+    };
+    rows.push_back(std::move(pattern));
+  }
+  {
+    std::vector<Choice> paper_white;
+    for (int nits = 80; nits <= 500; nits += 10) {
+      paper_white.push_back({std::to_string(nits) + " NITS",
+                             {{"present_hdr_paper_white_nits", std::to_string(nits)}}});
+    }
+    MenuRow row = Setting("PAPER WHITE", std::move(paper_white));
+    row.enabled = [step] { return *step == 2; };
+    rows.push_back(std::move(row));
+  }
+  {
+    std::vector<Choice> peak;
+    for (int nits = 300; nits <= 4000; nits += nits < 1500 ? 50 : 100) {
+      peak.push_back(
+          {std::to_string(nits) + " NITS", {{"present_hdr_peak_nits", std::to_string(nits)}}});
+    }
+    MenuRow row = Setting("PEAK", std::move(peak));
+    row.enabled = [step] { return *step == 3; };
+    rows.push_back(std::move(row));
+  }
+  auto note = [step] {
+    switch (*step) {
+      case 1:
+        return std::string("TV BRIGHTNESS: FIRST SQUARE BLACK, SECOND JUST SHOWS");
+      case 2:
+        return std::string("THE WHITE SQUARE SHOULD LOOK LIKE WHITE PAPER");
+      default:
+        return std::string("RAISE THE PEAK UNTIL THE SQUARE DISAPPEARS");
+    }
+  };
+  auto screen = std::make_unique<MenuScreen>("HDR CALIBRATION", std::move(rows), std::move(note));
+  // The patterns' band (hdr_output.ps.glsl kPatternTop and kPatternBottom).
+  screen->set_backdrop_gap(0.62f, 0.88f);
+  screen->set_on_back([show] { show(0); });
+  return screen;
 }
 
 std::unique_ptr<MenuScreen> SettingsPages::Graphics() {

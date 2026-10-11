@@ -4,6 +4,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace pinyon_shift::hostui {
@@ -84,6 +85,10 @@ class MenuScreen {
       tick_();
     }
   }
+  // A band of the guest image, as fractions of its height, that the menu
+  // does not dim (the HDR calibration patterns show there), or none.
+  void set_backdrop_gap(float top, float bottom) { backdrop_gap_ = {top, bottom}; }
+  std::pair<float, float> backdrop_gap() const { return backdrop_gap_; }
   // A line shown under the rows, or empty.
   std::string note() const { return note_ ? note_() : std::string(); }
   const std::vector<MenuRow>& rows() const { return rows_; }
@@ -107,6 +112,7 @@ class MenuScreen {
   std::function<void(int)> key_capture_;
   std::function<void()> tick_;
   size_t focus_ = 0;
+  std::pair<float, float> backdrop_gap_ = {1.0f, 1.0f};
 };
 
 // Turns polled pad state into navigation commands with the usual menu key

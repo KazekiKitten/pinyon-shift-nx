@@ -881,15 +881,23 @@ void HostUi::DrawMenu(rex::ui::UIDrawContext& context) {
 
   drawer_.Begin(context, float(context.render_target_width()),
                 float(context.render_target_height()));
-  // Dim the title behind the menu across the whole guest image.
+  // Dim the title behind the menu across the whole guest image, except for
+  // the screen's gap.
+  const auto [gap_top, gap_bottom] = screen.backdrop_gap();
+  const auto dim = [this, gap_top, gap_bottom](float width, float height) {
+    DrawGradient(0.0f, 0.0f, width, height * gap_top, kBackdropLeft, kBackdropRight);
+    if (gap_bottom < 1.0f) {
+      DrawGradient(0.0f, height * gap_bottom, width, height * (1.0f - gap_bottom),
+                   kBackdropLeft, kBackdropRight);
+    }
+  };
   if (auto rect = presenter_.GetPaintedGuestOutputRectFromUIThread()) {
     const Canvas saved = canvas_;
     canvas_ = Canvas{float(rect->x), float(rect->y), 1.0f};
-    DrawGradient(0.0f, 0.0f, float(rect->width), float(rect->height), kBackdropLeft,
-                 kBackdropRight);
+    dim(float(rect->width), float(rect->height));
     canvas_ = saved;
   } else {
-    DrawGradient(0.0f, 0.0f, kTitleWidth, kTitleHeight, kBackdropLeft, kBackdropRight);
+    dim(kTitleWidth, kTitleHeight);
   }
   const size_t content_batch = batches_.size() - 1;
   const size_t content_vertex = batches_.back().vertices.size();

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- HDR output: richer colors (gamma 2.2 decode), softer highlights
+  (HDR HIGHLIGHTS), brake lights expanded with their hue, no flicker on
+  translucent HUD. HDR now switches without a restart, HDR COMPARE shows
+  SDR and HDR side by side, and HDR CALIBRATION sets the paper white
+  and the display's peak from test patterns (#442).
 - The launchers' Logs link opens the game's own logs (runtime.log)
   once it has run, instead of the setup logs (#424).
 - Update from inside the launcher: **Update to <version>** downloads the
