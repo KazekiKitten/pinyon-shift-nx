@@ -403,6 +403,8 @@ Added on request after the ranking, larger than the 20:
 | --- | --- | --- | --- | --- | --- |
 | + | FB-12.21 | **Import cars from Assetto Corsa** ([#496](https://github.com/arcanite24/pinyon-shift/issues/496)): a tool that turns a permitted car the player supplies into an FH1 car mod; refuses encrypted and Kunos cars | `.carbin` writer (round-trip an FH1 car first), `.xds` encoding, physics and database mapping, closest FH1 engine bank | XL; the `.carbin` spike is the go or no-go | Guess |
 | + | FB-12.22 | **World editor** ([#497](https://github.com/arcanite24/pinyon-shift/issues/497)): a `world/` mod format, an in-game placement editor on the free camera, custom routes and events, then re-used scenery and new geometry | `CollObjs.xml`, `GameObjs.xml`, `TrackRoute*.xml` and `gamedb` are plain data; `.bix`, PVS, `.col` and `.nav` need writers | S-M (format) to XL (new roads) | Probable for the data tiers |
+| + | FB-12.23 | **Dual-screen devices** ([#499](https://github.com/arcanite24/pinyon-shift/issues/499)): map, touch controls, dashboard and quick actions on the AYN Thor's bottom screen, later on any second display | An Android `Presentation` with its own host-drawn Vulkan surface; shares the map with #494 | M | Probable; display discovery on the device decides |
+| + | FB-12.24 | **FH2 world and cars** ([#501](https://github.com/arcanite24/pinyon-shift/issues/501)): FH2's Xbox 360 world and cars from the player's disc, first as a separate destination like the Rally map, then joined to Colorado by a road that hides the track switch | Rally's separate track (`ColoradoDirt`, `RibbonConfiguration`); XE's FH2 cars; format survey shared with Lavender Shift | Cars M-L; world L-XL; joined XL | Cars probable; world a guess until the format survey |
 
 Also considered, kept out of the 20: tuning menu (second most common
 complaint; no evidence yet that FM4's tuning code survives; check in
@@ -422,6 +424,42 @@ Working order: FB-12.0, then FB-12.1 to FB-12.3 from what it finds;
 FB-12.4's spike in parallel because it can reopen split-screen; the data
 mods (FB-12.6, FB-12.8, FB-12.10, FB-12.11, FB-12.16) as one built-in pack;
 then `call_guest_fp` and FB-12.5, FB-12.7, FB-12.9.
+
+### FB-13 Custom content on top of the game
+
+Analysis of 2026-10-11 at `dev` `a98998f`: what custom brands, cars, shops,
+liveries, events and activities would take, from read-only reads of
+`gamedb.slt`, the game's archives and executable strings, the DLC, XE and
+Rally data, and a seed's save. Nothing was run in game; each issue names the
+experiment that confirms it. Findings are in
+[REVERSE_ENGINEERING.md](REVERSE_ENGINEERING.md) (Custom content).
+
+Most of FH1's content is data: cars, makes, parts, colours, events,
+prizes, opponents and activities are database rows; routes, checkpoints,
+shops and activities are plain XML; liveries are vector designs the game
+renders. What the mod system lacks is adding *new* archive members and
+string keys (FB-13.1), so that comes first, after a check of whether plain
+text in name columns is enough. The online Storefront is not worth
+emulating (no captured server replies); content is shared as mod packs and
+files instead.
+
+| ID | Content | Route | Effort | Confidence |
+| --- | --- | --- | --- | --- |
+| FB-13.1 | **Mod tooling: new archive members and string keys** ([#503](https://github.com/arcanite24/pinyon-shift/issues/503)) | Blocks most rows below; first check whether plain-text names work | M | Probable |
+| FB-13.2 | **Custom car brands** ([#504](https://github.com/arcanite24/pinyon-shift/issues/504)) | `List_CarMake` rows; the Autoshow make grid is one query; 37 dormant logos on the disc | S-M | Probable |
+| FB-13.3 | **Clone cars: new ids on existing models with their own specs** ([#505](https://github.com/arcanite24/pinyon-shift/issues/505)) | About 47 car tables; Rally and XE precedent; a clone tool | S-M | Probable to confirmed |
+| FB-13.4 | **Custom dealers and shop locations** ([#506](https://github.com/arcanite24/pinyon-shift/issues/506)) | Shops are XML activities on `GameObjs` triggers; own car lists need an `IsCarVisible` hook; the online Storefront is XL and not recommended | S, L for own lists | Probable |
+| FB-13.5 | **Custom liveries, decals and car skins** ([#507](https://github.com/arcanite24/pinyon-shift/issues/507)) | Liveries are encrypted vector `.liv` files in the save; decals by texture hash; skins by car texture; new decals and shapes need added members | S to L | Probable |
+| FB-13.6 | **Import FM4 vinyl groups** ([#508](https://github.com/arcanite24/pinyon-shift/issues/508)) | The game's own cross-title importer; FM4 is an alternate title id; the SDK enumerates alternate titles | S-M | Probable |
+| FB-13.7 | **Custom event packs** ([#509](https://github.com/arcanite24/pinyon-shift/issues/509)) | Events, routes with checkpoints, opponents, prizes and entry activities are data; a pack format with stable id allocation | S-M, L-XL for championships | Probable (Rally) |
+| FB-13.8 | **Unused event types** ([#510](https://github.com/arcanite24/pinyon-shift/issues/510)) | Elimination mode 4 unused; drag, drift and autocross scoring from Forza 4 | S to L | Probable to guess |
+| FB-13.9 | **Custom free-roam activities** ([#511](https://github.com/arcanite24/pinyon-shift/issues/511)) | Speed traps, stunts, photo shoots, barn finds and head-to-head drivers are XML and database rows | S-M each | Probable |
+| FB-13.10 | **Custom upgrade parts, rims and paints** ([#512](https://github.com/arcanite24/pinyon-shift/issues/512)) | `List_Upgrade*`, `List_Wheels`, `Combo_Colors`; no new part types (code enum) | S | Probable |
+
+Working order: FB-13.1's plain-text check and FB-13.3 (clone cars) first,
+since brands, dealers and barn finds need a car to show; then FB-13.2,
+FB-13.7 tiers 1-2 and FB-13.9; FB-13.6 as a cheap experiment at any time.
+Car models from other games are FB-12.21 (#496) and FB-12.24 (#501).
 
 ## Not to build
 
