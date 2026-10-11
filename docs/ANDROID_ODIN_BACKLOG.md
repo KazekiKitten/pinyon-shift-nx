@@ -924,6 +924,96 @@ What remains warm, by cause:
 | Dense part of the long drive | 41-43 ms | Single `mprotect` calls of 6 to 12 ms in the write-watch path (`PhysicalHeap::EnableAccessCallbacks` and the fault handler) under the global lock, with about 5,000 mappings; needs the watch flags under their own lock |
 | Route captures | 40-83 ms | The capture's GPU readback; not in play |
 
+## Hand-edited hot shaders (2026-10-10, issue #413)
+
+Ranked with `fh1_native_gpu_profile` and `fh1_native_gpu_profile_draws`
+on the busy drive (`--fh1_native_stats_frames=600`, Turnip Gen8 V37, the
+60 fps limit), frame-weighted over the gameplay windows. Each shader's
+time is the sum of its draws' timestamp spans, so per-draw overhead is in
+it. Frame replays do not fill this per-draw profile (no window ends
+there), so it needs a live route.
+
+| Pixel shader | 1x ms/frame | Draws | 4x ms/frame | Draws | Instructions | Fetches |
+| --- | --- | --- | --- | --- | --- | --- |
+| `9584B309533EF6C9` | 1.46 | 214 | 1.64 | 211 | 8 | 1 |
+| `E9CD565D9C61D037` | 0.67 | 16.5 | 0.71 | 17.2 | 134 | 8 |
+| `9D86C9913458AE3C` | 0.65 | 70 | 0.55 | 48 | 49 | 4 |
+| `614588022744BF6B` | 0.48 | 2.0 | 0.48 | 2.0 | 66 | 9 |
+| `A2C1F872E049AD8B` | 0.45 | 35 | 0.36 | 26.5 | | |
+| `BA6A2871A980A4E8` | 0.43 | 26.6 | 0.51 | 22.6 | 10 | 1 |
+| `C48DE0037F1FE9E3` | 0.39 | 7.0 | 0.36 | 6.3 | | |
+| `CE7C54664D18A4E3` | 0.38 | 41 | 0.47 | 44 | | |
+| `34DE4D8ECA877714` | 0.33 | 42 | 0.31 | 30 | | |
+| `68150A8E959006CD` | 0.33 | 41 | 0.50 | 56 | | |
+
+The frame is 18.7 ms at 1x and 22.1 ms at 4x in these windows. After the
+main scene's rendering as a whole (about 12 ms), no single shader is over
+1.7 ms.
+
+**Override path** (SDK `882da83`): after translation, a shader whose
+guest hash, modification and XXH3 hash of the translated SPIR-V match an
+entry gets that entry's hand edits; any other translation, including one
+from a changed translator or host configuration, is used as is and logged.
+`vulkan_shader_overrides` (on) turns it off, each hit is logged once
+("Vulkan shader override ... for ..."), shader pack captures keep the
+translator's bytecode, and `vulkan_shader_override_dir` loads whole
+replacement `shader_<guest>_<modification>_<translated>.spv` files for
+writing new ones. The edits are code applied to the translation, never
+shader binaries: the translations come from the game's microcode. The
+bytes the translator produced at each of these translations are
+identical in the frame-600, race-4500 and live runs, at 1x and 4x.
+
+**Measuring.** Each candidate ran as a `vulkan_shader_override_dir`
+replacement in the frame-600 and race-4500 replays (`TU_DEBUG=sysmem`,
+300 repeats, `guest_frame_gpu_time` median), alternating with the
+translation; replay medians repeat within about 0.05 ms. Parity is the
+replayed front buffer against the translation's, which every resolve in
+the frame feeds. A flat-color replacement bounds what each shader can
+give back:
+
+| Pixel shader | Flat bound frame 600 | Flat bound race 4500 |
+| --- | --- | --- |
+| `9584B309533EF6C9` | 0.44 ms | 0.66 ms |
+| `E9CD565D9C61D037` | 0.66 ms | 0.47 ms |
+| `614588022744BF6B` | 0.44 ms | 0.48 ms |
+| `BA6A2871A980A4E8` | 0.27 ms | 0.63 ms |
+| `9D86C9913458AE3C` | 0 | 0 (its draws do not reach the image in either dump) |
+
+Most of each bound is texture fetching and output bandwidth, which the
+shader cannot change.
+
+**Kept: the translator's NaN guards.** After every product and sum the
+translator selects 0 (or the addend) when the result is NaN, for the
+Xenos rule that 0 times infinity is 0. These shaders never produce one in
+the dumps, and the selects cost ALU in every pixel. The edit drops them
+(5 to 106 per shader) and instead writes 0 for a NaN color output
+component once at the end, so a NaN that the guards would have zeroed
+cannot spread through blending or a resolve.
+
+| Pixel shader | Guards | Race 4500, two rounds | Parity |
+| --- | --- | --- | --- |
+| `614588022744BF6B` | 37 | -0.08, -0.09 ms | identical |
+| `E9CD565D9C61D037` | 106 | -0.07, -0.06 ms | identical |
+| `BA6A2871A980A4E8` | 5 | -0.04, -0.03 ms | identical |
+| `9584B309533EF6C9` | 5 | -0.02, -0.02 ms | identical |
+| `9D86C9913458AE3C` (both modifications) | 45 each | 0 | identical |
+| All six translations, built in, three rounds | | frame 600 17.73 to 17.52 ms, race 4500 21.14 to 20.93 ms | identical |
+
+The live drive hits all six translations at 1x and at 4x and completes.
+
+Measured and not kept:
+
+| Tried | Result |
+| --- | --- |
+| The translation through spirv-cross and glslang, unchanged | Identical image; `E9CD565D9C61D037` 0.22 ms slower even after `spirv-opt -O`: glslang's output drops the translator's float controls and its structure. Edits stay at the SPIR-V level |
+| No `SignedZeroInfNanPreserve` or `RoundingModeRTE` execution modes | Nothing beyond the guard edit |
+| No sample mask output | No gain for `E9CD565D9C61D037`; `9584B309533EF6C9` and `BA6A2871A980A4E8` use alpha to mask (the image changes) |
+| `nopreamble` off for the replay | Not measurable this way (an empty `IR3_SHADER_DEBUG` made the app start the game instead of the replay); preambles were measured slower on 2026-10-09 |
+
+The remaining cost is the fetches and the draws themselves: `9584B309533EF6C9`,
+the costliest, is one fetch and 8 ALU instructions over about 210 small
+alpha-to-mask draws a frame.
+
 ## The Odin switches on other platforms (2026-10-10, issue #427)
 
 The frame-600 replay (`--fh1_frame_replay_repeat=1210`, synchronous
