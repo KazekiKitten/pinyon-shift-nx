@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Expose the screen correctly at any time of day above 1x resolution;
+  mornings were overexposed until about noon in game (#444).
 - HDR output: richer colors (gamma 2.2 decode), softer highlights
   (HDR HIGHLIGHTS), brake lights expanded with their hue, no flicker on
   translucent HUD. HDR now switches without a restart, HDR COMPARE shows

@@ -67,7 +67,11 @@ lists what it covers.
   about three times the frame time), `some` and `fast` hand the game the
   previous frame's data (`fast` never reaches free roam). Config migration
   drops it only from files older than schema 24, which older launchers
-  wrote for players.
+  wrote for players. Above 1x, resolves of 4 KB or less also write their
+  unscaled copy to GPU guest memory, without a readback: the game reads its
+  32x32 scene luminance at guest size, and without that copy the auto
+  exposure stayed at its daytime limit, overexposing the screen until
+  about noon in game (#444).
 - **Diagnostics:** front-buffer dumps (`fh1_native_dump_frames` /
   `fh1_native_dump_dir`), per-resolve dumps (`fh1_resolve_dump_dir`), the
   frame census (`fh1_frame_census`) and offline frame replays
