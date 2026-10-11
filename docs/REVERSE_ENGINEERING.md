@@ -22,6 +22,27 @@ evidence) or **guess**.
 The fix and its reasoning are in [DEVELOPMENT.md](DEVELOPMENT.md)
 (guest-visible resolves).
 
+## World detail
+
+What was found while looking for a draw distance setting (#421,
+[FEATURE_BACKLOG.md](FEATURE_BACKLOG.md) FB-4). None of the data knobs
+below gave a visible gain.
+
+| Base | v4 | Name | What it is | Established by | Confidence |
+| --- | --- | --- | --- | --- | --- |
+| `sub_82D505C0` | — | track render settings | Serializes the per-track render settings that `media/tracks/<track>/TrackSettings.xml` sets, plain XML read in free roam. Field offsets: `GrassLODDist` +712, `GrassLODFadeRange` +716, `GrassMinNumShells` +720, `GrassFadeStartDistance` +728, `GrassFadeEndDistance` +732, `Crowds` +832, `CollidableDropDistance` +656, `wholeTrackLightmapRadius` +1248, `depthPassRadius` +1252, `screenAreaDistances` +1260, `Performance` +1378, `MipMapLodBiasModifier` +1404, besides lighting, tone map and wind fields. | Key strings mapped to the serializer's field arguments; a mod replacing the file logged `mod.file.override` in free roam. | Confirmed |
+| `TrackSettings.xml` (Colorado) | same | no visible gain | Doubling the grass fade distances, the crowd LOD and sprite distances and `screenAreaDistances mainScene` changed nothing visible in free-roam views; the only differences were moving cars. | A/B captures of the same free-roam views from one seed. | Confirmed |
+| `tracks\%s\Ribbon_%02d\*.pvs`, `PVSZLookup`, `CTrackPVSZoneResource`, `PVSZoneSpeeds.dat` | same | scenery visibility | Track scenery is culled through precomputed visibility (PVS) zones, not by a distance, so there is no draw distance value to raise for it. | Strings and class names in the executable. | Probable |
+| `0x8207AA58` `draw_distance`, `sub_828C6E68` | — | map draw distance | Belongs to the map and minimap profiles (`MapProfileFullscreen.xml`, `MapProfileMinimap.xml`), not the 3D world. | String xref. | Probable |
+| `0x820744F0` `CamFarClip` | — | camera far plane | Read by the camera functions `sub_8284DAE0`, `sub_8284CB30`, `sub_8284C5D0`, `sub_8284C410`. `camera.zip` sets only near planes (`CameraSettings.ini`), so the far plane is a code default. | String xref; reading the camera archive. | Probable |
+| `0x8201BA00` `SLod.xml`, `sub_82548C20`, `sub_82548E78` | — | car shader settings | `cars/Shared.zip` `ShaderSettings/Slod.xml` (and `Tire/Slod.xml`): settings for the distant-car "super LOD" shader, not world LOD. | String xref; archive listing. | Confirmed |
+| `sub_82D86268` | — | dynamic render settings | Constructor of the per-scenario render settings that `media/renderscenarios.zip` fills (`CDynamicRenderControl` entries: `FrameRate`, `TilingScenario`, car LOD, crowds, particles and more). Every scenario file is parsed into its own object at boot, through one XML reader archive (vtable `0x8222B154`, v4 `0x8223DEC4`). Each control's vtable holds a name getter, a serialize (a visitor binding attribute names to fields) and a reset. | Probe hooks on the visitors logged every read with the archive's vtable. | Confirmed |
+| `sub_82D7E2A8` reset, `sub_82D7E1F8` visitor, `sub_82D7E290` name | `sub_82E404D0`, `sub_82E40420`, — | `CarLODTransDist` | Three floats (`near`, `far`, `veryfar`) at +168/+172/+176 of the render settings (control at +164); compiled defaults 15/25/50 m, the same as every race file. | Hooks on every writer: reset, constructor and XML visitor. | Confirmed |
+| `sub_82D7E4B0` reset, `sub_82D7E2E8` constructor, `sub_82D7E390` visitor, `sub_82D7E498` name | `sub_82E406B0`, `sub_82E40510`, `sub_82E405B8`, — | `CarLODTransDistTraffic` | Six floats (`LOD2`..`LOD5`, `LOD4_closest`, `LOD5_closest`); defaults 15/25/50/100/20/80 m, and `Horizon_Race.xml` sets 22/40/75/100/30/80. | Same hooks. | Confirmed |
+| `CarLODTransDist`, `CarLODTransDistTraffic` | same | no visible car LOD change | Scaling both tables by 0.01 at every writer left the cars' models unchanged, in free roam and in a race (`fh1-race-start-wait`, frames aligned within 5 % of pixels). They do not select the model LOD the player sees. | Deterministic A/B captures with the scale hooks (not kept). | Confirmed |
+| `CarLODThresholds` | same | no visible change on the grid | Setting `lod1`, `lod2` and `count` to 0 in all 19 scenarios that set them left the race grid cars unchanged. An earlier probe on 2026-10-10 that saw `Horizon_Race.xml` change race cars was not reproduced and was probably run-to-run variance. | Member-replacing mod, A/B grid captures. | Confirmed for the grid view |
+| `CarFocusLODMinMax min=0 max=0` | same | player car held at LOD0 | Seven scenarios clamp the focused car's LOD to 0, which is why the player's car never changes detail. | Reading the scenario files; the player car stayed identical in every probe. | Probable |
+
 ## Radio
 
 | Base | v4 | Name | What it is | Established by | Confidence |
