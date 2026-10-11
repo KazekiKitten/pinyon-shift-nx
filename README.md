@@ -35,7 +35,7 @@ It does **not** contain the game, its assets, generated translations or a
 prebuilt executable: you build the game from a disc you own.
 
 > **Playable preview.** Expect some rendering bugs and slowdowns. The
-> [0.4.0 release notes](docs/releases/0.4.0.md) list what the latest release
+> [0.5.0 release notes](docs/releases/0.5.0.md) list what the latest release
 > contains and its known limitations.
 
 ## Highlights
@@ -48,6 +48,9 @@ prebuilt executable: you build the game from a disc you own.
   depth of field.
 - **In-game settings (F6)** and a trainer (F10: credits, game speed, time of
   day, free camera), photo export, save backups and [mods](docs/MODDING.md).
+- **HDR, your music and an immersive camera.** HDR output with calibration,
+  your own music in game or as custom radio stations, and an optional camera
+  that reacts to the car. See [Settings and controls](https://arcanite24.github.io/pinyon-shift/playing/).
 - **Your DLC.** Owned Xbox 360 packages are verified and imported. Car packs
   work, and Rally and 1000 Club run on the optional title update v4 build.
 - **Linux and Steam Deck.** A native Linux build, no Proton: 60 fps at 1x on

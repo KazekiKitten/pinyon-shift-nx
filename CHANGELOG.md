@@ -1,7 +1,23 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 - 2026-10-11
 
+- Built natively for Linux and the Steam Deck (not Proton), with a Linux
+  launcher archive and Add to Steam; 60 fps at 1x on the Deck at 15 W.
+- Built natively for Apple silicon Macs, with Vulkan on Metal through
+  MoltenVK and a macOS launcher app.
+- Installed the Android alpha over Wi-Fi from the launcher's Android panel,
+  without adb, and renamed its package to `studio.deimos.pinyonshift`
+  (`pinyon.py android migrate` moves an earlier install).
+- Imported DLC from the player's own Xbox 360 packages, and added the
+  optional title update v4 build for the original Horizon Rally and the
+  1000 Club challenges offline (Windows and Android).
+- Drove on WASD by default, rebound keys and mapped controllers in game,
+  and opened the settings with a controller chord.
+- Started new installs at the Low-spec 60 preset, added Balanced 40, and
+  recommended a preset for the PC in the launcher.
+- Imported Xenia saves under their profile and accepted verified extracted
+  game folders.
 - Steam Deck and Linux: about 3 % faster rendering by default, and a new
   F6 > GRAPHICS > SCENE SHADING > COARSE that shades once per 2 x 2
   pixels for about 8 % more on the Deck, a little softer (#427).
