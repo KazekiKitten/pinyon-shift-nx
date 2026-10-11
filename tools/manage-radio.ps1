@@ -1,4 +1,4 @@
-[CmdletBinding()]
+[CmdletBinding(PositionalBinding = $false)]
 param(
     [Parameter(Mandatory)]
     [ValidateSet('list', 'create', 'rename', 'delete', 'add', 'remove', 'logo', 'clear-logo', 'mode', 'ffmpeg', 'build')]
