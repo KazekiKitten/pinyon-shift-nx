@@ -49,7 +49,7 @@ python tools/pinyon.py android push-data
 
 Both draw the game's three predicated tiles in one pass and redraw the reflection map at a quarter of the game's rate.
 
-On Adreno 7xx the bundled Mesa Turnip driver (Gen8 V37) is chosen automatically and is much faster than the stock driver. Other GPUs, such as the Adreno 830, use the system driver. **SETTINGS > GRAPHICS > GPU DRIVER** picks the driver for the next start. **IMPORT DRIVER (.ZIP)** adds an adrenotools package.
+On Adreno 7xx and 8xx the bundled Mesa Turnip driver (Gen8 V37) is chosen automatically. It is much faster than the stock driver on the Adreno 740 and takes about a fifth less GPU time on the Adreno 830. Other GPUs use the system driver. **SETTINGS > GRAPHICS > GPU DRIVER** picks the driver for the next start. **IMPORT DRIVER (.ZIP)** adds an adrenotools package, including Qualcomm driver packages; the log's `Vulkan device` line shows which driver version runs.
 
 ## Measured devices
 

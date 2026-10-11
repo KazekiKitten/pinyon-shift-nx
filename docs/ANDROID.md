@@ -20,11 +20,25 @@ notice is in `android/drivers/turnip-gen8-v37/NOTICE.txt`) and installs it
 into `files/state/drivers` at start. SETTINGS > GRAPHICS > GPU DRIVER picks
 the Vulkan driver loaded at the next start (`android_gpu_driver`): AUTO, the
 default, loads the one recommended for the GPU (Turnip Gen8 V37 on Adreno
-7xx, the system's elsewhere, such as the Adreno 830), SYSTEM the device's
-own, and every folder under `files/state/drivers` by name. IMPORT DRIVER
-(.ZIP) opens the system's file picker for an adrenotools package (a `.zip`
-with `meta.json` and the driver `.so`), which is unpacked into a folder
-named after the zip. The page's note names the driver in use. Packaging
+7xx and 8xx, the system's elsewhere), SYSTEM the device's own, and every
+folder under `files/state/drivers` by name. IMPORT DRIVER (.ZIP) opens the
+system's file picker for an adrenotools package (a `.zip` with `meta.json`
+and the driver `.so`), which is unpacked into a folder named after the zip.
+The page's note names the driver in use.
+
+On the Adreno 830 (Snapdragon 8 Elite, Android 15) Turnip Gen8 V37 takes
+20.2 ms of GPU per frame in the race at 1x with MSAA off, against 24.8 ms
+for the system driver (Qualcomm v800.40) and the same for Qualcomm's
+v800.51 and v842.8 packages; the route matrix renders the same on Turnip
+and the system driver. Qualcomm packages (the "Adreno driver" zips shared
+for emulators) name their libraries like the system driver's
+(`vulkan.adreno.so`, `libgsl.so` and others). The system driver is already
+loaded when the game opens Vulkan, so the loader once returned it for every
+such package; the game now gives the copied package's libraries unique
+names first, and the log's `Vulkan device` line shows the driver version
+that runs. Packages built for Android 16, such as v891.7, need a binder
+function Android 15 lacks: with that stubbed out v891.7 loads, then crashes
+within a minute. Packaging
 reads the driver binary from `.local/android/drivers/turnip-gen8-v37`
 (`meta.json` and `libvulkan_freedreno.so`) and skips it with a warning when
 absent.

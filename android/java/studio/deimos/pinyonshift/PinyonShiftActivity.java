@@ -182,10 +182,11 @@ public class PinyonShiftActivity extends SDLActivity {
         return null;
     }
 
-    // Adreno 7xx: Mesa Turnip Gen8 V37 (measured on the Adreno 740 against
-    // the system driver and newer Turnip builds). Others keep the system's.
+    // Adreno 7xx and 8xx: Mesa Turnip Gen8 V37 (measured on the Adreno 740
+    // and 830 against the system driver, and on the 740 against newer Turnip
+    // builds). Others keep the system's.
     private static String recommendedDriver(String adreno) {
-        return adreno.startsWith("7") ? "turnip-gen8-v37" : null;
+        return adreno.startsWith("7") || adreno.startsWith("8") ? "turnip-gen8-v37" : null;
     }
 
     // Copies each driver folder under the package's assets/drivers into

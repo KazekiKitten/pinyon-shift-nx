@@ -38,6 +38,13 @@ tablet cooled to under 45 C CPU between runs. Compare by draw band
 (frames with 4,000-7,000 draws are the busiest section): frame, GPU and
 recorder medians, plus the executor's 600-frame rendering stats.
 
+Since the 2026-10 renderer work the race draws 1,300-1,600 a frame, so
+compare that band. The seed's own `host_present_fps_limit` still caps the
+present rate at 30, so frame times sit at 33.3 ms and the GPU time is the
+measure. Before ShiftGlue 771015d an empty value such as
+`--android_gpu_driver=` dropped every argument of the run, so "system
+driver" runs with that argument ran at the seed's settings.
+
 ## Experiments
 
 | ID | Experiment | Decides | Status |
@@ -53,6 +60,7 @@ recorder medians, plus the executor's 600-frame rendering stats.
 | A60-E8 | Sun shadow pass every other frame | The fidelity trade's value on Adreno | Not built (see Progress) |
 | A60-E9 | Thread placement on the 3.53 GHz cores, and sleep-only `WAIT_REG_MEM` | A60-5.1, A60-5.3 | Spins done; placement not built |
 | A60-E10 | Occlusion-query ends per frame | Whether A60-6 is worth anything | **Done.** A counter of guest occlusion-query ends (`occlusion_query_end` in the 600-frame stats): 0 in the race, so A60-6 has nothing to gain |
+| A60-E11 | Custom Vulkan drivers on the Adreno 830: Turnip Gen8 V37 and Qualcomm's v800.51, v842.8 and v891.7 packages against the system's v800.40 | The AUTO driver for Adreno 8xx | **Done (2026-10-11).** Race at 1x, MSAA off, two interleaved rounds per driver from a cooled tablet (skin under 34 C), median GPU per frame in the 1,300-1,600-draw band: system 24.8 ms, v800.51 24.7, v842.8 24.9, Turnip 20.2 (19 % less; decoder CPU also about 1.5 ms lower). The route matrix (free roam, pause, map, opening, FMV) renders the same on Turnip, so AUTO now picks Turnip on Adreno 8xx. Every Qualcomm package had silently run the system driver: its libraries share the system driver's sonames, which the linker resolves to the loaded copies; the loader now renames them. v891.7 (minimum Android 16) needs `AIBinder_Class_setTransactionCodeToFunctionNameMap`, absent on Android 15; with a no-op stub it loads and then crashes within a minute |
 
 ## Items
 
