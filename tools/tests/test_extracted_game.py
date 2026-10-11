@@ -74,7 +74,10 @@ class ExtractedGameTests(unittest.TestCase):
             # stages. The real verifier, source copy and destination checks run.
             shutil.copyfile(ROOT / 'tools/setup-preview.ps1', root / 'tools/setup-preview.ps1')
             shutil.copyfile(ROOT / 'tools/release-common.ps1', root / 'tools/release-common.ps1')
-            shutil.copyfile(ROOT / 'config/release-toolchain.json', config / 'release-toolchain.json')
+            # The stubbed stages need no space; CI runners have about 30 GB free.
+            toolchain = json.loads((ROOT / 'config/release-toolchain.json').read_text(encoding='utf-8'))
+            toolchain['disk_space_gb'] = {key: 0 for key in toolchain['disk_space_gb']}
+            (config / 'release-toolchain.json').write_text(json.dumps(toolchain), encoding='utf-8')
             for name in ('provision-toolchain', 'prepare-rexglue', 'build-preview', 'prepare-fh1-shaders'):
                 (root / f'tools/{name}.ps1').write_text("param([switch]$JsonEvents, [string]$GameRoot)\nAdd-Content -LiteralPath (Join-Path $PSScriptRoot '../stages.txt') '" + name + "'\n")
             command = ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', str(root / 'tools/setup-preview.ps1'), '-GamePath', str(game), '-JsonEvents']
