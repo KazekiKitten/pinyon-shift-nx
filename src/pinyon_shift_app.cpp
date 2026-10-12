@@ -29,6 +29,7 @@
 #include <rex/input/sdl/joystick_mapping.h>
 #include <rex/ui/flags.h>
 #include <rex/ui/keybinds.h>
+#include <rex/ui/overlay/debug_overlay.h>
 #include <rex/ui/presenter.h>
 #if REX_HAS_VULKAN
 #include <rex/ui/vulkan/provider.h>
@@ -705,6 +706,8 @@ void PinyonShiftApp::OnPostInitLogging() {
 
 void PinyonShiftApp::OnPreSetup(rex::RuntimeConfig& config) {
   rex::system::SetHostGpuLossHandler(&OnHostGpuLoss);
+  // The window title and the F3 overlay name this release and its commits.
+  rex::ui::SetBuildLabel(pinyon_shift::diagnostics::BuildLabel());
   config.gpu_plugin =
       pinyon_shift::platform::EnvironmentVariable("PINYON_SHIFT_FH1_DISC_SHADER_CORPUS_DIR")
           ? "fh1-producer"

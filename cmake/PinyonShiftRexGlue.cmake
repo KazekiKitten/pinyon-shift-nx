@@ -287,6 +287,12 @@ endif()  # NOT PINYON_SHIFT_HOST_TESTS_ONLY
 
 set(PINYON_SHIFT_STAGE_FILE_SCRIPT "${CMAKE_CURRENT_LIST_DIR}/PinyonStageFile.cmake")
 
+# The release version for the build label (#545); a version bump reconfigures.
+file(READ "${PROJECT_SOURCE_DIR}/config/release.json" PINYON_SHIFT_RELEASE_JSON)
+string(JSON PINYON_SHIFT_VERSION GET "${PINYON_SHIFT_RELEASE_JSON}" version)
+set_property(DIRECTORY "${PROJECT_SOURCE_DIR}" APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${PROJECT_SOURCE_DIR}/config/release.json")
+
 function(pinyon_shift_attach_rexglue target_name)
     if(PINYON_SHIFT_RECOMP_PGO STREQUAL "GENERATE")
         target_compile_definitions(${target_name} PRIVATE PINYON_SHIFT_PGO_GENERATE=1)
@@ -322,7 +328,8 @@ function(pinyon_shift_attach_rexglue target_name)
     endif()
     target_link_libraries(${target_name} PRIVATE rex::runtime)
     target_compile_definitions(${target_name} PRIVATE
-        PINYON_SHIFT_CPU_BASELINE="${PINYON_SHIFT_CPU_BASELINE}")
+        PINYON_SHIFT_CPU_BASELINE="${PINYON_SHIFT_CPU_BASELINE}"
+        PINYON_SHIFT_VERSION="${PINYON_SHIFT_VERSION}")
     add_dependencies(${target_name} pinyon_shift_codegen)
     rexglue_configure_target(${target_name} GPU_PLUGINS fh1)
     if(REXSDK_DIR)

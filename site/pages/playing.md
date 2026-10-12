@@ -14,7 +14,7 @@ Most settings live in the game, on <kbd>F6</kbd>, and apply at once. MSAA and th
 | Key | Action |
 | --- | --- |
 | <kbd>F6</kbd> | Settings. Also **SETTINGS** in the pause menu |
-| <kbd>F3</kbd> | Performance panel |
+| <kbd>F3</kbd> | Performance panel, with the build line (version, commits, build time) to quote in a bug report |
 | <kbd>F7</kbd> | Achievements |
 | <kbd>F8</kbd> | Save the current frame as a PNG photo |
 | <kbd>F10</kbd> | Trainer: credits, game speed, time of day, free camera. Needs cheats on |
