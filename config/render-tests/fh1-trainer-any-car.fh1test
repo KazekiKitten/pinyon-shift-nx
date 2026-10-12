@@ -10,6 +10,11 @@ pinyon-shift-fh1-render-test-v1
 # cheat.applied names the event. Without the cheat the ticket reads GARAGE
 # CARS ELIGIBLE, car select offers only the 1983 Audi Sport quattro and the
 # race HUD check fails.
+# The class: the same inputs on a seed whose mod instead sets
+#   update Events set TargetClass = 2 where Id = 43;
+#   update EventRestrictions set Value = '0000000000' where EventID = 43;
+# (class D, no other limits). With the cheat the A 600 Miata races as it is; without it
+# car select offers to fit it to D 299 and the race HUD check fails.
 # clock-hz 60
 # expect-race-hud-any race-ready race-moving
 input 0 0000 0 0 0 0 0 0

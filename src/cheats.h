@@ -29,8 +29,8 @@ double TimeOfDaySeconds();
 bool FreeCamera();
 
 // Whether events ignore their car restrictions (cheat_any_car_events): each
-// event loads without its make, year and other EventRestrictions limits. The
-// event's class is a separate check (the game offers to fit the car to it).
+// event loads without its make, year and other EventRestrictions limits, and
+// without the limit its class (Events.TargetClass) adds to them.
 bool AnyCarInEvents();
 
 // The cheats currently changing the game, as "name=value" pairs separated by

@@ -6388,10 +6388,9 @@ static void PinyonShiftApplyFreeCamera() {
 // up a restriction record at r1+176 with sub_825F3138 and decodes the row's
 // Value into it with sub_825FE8B0. The record starts with no make, year,
 // power, PI or other limits; skipping the decode keeps it so, and the row's
-// record is still added as usual. The event's class is checked elsewhere (car
-// select offers to fit the car to it) and is not affected. The title's
-// developer options for this (eventrestrictions, chooseillegalcarforevent)
-// are parsed but read nowhere.
+// record is still added as usual. The event's class is applied separately,
+// and the hook below lifts it. The title's developer options for this (eventrestrictions,
+// chooseillegalcarforevent) are parsed but read nowhere.
 bool PinyonShiftAnyCarEventRestriction(PPCRegister& r25) {
   if (!pinyon_shift::cheats::AnyCarInEvents()) {
     return false;
@@ -6406,6 +6405,27 @@ bool PinyonShiftAnyCarEventRestriction(PPCRegister& r25) {
   if (first) {
     pinyon_shift::diagnostics::RecordEvent("cheat.applied", {{"name", "cheat_any_car_events"},
                                                              {"event_id", fmt::format("{}", r25.u32)}});
+  }
+  return true;
+}
+
+// The event's class, for the same cheat. Each place that checks a car
+// against an event (sub_82781968, sub_8283EEA0, sub_82842340, sub_825DE820)
+// loads the restrictions with sub_8260A448, reads Events.TargetClass and
+// passes it to sub_825F6ED8 (r4), which stamps a limit derived from the class
+// (sub_82BDE490) into the 16-bit field at +4 of every bucket-0 record. A car
+// over it gets car select's offer to fit it to the class. Skipping the stamp
+// (from just after the frame is set up to the epilogue) leaves the field at
+// the set-up value of no limit.
+bool PinyonShiftAnyCarEventClass(PPCRegister& r4) {
+  if (!pinyon_shift::cheats::AnyCarInEvents()) {
+    return false;
+  }
+  static std::atomic<bool> logged{false};
+  if (!logged.exchange(true, std::memory_order_acq_rel)) {
+    pinyon_shift::diagnostics::RecordEvent(
+        "cheat.applied", {{"name", "cheat_any_car_events"},
+                          {"class_limit", fmt::format("{}", r4.u32 & 0xFFu)}});
   }
   return true;
 }

@@ -1360,3 +1360,13 @@ address = 0x826088B4
 name = "PinyonShiftAnyCarEventRestriction"
 registers = ["r25"]
 jump_address_on_true = 0x826088C0
+
+# The same cheat for the event's class: sub_825F6ED8 stamps a limit derived
+# from Events.TargetClass (r4) into every bucket-0 restriction record; skip
+# from after its frame is set up to its epilogue
+# (src/pinyon_shift_runtime_hooks.cpp).
+[[midasm_hook]]
+address = 0x825F6EE4
+name = "PinyonShiftAnyCarEventClass"
+registers = ["r4"]
+jump_address_on_true = 0x825F6FA8

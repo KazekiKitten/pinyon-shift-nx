@@ -95,7 +95,7 @@ The previous Pinyon Shift save is kept; `-Restore` switches back to it.
 Turn cheats on in **SETTINGS > CHEATS** and restart. The game then plays a separate copy of your profile (`user-modded` in the state folder), so cheated progress never reaches your own save. <kbd>F10</kbd> opens the trainer:
 
 - **PLAYER**: set or add credits, set the wristband level.
-- **WORLD**: game speed, time of day, free camera, collectibles on the map, and **ANY CAR IN ANY EVENT**. With it on, events drop their make, year and other car limits, so the car you drive is eligible. An event's class still applies: car select offers to fit the car to it. Turn it on before you drive up to the event.
+- **WORLD**: game speed, time of day, free camera, collectibles on the map, and **ANY CAR IN ANY EVENT**. With it on, events drop their class, make, year and other car limits, so the car you drive is eligible as it is. Turn it on before you drive up to the event.
 - **GRAPHICS** and **DEBUG**: bloom, motion blur, depth of field, filtering, a file-open log.
 
 ## Treasure Map

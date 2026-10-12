@@ -33,9 +33,8 @@ REXCVAR_DEFINE_BOOL(cheat_free_camera, false, "Cheats",
                     "returns them to the player")
     .lifecycle(rex::cvar::Lifecycle::kHotReload);
 REXCVAR_DEFINE_BOOL(cheat_any_car_events, false, "Cheats",
-                    "Let any car enter any event: events load without their make, year and "
-                    "other car limits (an event's class still applies: the game offers to fit "
-                    "the car to it); applies the next time an event's ticket loads")
+                    "Let any car enter any event: events load without their class, make, year "
+                    "and other car limits; applies the next time an event's ticket loads")
     .lifecycle(rex::cvar::Lifecycle::kHotReload);
 REXCVAR_DEFINE_STRING(cheat_set_profile_fields, "", "Cheats",
                       "Set these profile fields when it next loads, once, as "
