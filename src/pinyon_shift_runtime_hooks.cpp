@@ -45,6 +45,7 @@
 #include "cheats.h"
 #include "cheats_map.h"
 #include "dlc_token_unlocks.h"
+#include "hud_toggle.h"
 #include "dlc_treasure_map.h"
 #include "ui/music.h"
 #include "dlc/rally_progress.h"
@@ -6243,6 +6244,7 @@ void PinyonShiftTraceFrameTelemetry(PPCRegister& r28, PPCRegister& r31) {
   pinyon_shift::dlc::UpdateTreasureMap();
   UpdateMapView();
   pinyon_shift::dlc::UpdateTokenUnlocks();
+  pinyon_shift::hud::Update();
   // Your music waits for a world (#445).
   {
     static uint32_t music_frames = 0;

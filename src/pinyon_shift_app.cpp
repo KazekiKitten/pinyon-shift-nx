@@ -51,6 +51,7 @@
 #include "ui/host_style.h"
 #include "ui/hostui/host_ui.h"
 #include "cheats.h"
+#include "hud_toggle.h"
 #include "mod/mod_host.h"
 #include "mod/overlay_device.h"
 #include "save/car_cards.h"
@@ -997,6 +998,8 @@ void PinyonShiftApp::OnPostSetup() {
                                     ? runtime()->graphics_system()->presenter()
                                     : nullptr);
   });
+  rex::ui::RegisterBind("bind_hud", pinyon_shift::config::kHudKeys,
+                        "Hide or show the HUD (for screenshots)", [] { pinyon_shift::hud::Toggle(); });
   rex::ui::RegisterBind("bind_music_next", pinyon_shift::config::kMusicNextKeys,
                         "Your music: next track", [] { pinyon_shift::music::Next(); });
   rex::ui::RegisterBind("bind_music_previous", pinyon_shift::config::kMusicPreviousKeys,
@@ -1289,6 +1292,7 @@ void PinyonShiftApp::OnShutdown() {
   rex::ui::UnregisterBind("bind_fullscreen");
   rex::ui::UnregisterBind("bind_quit");
   rex::ui::UnregisterBind("bind_photo");
+  rex::ui::UnregisterBind("bind_hud");
   rex::ui::UnregisterBind("bind_trainer");
   rex::ui::UnregisterBind("bind_music_next");
   rex::ui::UnregisterBind("bind_music_previous");

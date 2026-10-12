@@ -16,6 +16,7 @@ Most settings live in the game, on <kbd>F6</kbd>, and apply at once. MSAA and th
 | <kbd>F6</kbd> | Settings. Also **SETTINGS** in the pause menu |
 | <kbd>F3</kbd> | Performance panel, with the build line (version, commits, build time) to quote in a bug report |
 | <kbd>F7</kbd> | Achievements |
+| <kbd>F2</kbd> | Hide or show the HUD (minimap, speedometer, banners), for screenshots. Menus and photo mode still draw |
 | <kbd>F8</kbd> | Save the current frame as a PNG photo |
 | <kbd>F10</kbd> | [Trainer](#trainer): credits, game speed, time of day, free camera, any car in any event. Needs cheats on |
 | <kbd>F11</kbd> | Fullscreen. Also <kbd>Alt</kbd>+<kbd>Enter</kbd> |
@@ -81,7 +82,7 @@ Connect the controller before starting the game. XInput controllers work as they
 Saves are in the install's state folder, `%LOCALAPPDATA%\PinyonShift\source\<version>\.local\preview\user` (under `data` for a portable install).
 
 - **Backups.** After each save, the save files are copied to `backups\saves`. The last 10 are kept. Restore one from **SETTINGS > PROFILE > SAVE BACKUPS**.
-- **Photos.** <kbd>F8</kbd> writes PNGs to the `photos` folder in the state folder.
+- **Photos.** <kbd>F8</kbd> writes PNGs to the `photos` folder in the state folder. Press <kbd>F2</kbd> first for a photo without the HUD.
 - **Saves from Xenia.** A Xenia save is signed with its profile's XUID, so copying it over doesn't work. Import it with the tool from a repository checkout:
 
 ```powershell

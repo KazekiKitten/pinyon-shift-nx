@@ -82,6 +82,7 @@
     {0x832E6364u, 0x833D3F34u},  // data: data
     {0x832FEE8Cu, 0x833EDA1Cu},  // data: data
     {0x832FF1D8u, 0x833EDDA4u},  // data: data
+    {0x833023C1u, 0x833F0F91u},  // data: data
     {0x83305CC4u, 0x833F4A80u},  // data: data
     {0x833067E0u, 0x833F5600u},  // data: data
     {0x83439490u, 0x8352EA5Cu},  // data: data

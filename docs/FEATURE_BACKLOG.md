@@ -475,7 +475,7 @@ Frame generation is planned since this round, opt-in (FB-14.6 to FB-14.9).
 | ID | Feature | Effort | Confidence |
 | --- | --- | --- | --- |
 | FB-14.1 | **Texture packs on the Vulkan renderer (bug; FB-5.6)** ([#518](https://github.com/arcanite24/pinyon-shift/issues/518)) | S-M | Done |
-| FB-14.2 | **Screenshots without the HUD and a HUD toggle key** ([#519](https://github.com/arcanite24/pinyon-shift/issues/519)) | S | Confirmed inputs |
+| FB-14.2 | **Screenshots without the HUD and a HUD toggle key** ([#519](https://github.com/arcanite24/pinyon-shift/issues/519)). F2 (`bind_hud`, setting `hud_hidden`) holds the game's own HUD-hidden byte, so F8 photos and any capture tool get the frame without the HUD at no render cost; menus and photo mode still draw ([REVERSE_ENGINEERING.md](REVERSE_ENGINEERING.md#developer-options-and-leftover-systems)). The pre-HUD snapshot was not needed | S | Done |
 | FB-14.3 | **HUD scale and safe-zone setting** ([#520](https://github.com/arcanite24/pinyon-shift/issues/520)) | S-M | Probable |
 | FB-14.4 | **Colour grading mods: grading maps and a host LUT** ([#521](https://github.com/arcanite24/pinyon-shift/issues/521)) | S | Confirmed / probable |
 | FB-14.5 | **Shader replacement as a mod folder** ([#522](https://github.com/arcanite24/pinyon-shift/issues/522)) | S-M | Confirmed hook |
