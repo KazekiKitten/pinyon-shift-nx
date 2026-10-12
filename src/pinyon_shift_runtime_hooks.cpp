@@ -6383,6 +6383,33 @@ static void PinyonShiftApplyFreeCamera() {
   });
 }
 
+// The trainer's any car in any event (FB-12.3). sub_826087A0 reads an
+// event's EventRestrictions rows (r25 is the event id) and, for each, sets
+// up a restriction record at r1+176 with sub_825F3138 and decodes the row's
+// Value into it with sub_825FE8B0. The record starts with no make, year,
+// power, PI or other limits; skipping the decode keeps it so, and the row's
+// record is still added as usual. The event's class is checked elsewhere (car
+// select offers to fit the car to it) and is not affected. The title's
+// developer options for this (eventrestrictions, chooseillegalcarforevent)
+// are parsed but read nowhere.
+bool PinyonShiftAnyCarEventRestriction(PPCRegister& r25) {
+  if (!pinyon_shift::cheats::AnyCarInEvents()) {
+    return false;
+  }
+  static std::mutex logged_mutex;
+  static std::set<uint32_t> logged;
+  bool first = false;
+  {
+    std::lock_guard lock(logged_mutex);
+    first = logged.insert(r25.u32).second;
+  }
+  if (first) {
+    pinyon_shift::diagnostics::RecordEvent("cheat.applied", {{"name", "cheat_any_car_events"},
+                                                             {"event_id", fmt::format("{}", r25.u32)}});
+  }
+  return true;
+}
+
 // The trainer's live credits (NP-8.3), through the title's own accessors as
 // its CGivePlayerMoney script action (sub_825AD820) uses them: the profile is
 // sub_824F04B0 of the user at [[0x832DF024] + 108], sub_824E4F78 reads its

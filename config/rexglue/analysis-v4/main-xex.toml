@@ -2114,3 +2114,14 @@ address = 0x82D19DE8
 name = "PinyonShiftArrayReleaseWalk"
 context = true
 jump_address_on_true = 0x82D19DF8
+
+# The trainer's any car in any event (FB-12.3): in sub_826087A0, which reads
+# an event's EventRestrictions rows (r25 the event id), skip the decode of a
+# row's Value (sub_825FE8B0) into the record at r1+176, which sub_825F3138
+# has just set up with no limits; the record is still added
+# (src/pinyon_shift_runtime_hooks.cpp).
+[[midasm_hook]]
+address = 0x826AF10C
+name = "PinyonShiftAnyCarEventRestriction"
+registers = ["r25"]
+jump_address_on_true = 0x826AF118

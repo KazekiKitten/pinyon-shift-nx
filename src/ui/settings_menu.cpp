@@ -1389,6 +1389,9 @@ std::unique_ptr<MenuScreen> SettingsPages::TrainerWorld() {
   // The discount signs and barn finds not yet found, on the map and minimap
   // (NP-8.6).
   rows.push_back(Toggle("SHOW COLLECTIBLES", "cheat_show_collectibles"));
+  // Events load without their make, year and other car limits (FB-12.3);
+  // an event's ticket picks it up the next time it loads.
+  rows.push_back(Toggle("ANY CAR IN ANY EVENT", "cheat_any_car_events"));
   return std::make_unique<MenuScreen>("WORLD", std::move(rows));
 }
 
