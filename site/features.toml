@@ -175,7 +175,7 @@ cells = ["yes", "yes", "yes", "not yet"]
 [[platform]]
 feature = "Asset and texture mods"
 link = "modding.md"
-cells = ["partly: texture replacement not on the Vulkan renderer yet ([#518](https://github.com/arcanite24/pinyon-shift/issues/518))", "partly: texture replacement not on the Vulkan renderer yet ([#518](https://github.com/arcanite24/pinyon-shift/issues/518))", "partly: texture replacement not on the Vulkan renderer yet ([#518](https://github.com/arcanite24/pinyon-shift/issues/518))", "partly: texture replacement not on the Vulkan renderer yet ([#518](https://github.com/arcanite24/pinyon-shift/issues/518))"]
+cells = ["yes", "yes", "yes", "partly: DXT texture replacements need a GPU with BC formats ([#516](https://github.com/arcanite24/pinyon-shift/issues/516))"]
 
 [[platform]]
 feature = "Forza Horizon XE"

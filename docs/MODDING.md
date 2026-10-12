@@ -209,10 +209,12 @@ lists the mods merged into each member.
 
 ### Textures
 
-**Texture replacement works only on the D3D12 renderer today.** The dump,
-the replacement and the reload are implemented in the D3D12 texture cache;
-the Vulkan renderer, which every platform uses by default, ignores
-`textures/` folders ([#518](https://github.com/arcanite24/pinyon-shift/issues/518)).
+Texture replacement works on the Vulkan renderer every platform uses
+([#518](https://github.com/arcanite24/pinyon-shift/issues/518)). The dump,
+the lookup and the DDS files are shared with the legacy D3D12 cache
+(`pipeline/texture/replacement.cpp` in ShiftGlue). On a GPU without BC
+texture formats (most Android GPUs on their stock driver, #516) the game
+decodes DXT textures on load, so only 8_8_8_8 replacements apply there.
 
 A mod may replace textures without touching the archives that hold them:
 
