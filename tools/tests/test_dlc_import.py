@@ -15,6 +15,20 @@ SPEC.loader.exec_module(dlc)
 
 
 class DlcImportTests(unittest.TestCase):
+    def test_payload_digest_order_is_the_same_on_every_platform(self):
+        # The catalog digests were made on Windows, where paths sort without
+        # case; macOS and Linux must list the files in the same order.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name in ("Media/audio/b.fsb", "Media/AnimatedObjects/a.pgeo", "Media/1.puboffer",
+                         "spa.bin", "Media/aIOpenWorld/r.owt"):
+                (root / name).parent.mkdir(parents=True, exist_ok=True)
+                (root / name).write_bytes(name.encode())
+            files, _ = dlc.payload_catalog(root)
+        self.assertEqual([f["path"] for f in files],
+                         ["Media/1.puboffer", "Media/aIOpenWorld/r.owt",
+                          "Media/AnimatedObjects/a.pgeo", "Media/audio/b.fsb", "spa.bin"])
+
     def test_active_content_reverification_rejects_tampering_and_preserves_save(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
