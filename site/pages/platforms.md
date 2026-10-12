@@ -55,6 +55,7 @@ The core-count limits were tested on the same PC with the game restricted to few
 - Audio goes through SDL3, which loads PipeWire, PulseAudio or ALSA at run time.
 - SteamOS ships `librenderdoc.so`, which hooked every run; RenderDoc is now used only when it is already loaded.
 - Input comes from SDL3, including SDL's Deck driver and Steam Input's virtual pad when Steam starts the game.
+- LLVM's Linux `ld.lld` and the sysroot's `wayland-scanner` link `libxml2.so.2`, which SteamOS, Arch and other distributions with libxml2 2.14 or newer no longer have. Setup runs both through small wrappers that load only that library and its ICU from the sysroot, so nothing has to be installed on the host.
 
 **The Deck.** The Steam Deck LCD (Zen 2, 4 cores and 8 threads, RDNA 2 on Mesa RADV) runs the race and free roam at 60 fps at 1x under its default 15 W limit. A replayed frame at 1x:
 

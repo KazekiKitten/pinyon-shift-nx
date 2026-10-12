@@ -47,6 +47,12 @@ foreach(_pinyon_lang C CXX ASM)
 endforeach()
 
 set(_pinyon_link "-fuse-ld=lld -L${PINYON_LINUX_TOOLCHAIN}/sniper-libgcc -static-libstdc++")
+# On a Linux host, setup's bin/ wrappers run ld.lld and wayland-scanner with
+# the sysroot's libxml2.so.2, which current distributions no longer ship.
+set(_pinyon_wrappers "${PINYON_LINUX_TOOLCHAIN}/bin")
+if(NOT CMAKE_HOST_WIN32 AND EXISTS "${_pinyon_wrappers}/ld.lld")
+  string(APPEND _pinyon_link " --ld-path=${_pinyon_wrappers}/ld.lld")
+endif()
 set(CMAKE_EXE_LINKER_FLAGS_INIT "${_pinyon_link}")
 set(CMAKE_SHARED_LINKER_FLAGS_INIT "${_pinyon_link}")
 set(CMAKE_MODULE_LINKER_FLAGS_INIT "${_pinyon_link}")
@@ -74,5 +80,9 @@ endif()
 # sysroot's scanner runs on a Linux build host with libxml2 (LX-1.4 replaces
 # it with pregenerated sources so Windows can cross-build).
 if(NOT CMAKE_HOST_WIN32 AND NOT WAYLAND_SCANNER)
-  set(WAYLAND_SCANNER "${CMAKE_SYSROOT}/usr/bin/wayland-scanner" CACHE FILEPATH "")
+  if(EXISTS "${_pinyon_wrappers}/wayland-scanner")
+    set(WAYLAND_SCANNER "${_pinyon_wrappers}/wayland-scanner" CACHE FILEPATH "")
+  else()
+    set(WAYLAND_SCANNER "${CMAKE_SYSROOT}/usr/bin/wayland-scanner" CACHE FILEPATH "")
+  endif()
 endif()

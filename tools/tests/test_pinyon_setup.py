@@ -123,6 +123,50 @@ class ToolchainPinTests(unittest.TestCase):
         # The sysroot matches the one the toolchain file was written for.
         self.assertIn("sniper", linux["sysroot"]["url"])
 
+    def test_only_libxml2_and_its_icu_are_given_to_the_host_programs(self):
+        # #472: ld.lld and wayland-scanner get libxml2.so.2 from the sysroot;
+        # zlib, liblzma and everything else stay the host's.
+        match = pinyon_setup.HOST_LIBRARY.match
+        for name in ("libxml2.so.2", "libicuuc.so.67", "libicudata.so.67"):
+            self.assertTrue(match(name), name)
+        for name in ("libxml2.so", "libxml2.so.2.9.10", "libicuuc.so", "libicuuc.so.67.1",
+                     "libz.so.1", "liblzma.so.5", "libicui18n.so.67"):
+            self.assertFalse(match(name), name)
+
+    @unittest.skipIf(sys.platform == "win32", "symlinks and sh wrappers")
+    def test_host_wrappers_point_at_the_pinned_programs(self):
+        with tempfile.TemporaryDirectory() as temp:
+            temp = Path(temp)
+            libs = temp / "sysroot/usr/lib/x86_64-linux-gnu"
+            libs.mkdir(parents=True)
+            for name in ("libxml2.so.2", "libicuuc.so.67", "libz.so.1"):
+                (libs / name).write_bytes(b"")
+            tools = {"llvm": {"install_path": str(temp / "llvm")},
+                     "sysroot": {"install_path": str(temp / "sysroot")}}
+            folder = temp / "linux-x86_64"
+            folder.mkdir()
+            pinyon_setup.prepare_host_wrappers(folder, tools)
+            self.assertEqual(sorted(p.name for p in (folder / "host-libs").iterdir()),
+                             ["libicuuc.so.67", "libxml2.so.2"])
+            wrapper = (folder / "bin/ld.lld").read_text(encoding="utf-8")
+            self.assertIn(str(temp / "llvm/bin/ld.lld"), wrapper)
+            self.assertIn("host-libs", wrapper)
+            self.assertTrue((folder / "bin/wayland-scanner").stat().st_mode & 0o100)
+
+    def test_an_unfinished_configure_starts_over(self):
+        with tempfile.TemporaryDirectory() as temp:
+            build = Path(temp)
+            (build / "CMakeFiles").mkdir()
+            (build / "CMakeCache.txt").write_text("CMAKE_EXE_LINKER_FLAGS:STRING=old\n")
+            pinyon_setup.discard_unfinished_configure(build)
+            self.assertFalse((build / "CMakeCache.txt").exists())
+            self.assertFalse((build / "CMakeFiles").exists())
+            # A finished configure keeps its cache.
+            (build / "CMakeCache.txt").write_text("")
+            (build / "build.ninja").write_text("")
+            pinyon_setup.discard_unfinished_configure(build)
+            self.assertTrue((build / "CMakeCache.txt").exists())
+
     def test_the_payload_ships_the_posix_setup(self):
         script = (ROOT / "tools/package-launcher.ps1").read_text(encoding="utf-8")
         include = script.split("$include = @(", 1)[1].split("\n)", 1)[0]

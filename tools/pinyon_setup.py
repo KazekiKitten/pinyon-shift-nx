@@ -29,6 +29,8 @@ import hashlib
 import json
 import os
 import platform
+import re
+import shlex
 import shutil
 import stat
 import struct
@@ -360,6 +362,40 @@ def prepare_linux_toolchain(tools: dict) -> None:
     gcc10 = ROOT / tools["sysroot"]["install_path"] / "usr/lib/gcc/x86_64-linux-gnu/10"
     for name in ("libgcc_s.so", "libgcc_eh.a"):
         shutil.copyfile(str(gcc10 / name), str(overlay / name))
+    prepare_host_wrappers(folder, tools)
+
+
+# libxml2 2.14 renamed its library libxml2.so.16, so SteamOS, Arch and other
+# current distributions no longer have the libxml2.so.2 that the LLVM
+# release's ld.lld and the sysroot's wayland-scanner link (#472, #474, #514).
+HOST_LIBRARY = re.compile(r"^lib(xml2\.so\.2|icuuc\.so\.\d+|icudata\.so\.\d+)$")
+
+
+def prepare_host_wrappers(folder: Path, tools: dict) -> None:
+    """host-libs/ holds the sysroot's libxml2.so.2 and the ICU it needs, and
+    nothing else; bin/ wraps the two programs so only they load it."""
+    sysroot = ROOT / tools["sysroot"]["install_path"]
+    libs = folder / "host-libs"
+    if libs.exists():
+        shutil.rmtree(libs)
+    libs.mkdir()
+    source = sysroot / "usr/lib/x86_64-linux-gnu"
+    for entry in sorted(source.iterdir()):
+        if HOST_LIBRARY.match(entry.name):
+            os.symlink(str(entry), str(libs / entry.name))
+    wrappers = folder / "bin"
+    wrappers.mkdir(exist_ok=True)
+    for name, target in (("ld.lld", ROOT / tools["llvm"]["install_path"] / "bin/ld.lld"),
+                         ("wayland-scanner", sysroot / "usr/bin/wayland-scanner")):
+        wrapper = wrappers / name
+        wrapper.write_text(
+            "#!/bin/sh\n"
+            "# Written by tools/pinyon_setup.py: runs the pinned program with the\n"
+            "# libxml2.so.2 the host may lack.\n"
+            'libs="$(dirname -- "$0")/../host-libs"\n'
+            'LD_LIBRARY_PATH="$libs${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" '
+            f'exec {shlex.quote(str(target))} "$@"\n', encoding="utf-8")
+        wrapper.chmod(0o755)
 
 
 def require_xcode_tools() -> None:
@@ -663,6 +699,14 @@ def cpu_baseline(name: str) -> str:
     return "fma" if " fma " in flags and " avx2 " in flags else "sse4.1"
 
 
+def discard_unfinished_configure(directory: Path) -> None:
+    """A configure that failed before writing build.ninja may have cached
+    flags from an older toolchain; the retry starts that configure over."""
+    if (directory / "CMakeCache.txt").is_file() and not (directory / "build.ninja").is_file():
+        (directory / "CMakeCache.txt").unlink()
+        shutil.rmtree(directory / "CMakeFiles", ignore_errors=True)
+
+
 def build(progress: Progress, tools: dict, sdk: Path, python: Path, name: str,
           jobs: int, configuration: str = "Release") -> Path:
     presets = PRESETS[name]
@@ -677,6 +721,7 @@ def build(progress: Progress, tools: dict, sdk: Path, python: Path, name: str,
                      f"-DCMAKE_C_COMPILER={llvm / 'clang'}",
                      f"-DCMAKE_CXX_COMPILER={llvm / 'clang++'}"]
     generator = sdk / presets["generator"]
+    discard_unfinished_configure(sdk / "out" / "build" / presets["sdk"])
     run_logged([cmake, "--preset", presets["sdk"], "-DREXGLUE_ENABLE_TRACY=OFF",
                 "-DSDL_HIDAPI_LIBUSB=OFF"] + toolchain, LOGS / "rexglue-configure.log",
                progress, "build", 0, 2, "Configuring ShiftGlue", environment, cwd=sdk)
@@ -710,6 +755,7 @@ def build(progress: Progress, tools: dict, sdk: Path, python: Path, name: str,
         flags = ["-DPINYON_SHIFT_CPU_BASELINE=fma",
                  "-DCMAKE_C_FLAGS=-msse4.1 -mfma -ffp-contract=off",
                  "-DCMAKE_CXX_FLAGS=-msse4.1 -mfma -ffp-contract=off"]
+    discard_unfinished_configure(ROOT / "out" / "build" / preset)
     run_logged([cmake, "--preset", preset, f"-DREXSDK_DIR={sdk}", f"-DPYTHON_EXECUTABLE={python}",
                 "-DREXGLUE_ENABLE_TRACY=OFF", "-DSDL_HIDAPI_LIBUSB=OFF"] + flags,
                LOGS / "preview-configure.log", progress, "build", 28, 30,
