@@ -54,7 +54,7 @@ Keys can be rebound in **F6 > CONTROLS**, and **RESET KEYS** returns to this lay
 
 ## HDR
 
-On an HDR display, turn on HDR in the system first (on Windows, **Settings > Display > Use HDR**), then **F6 > DISPLAY > HDR**. **HDR PAPER WHITE** sets the brightness of white menus and the HUD, **HDR HIGHLIGHTS** how far bright highlights reach, and **HDR CALIBRATION** sets both from test patterns. **HDR COMPARE** shows SDR and HDR side by side. Every HDR setting applies at once. HDR is tested on Windows; on Linux and macOS it's offered when the driver provides an HDR output.
+On an HDR display, turn on HDR in the system first (on Windows, **Settings > Display > Use HDR**), then **F6 > DISPLAY > HDR**. **HDR PAPER WHITE** sets the brightness of white menus and the HUD, **HDR HIGHLIGHTS** how far bright highlights reach, and **HDR CALIBRATION** sets both from test patterns. **HDR COMPARE** shows SDR and HDR side by side. Every HDR setting applies at once. HDR is tested on Windows and on Android (AYN Odin 2 Portal); on Linux and macOS it's offered when the driver provides an HDR output. On Android, HDR appears only on displays that report HDR10, and the brightness slider doesn't change the HDR image: set **HDR PAPER WHITE** to match the menus to your usual brightness. Highlights stop at the peak the display reports (420 nits on the Odin 2 Portal).
 
 ## Immersive camera
 

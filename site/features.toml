@@ -148,7 +148,7 @@ cells = [
   "yes",
   "partly: offered when the driver has an HDR swapchain; not tested",
   "partly: offered when the driver has an HDR swapchain; not tested",
-  "n/a",
+  "partly: HDR10 on displays that report it; tested on the Odin 2 Portal",
 ]
 
 [[platform]]
