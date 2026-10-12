@@ -17,7 +17,7 @@ Most settings live in the game, on <kbd>F6</kbd>, and apply at once. MSAA and th
 | <kbd>F3</kbd> | Performance panel, with the build line (version, commits, build time) to quote in a bug report |
 | <kbd>F7</kbd> | Achievements |
 | <kbd>F8</kbd> | Save the current frame as a PNG photo |
-| <kbd>F10</kbd> | Trainer: credits, game speed, time of day, free camera. Needs cheats on |
+| <kbd>F10</kbd> | [Trainer](#trainer): credits, game speed, time of day, free camera, any car in any event. Needs cheats on |
 | <kbd>F11</kbd> | Fullscreen. Also <kbd>Alt</kbd>+<kbd>Enter</kbd> |
 
 On a Mac, where the F-keys are media keys, use <kbd>Cmd</kbd>+<kbd>,</kbd> for the settings, <kbd>Ctrl</kbd>+<kbd>Cmd</kbd>+<kbd>F</kbd> for fullscreen, <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> for a photo, <kbd>Cmd</kbd>+<kbd>T</kbd> for the trainer and <kbd>Cmd</kbd>+<kbd>Q</kbd> to quit.
@@ -89,6 +89,14 @@ Saves are in the install's state folder, `%LOCALAPPDATA%\PinyonShift\source\<ver
 ```
 
 The previous Pinyon Shift save is kept; `-Restore` switches back to it.
+
+## Trainer
+
+Turn cheats on in **SETTINGS > CHEATS** and restart. The game then plays a separate copy of your profile (`user-modded` in the state folder), so cheated progress never reaches your own save. <kbd>F10</kbd> opens the trainer:
+
+- **PLAYER**: set or add credits, set the wristband level.
+- **WORLD**: game speed, time of day, free camera, collectibles on the map, and **ANY CAR IN ANY EVENT**. With it on, events drop their make, year and other car limits, so the car you drive is eligible. An event's class still applies: car select offers to fit the car to it. Turn it on before you drive up to the event.
+- **GRAPHICS** and **DEBUG**: bloom, motion blur, depth of field, filtering, a file-open log.
 
 ## Treasure Map
 

@@ -79,6 +79,12 @@ xbox = "Console storage"
 pinyon = "Automatic save backups, PNG photos, saves imported from Xenia"
 
 [[original]]
+feature = "Cheats"
+link = "playing.md#trainer"
+xbox = "None"
+pinyon = "A trainer on a separate profile: credits, wristbands, game speed, time of day, free camera, collectibles on the map, any car in any event"
+
+[[original]]
 feature = "Online services"
 link = "dlc.md"
 xbox = "Xbox Live (closed)"
