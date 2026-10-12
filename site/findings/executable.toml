@@ -1,0 +1,313 @@
+# Reverse-engineering records for the "Executable" page.
+
+# ---------------------------------------------------------------- Image layout
+
+[[finding]]
+group = """Image layout"""
+base = """82000000-838A3400"""
+v4 = """82000000-839CB000"""
+name = """image extent and entry point"""
+what = """`default.xex` holds one PE image for the Xenon CPU (machine `0x1F2`, big-endian PowerPC), based at `0x82000000`, 0x18A3400 bytes (24.6 MB) in base and 0x19CB000 (25.8 MB) in v4. The PE entry point is `0x82A6FBC0` in base and `0x82B2CC30` in v4. Thread-local data (`.tls`) is 0x3069 bytes in both."""
+how = """PE headers of the loaded image, read with a short Python script (`struct` over the optional header)."""
+confidence = """confirmed"""
+
+[[finding]]
+group = """Image layout"""
+id = """sections"""
+base = """.rdata 82000600, .pdata 82366E00, .text 823E0000, .data 831F0000, .reloc 83540200"""
+v4 = """.rdata 82000600, .pdata 82389200, .text 82410000, .data 832C0000, .reloc 83630200"""
+name = """section map"""
+what = """Fourteen sections. Read-only data (`.rdata`, 3.6 MB, RTTI and strings) sits first, then the function table (`.pdata`), code (`.text`, 14.7 MB, plus two small code sections `PAGELK` and `_TEXT`), writable data (`.data`, 3.3 MB), and small `.XBMOVIE`, `.NSPCH`, `.tls`, `.XEXID`, `.edata`, `.idata`, `.XBLD` and `.reloc` sections. v4 shifts every section after `.rdata`: `.text` starts 0x30000 later and grows by 0.6 MB."""
+how = """Section headers of both images."""
+confidence = """confirmed"""
+
+[[finding]]
+group = """Image layout"""
+id = """function-count"""
+base = """.pdata 82366E00"""
+v4 = """.pdata 82389200"""
+name = """function table and size profile"""
+what = """`.pdata` lists 57,127 functions (13.7 MB of code) in base and 60,903 (14.3 MB) in v4. The median function is 120 bytes; 7,676 are under 64 bytes and 122 over 4 KB. The recompiler's analysis splits these into 76,262 translated functions and 419,524 addressable entry points (call and jump-table targets)."""
+how = """`.pdata` entries (begin address and length in 4-byte units); counts from the generated function table."""
+confidence = """confirmed"""
+note = """Older backlog entries quote 76,502 translated functions from an earlier analysis run."""
+
+[[finding]]
+group = """Image layout"""
+base = """sub_8241A370"""
+v4 = """sub_8244A320"""
+name = """largest function"""
+what = """The largest `.pdata` unit, 110,012 bytes, more than three times the next (`sub_82BE1880`, 30,196 bytes). Nine entry points inside it are called from elsewhere. The fourth largest is the track render settings serializer `sub_82D505C0`."""
+how = """`.pdata` lengths; entry points from the generated function table. The recompiler also flags its size (an accepted codegen warning)."""
+confidence = """confirmed"""
+note = """purpose not identified"""
+source = """config/rexglue/accepted-codegen-warnings.json"""
+
+[[finding]]
+group = """Image layout"""
+base = """guest phys 0xA0000000, 0x40000000-0x7FFFFFFF"""
+name = """guest memory map"""
+what = """The title's physical allocations fit in the console's 512 MB, seen through the `0xA0000000` view (the `0xC0000000` and `0xE0000000` views alias it). Its virtual heaps lie at `0x40000000`-`0x7FFFFFFF`; committed virtual heap pages total about 110 MB in free roam. UI allocations sit in the `0x2E...` and `0x40...` regions, and some long-lived objects, such as the career profile's value tree, live in a heap below `0x40000000`. Code, vtables and RTTI are in the image from `0x82000000`."""
+how = """Route `snapshot` and `mark` steps that copy guest memory; the UI label scan and the live-profile scan."""
+confidence = """confirmed"""
+note = """Which heap holds which objects comes from scans, not from reading the allocator."""
+source = """docs/native-renderer/FH1_RENDER_TEST_AUTOMATION.md; src/save/live_profile.cpp; src/pinyon_shift_runtime_hooks.cpp"""
+
+# --------------------------------------------------------- Imports and modules
+
+[[finding]]
+group = """Imports and modules"""
+name = """supported retail disc"""
+what = """The supported dump is the USA retail disc MS-2505 (title `4D5309C9`, media `2DC7007B`, version 0.0.0.10) with 18 languages. The ISO is 8,738,846,720 bytes (SHA-256 prefix `83DFC7D0B58B8042`); extract-xiso yields 2,400 files totalling 7,221,319,555 bytes, skipping `$SystemUpdate`."""
+how = """Local dump hashed and extracted."""
+confidence = """confirmed"""
+note = """Locally verified; not matched against a Redump hash."""
+source = """config/supported-dumps.json forza-horizon-usa-ms-2505-retail-base; docs/TITLE_UPDATE_V4_BACKLOG.md Finding: v4 applies exactly to the USA disc"""
+
+[[finding]]
+group = """Imports and modules"""
+base = """default.xex"""
+v4 = """default.xex + default.xexp"""
+name = """default.xex main image"""
+what = """`default.xex` is the entry image: 20,856,832 bytes, image SHA-256 prefix `DB40DF605ADE49A6`. Title update 4 is the `default.xexp` patch applied on top of the same base image; the patched image's SHA-256 prefix is `74B033805AB1BCAA`. Symbol tables for mods are keyed on these two prefixes."""
+how = """Hashed from the extracted disc; v4 hash from the verified patch application."""
+confidence = """confirmed"""
+source = """config/supported-dumps.json; config/mod/fh1-symbols.toml; docs/TITLE_UPDATE_V4_BACKLOG.md Finding: v4 applies exactly to the USA disc"""
+
+[[finding]]
+group = """Imports and modules"""
+base = """SpeechFacade_default.xex"""
+v4 = """SpeechFacade_default.xex + SpeechFacade_default.xexp"""
+name = """speech facade module"""
+what = """`SpeechFacade_default.xex` (2,138,112 bytes, SHA-256 prefix `D54F6AAE6AE2FD6D`) is a separately loaded code module. The campaign loads it and dispatches into its code immediately."""
+how = """Module hash from the dump manifest; load and dispatch shown by the M4 route trace."""
+confidence = """confirmed"""
+source = """config/supported-dumps.json; config/rexglue/pinyon_shift_manifest.toml M4"""
+
+[[finding]]
+group = """Imports and modules"""
+base = """XMediaFacade_default.xex"""
+v4 = """XMediaFacade_default.xex + XMediaFacade_default.xexp"""
+name = """xmedia facade module"""
+what = """`XMediaFacade_default.xex` (2,662,400 bytes, SHA-256 prefix `ED285BEEFEAFCDC9`) is the video playback module. It is loaded during front-end video playback."""
+how = """Module hash from the dump manifest; load shown by the M2 route trace."""
+confidence = """confirmed"""
+source = """config/supported-dumps.json; config/rexglue/pinyon_shift_manifest.toml M2"""
+
+[[finding]]
+group = """Imports and modules"""
+base = """0x831EDA6C"""
+v4 = """0x832B881C"""
+name = """XGetAVPack import thunk"""
+what = """The title's import thunk for the kernel's `XGetAVPack`, which returns the connected AV pack and has no side effects."""
+how = """Import table; called from a host task as a test of guest calls."""
+confidence = """confirmed"""
+source = """config/mod/fh1-symbols.toml kernel.get_av_pack; docs/MODDING.md hello_telemetry"""
+
+# --------------------------------------------------------------------- Classes
+
+[[finding]]
+group = """Classes"""
+id = """rtti-census"""
+base = """.rdata"""
+v4 = """.rdata"""
+name = """RTTI type census"""
+what = """The image keeps MSVC run-time type information: 6,789 type names in base and 7,558 in v4. 3,303 are template instances; of the rest, the largest namespaces are `ForzaUI` (628 types, the front-end screens), `States` (492, game-flow behaviours), `GameModes` (111), `Network` (107), `AIOpenWorld` (78), `Navigation` (74), `IOSys` (51), `Camera` (28), `RaceFeats` (28), `RacingAI` (24), `HorizonGameState` (24), `SatNav` (18), `RadioSystem` (13) and `Replay` (11). Class names, vtables and base classes can be read from these records, which is how most class names on these pages were found."""
+how = """Scan of both images for `.?AV`/`.?AU` type descriptor names, grouped by their innermost namespace."""
+confidence = """confirmed"""
+
+[[finding]]
+group = """Classes"""
+id = """deferred-commands"""
+base = """.rdata"""
+v4 = """.rdata"""
+name = """deferred command classes"""
+what = """Simulation code does not call renderers, presentation objects and audio directly. Each such interface has a `C...Deferred` or `C...Link` owner, and every method call is recorded as a parameter object (`CParams<N>I<Interface><Method>`, N the argument count) and run later on the owning thread. Base has 602 such command types under 24 owners: `CRenderAdapterLink` (104), `CAudioManagerDeferred` (94), `CCarPresentationDeferred` (78), `CRenderThreadLink` (61), `CPresentationDeferred` (35), `CGraphicsStreamDeferred` (33), `CTrackPresentationDeferred` (29) and smaller ones for cameras, particles, UI, crowds, skid marks and mirrors. Most commands take one argument (293) or none (140). `CRenderThreadLink` commands include the frame bracket (`BeginRender`, `EndRender`), post effect switches (motion blur, depth of field, shadows), photo and replay mode, `PushDynamicRenderSettings` and `IgnoreSwap`."""
+how = """RTTI type names nested in the owner classes; counted per owner and argument count."""
+confidence = """probable"""
+note = """The queueing is inferred from the class shapes; the queue itself is not traced."""
+
+[[finding]]
+group = """Classes"""
+id = """v4-classes"""
+v4 = """.rdata"""
+name = """classes the title update adds"""
+what = """v4 adds 792 type names and drops 23 (anonymous-namespace renames). The additions are the Car Challenge system (`CarChallenge` namespace, 224 types: challenge groups, triggers for air, drift, gear, collisions, events and distance, recommendations), Rally (`CRallyAIState`, `CRallyPlayerState`, `CRallyDriverState`, `CCoDriverComponent`, co-driver phrases and pep talks), 335 new `States` behaviours, 57 `ForzaUI` screens, a `SmartGlassComponent`, `CGameOptions` beside a `COldGameOptions`, and new audio commands (`SetRadioRallyMode`, `InitRallyVO`, `HandleDLCAudioLoading`)."""
+how = """Set difference of the two images' RTTI names."""
+confidence = """confirmed"""
+
+[[finding]]
+group = """Classes"""
+base = """0x823E4818"""
+v4 = """0x824147A8"""
+name = """RTTI cast"""
+what = """The title's run-time type cast (`dynamic_cast`). It takes the object in r3, the cast target in r4, source and target type descriptors in r5 and r6 and flags in r7, and reads the complete-object locator from the word before the object's vtable (vtable - 4)."""
+how = """Midasm hook that logs casts of objects without RTTI metadata."""
+confidence = """probable"""
+source = """src/pinyon_shift_runtime_hooks.cpp PinyonShiftGuardUiInvalidRttiCast"""
+
+# ------------------------------------------------------------- Runtime library
+
+[[finding]]
+group = """Runtime library"""
+base = """0x82A7D730, 0x82A7DCA0, 0x82A7F140"""
+v4 = """0x82B3A7E0, 0x82B3AD50, 0x82B3C1F0"""
+name = """CRT memcpy, memmove, memset"""
+what = """The title's C runtime `memcpy` (`0x82A7D730`), `memmove` (`0x82A7DCA0`) and `memset` (`0x82A7F140`). `memmove`'s forward-copy path branches into `memcpy`'s entry rather than having its own loop. `memcpy` alone was about 1 % of the simulation thread in a race."""
+how = """Identified for the `[rexcrt]` replacement table; routing the three to host code leaves race captures unchanged."""
+confidence = """confirmed"""
+source = """config/rexglue/analysis/main-xex.toml [rexcrt]; docs/PERFORMANCE_BACKLOG.md PB-8.1"""
+
+[[finding]]
+group = """Runtime library"""
+base = """0x82A81E80, 0x82A81950"""
+v4 = """0x82B3F830, 0x82B3F300"""
+name = """CRT setjmp and longjmp"""
+what = """The title's CRT `setjmp` is at `0x82A81E80` and `longjmp` at `0x82A81950`, and the title does use them for non-local jumps."""
+how = """Named in the analysis config so the recompiler can model the jumps; v4 from the v4 analysis config."""
+confidence = """confirmed"""
+note = """The optimization survey's statement that no addresses are known for them is out of date."""
+source = """config/rexglue/analysis/main-xex.toml; docs/RECOMP_OPTIMIZATION_SURVEY.md"""
+
+[[finding]]
+group = """Runtime library"""
+base = """sub_82438EA8"""
+v4 = """sub_82468E50"""
+name = """CRT pow"""
+what = """The C runtime's double `pow`, 1,252 bytes: special cases, an integral-exponent path by repeated squaring, and a table-driven log2/exp2 path with sixteenth splits. Called about 11 million times in the `fh1-race-retire` route, almost all while loading."""
+how = """Call sites and constants; a native port compared bit for bit on every call of a route (0 mismatches in 10.9 million)."""
+confidence = """confirmed"""
+source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Hot guest CPU functions"""
+
+[[finding]]
+group = """Runtime library"""
+base = """sub_823EF7E8, sub_82469188"""
+v4 = """sub_8241F8C0, sub_824989D0"""
+name = """CRT frexp and ldexp"""
+what = """`frexp` (`sub_823EF7E8`) splits a double into mantissa and exponent; `ldexp` (`sub_82469188`) scales by a power of two with overflow and underflow handling. Both are used by `pow`."""
+how = """Ported alongside `pow` and compared through it."""
+confidence = """confirmed"""
+source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Hot guest CPU functions"""
+
+[[finding]]
+group = """Runtime library"""
+base = """sub_82A80B78, sub_8244A250, sub_82A84E48, sub_82A84EE8"""
+v4 = """sub_82B3DF18, sub_82479910, sub_82B43BC0, sub_82B43C60"""
+name = """pow helpers"""
+what = """Small CRT helpers of `pow`: a natural log helper (`sub_82A80B78`) used when the table index lands next to 1; a classifier (`sub_8244A250`) that says whether a double is an integer and, if so, odd or even, used for negative bases and zero; and the exponent and `copysign` helpers (`sub_82A84E48`, `sub_82A84EE8`)."""
+how = """Ported alongside `pow` and compared through it."""
+confidence = """confirmed"""
+source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Hot guest CPU functions"""
+
+[[finding]]
+group = """Runtime library"""
+base = """sub_82A7F7B8"""
+v4 = """sub_82B3CD58"""
+name = """CRT math error handler"""
+what = """Reached by `pow` for domain errors (a negative base with a non-integral exponent)."""
+how = """Call from `pow`'s domain-error path; the native port leaves those calls to the original."""
+confidence = """probable"""
+source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Hot guest CPU functions"""
+
+[[finding]]
+group = """Runtime library"""
+base = """sub_82A7F710, sub_82A7F940"""
+name = """CRT _stricmp and strstr"""
+what = """`_stricmp` (`sub_82A7F710`, next to `memset`) is an ASCII case-insensitive compare: it lowers A-Z by or-ing 0x20 and returns the difference of the first unequal pair. `strstr` (`sub_82A7F940`) returns the first occurrence of the second string in the first, or 0. Each is 0.02 % of race samples."""
+how = """Instruction shape in the generated code; `simpleperf` share on the Odin."""
+confidence = """probable"""
+issue = """#465"""
+source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Hot guest CPU functions"""
+
+[[finding]]
+group = """Runtime library"""
+base = """2,207 small byte-loop leaves"""
+name = """no hot string routines"""
+what = """Leaf functions under 120 instructions with byte or halfword loads in a loop (string-shaped code) are together 1.98 % of race samples, the largest 0.23 % (`sub_82CD08C8`). No CRT string routine is a hot spot in a race."""
+how = """Scan of the generated code joined with four `simpleperf record` race profiles on the Odin."""
+confidence = """confirmed"""
+negative = true
+issue = """#465"""
+source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Hot guest CPU functions"""
+
+# -------------------------------------------------------------- Analysis notes
+
+[[finding]]
+group = """Analysis notes"""
+name = """stack switching and interior resumes"""
+what = """The title switches stacks with `KeSetCurrentStackPointers` and resumes execution at interior addresses of functions, and some functions restore r14-r31 before that switch. Together with `setjmp`/`longjmp`, this means not every resume point is a function entry."""
+how = """Audit of the generated code and a trace of the runtime's stack re-entry."""
+confidence = """confirmed"""
+source = """docs/PERFORMANCE_BACKLOG.md PB-3"""
+
+[[finding]]
+group = """Analysis notes"""
+name = """instruction census"""
+what = """The image has 70 `sync`/`eieio`, 230 `lwsync` and 20 `isync` sites, and Xenon fused multiply-adds at 11,725 sites. The title interleaves vector and scalar floating point code closely: the generated code needs 42,445 conditional switches of the denormal (flush) mode one way and 2,153 the other."""
+how = """Instruction counts over the analysed image and the generated code."""
+confidence = """confirmed"""
+source = """docs/ANDROID_PORT_BACKLOG.md AP-0.2; docs/RECOMP_OPTIMIZATION_SURVEY.md E4; docs/NATIVE_PORT_BACKLOG.md NP-3.5"""
+
+[[finding]]
+group = """Analysis notes"""
+base = """82B1ABD0..82B1AC08, 82B3B8B0..82B3B8C8, 82CF87F8, 82F1ED30, 830FEC90, 82F56798"""
+name = """adjustor and tail thunks missing from .pdata"""
+what = """The executable contains many small adjustor and tail thunks with no `.pdata` entry: six adjustor thunks at `82B1ABD0`-`82B1AC08`, leaf and tail thunks at `82B3B8B0`-`82B3B8C8`, tail adjustors `82CF87F8` and `82F1ED30` (two callers), a deleting-destructor thunk `830FEC90`, and `82F56798`, the one member of vtable `0x8227A648` that `.pdata` omits."""
+how = """Analysis gaps found by xref and vtable scans, fixed with explicit `[functions]` entries."""
+confidence = """confirmed"""
+source = """config/rexglue/analysis/main-xex.toml [functions]"""
+
+[[finding]]
+group = """Analysis notes"""
+base = """82F5CC68, 82F76188, 82F762A0, 830ED910, 831411E8"""
+name = """leaf routines missing from .pdata"""
+what = """Leaf routines `82F5CC68` (0x90 bytes), `82F76188` and `82F762A0` (0x88) have no `.pdata` entry. `830ED910` (0x40C) is a context-restore routine placed after a `KeBugCheck` no-return path. `831411E8` is an atomic-increment leaf in the function table at `0x832DE99C`, called from `0x83144F30`."""
+how = """Function-boundary analysis and xref."""
+confidence = """confirmed"""
+source = """config/rexglue/analysis/main-xex.toml [functions]"""
+
+[[finding]]
+group = """Analysis notes"""
+base = """0x8328C134, 829CB048, 0x829C9528, 0x822B4490, 830B0050, 830B0058, 830B00B8, 8249C648, 8249CC50"""
+name = """callback tables and their thunks"""
+what = """`829CB048` (0x30 bytes) is the middle entry of a three-address table at `0x8328C134`, reached from the callback dispatcher `0x829C9528` (outer caller return `0x829C4058`). The table at `0x822B4490` points at thunks `830B0050`, `830B0058` and `830B00B8`. `8249C648` and `8249CC50` are callback adapters registered elsewhere. None of these has a `.pdata` entry."""
+how = """Trace of unresolved indirect calls, then xref and table scans."""
+confidence = """confirmed"""
+source = """config/rexglue/analysis/main-xex.toml [functions]"""
+
+[[finding]]
+group = """Analysis notes"""
+base = """0x823F4FE8, 8249BE98..8249D660, 824516D0..82DBD148"""
+name = """registered callback adapter families"""
+what = """A family of 21 callback adapters (`8249BE98`-`8249D660`) is passed to the registration function `0x823F4FE8`. A further 47 registered adapters that end in `bctr` lie between `824516D0` and `82DBD148`. None has a `.pdata` entry."""
+how = """Xref of the registration call arguments and a scan for `bctr` adapters."""
+confidence = """confirmed"""
+source = """config/rexglue/analysis/main-xex.toml [functions]"""
+
+[[finding]]
+group = """Analysis notes"""
+base = """830B52B8..830B52E8, 830B52F0, 830B6520..830B6570, 0x830B666C, 830B6C50"""
+name = """audio-side vtable thunk clusters"""
+what = """Six thunks at `830B52B8`-`830B52E8` plus a 0xF4-byte dispatcher at `830B52F0` are vtable targets reached on the M3 route. A second cluster of nine thunks `830B6520`-`830B6570` (the last 0xFC bytes) is reached after audio render startup; the `blr` at `0x830B666C` is padding, not a function. `830B6C50` (0x18 bytes) is another missing entry nearby."""
+how = """Unresolved indirect calls in route traces, then a vtable scan."""
+confidence = """confirmed"""
+source = """config/rexglue/analysis/main-xex.toml [functions]"""
+
+[[finding]]
+group = """Analysis notes"""
+base = """0x890E2FA0, 0x890E2FB8, 0x890A6308, 88055B80, 882435D8"""
+v4 = """same"""
+name = """facade thunks missing from .pdata"""
+what = """In the speech facade, the only function analysis cannot place on its own is a 0x18-byte argument-shuffle thunk at `0x890E2FA0`: the direct target of the adjacent thunk at `0x890E2FB8`, it tail-branches to the `.pdata` function `0x890A6308`. In the xmedia facade, the last `.pdata` function `88055B80` is a 0x10-byte virtual-call thunk that gap filling would wrongly extend into padding, and `882435D8` (0x10 bytes) is reached right after the facade registers itself, in a slot no `.pdata` entry owns."""
+how = """Function-boundary analysis and a trace of facade registration, resolved by manual `[functions]` entries; the v4 facade configs are identical."""
+confidence = """confirmed"""
+source = """config/rexglue/analysis/speech-facade.toml; config/rexglue/analysis/xmedia-facade.toml"""
+
+[[finding]]
+group = """Analysis notes"""
+base = """82AD8138, 82AD813C, 82AD836C"""
+name = """switch branches outside their function"""
+what = """Two `bdz` branches at `82AD8138` and `82AD813C` jump outside their function to `82AD836C`. They handle the switch's out-of-range CTR cases (selectors 6 and 7)."""
+how = """Recompiler warnings reviewed and accepted."""
+confidence = """confirmed"""
+source = """config/rexglue/accepted-codegen-warnings.json"""

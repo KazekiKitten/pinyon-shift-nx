@@ -1,0 +1,198 @@
+# Audio engine, speech banks and the radio in Forza Horizon (base and v4).
+# Rendered by site/build.py on the reverse-engineering audio page.
+
+# ---------------------------------------------------------------- Audio engine
+
+[[finding]]
+group = """Audio engine"""
+base = """0x83439490, sub_82BADF40"""
+v4 = """0x8352EA5C"""
+name = """FMOD audio manager and cues"""
+what = """The global at `0x83439490` is the audio manager (`IAudioManager`) over FMOD Ex events. Its vtable +280 loads an FMOD event project (`.fev`), +300 creates a named cue (group path, cue name) and +304 a programmer-sound cue that streams from an FSB. A cue's vtable +72 plays, +76 stops, +12 releases, and +84 and +88 report playing and channels; +36 is a legacy play (`sub_82BADF40`, with a report-missing flag and a subsample index)."""
+how = """Loading the Rally co-driver bank and playing cues from the title's audio update through these methods; non-silent PCM captures."""
+confidence = """confirmed"""
+source = """src/pinyon_shift_runtime_hooks.cpp ProbeRallyAudio, ProbeRallyPace"""
+
+[[finding]]
+group = """Audio engine"""
+base = """sub_82BB5918"""
+v4 = """sub_82C74230"""
+name = """CAudioEngine::Update"""
+what = """`CAudioEngine::Update` (`0x82BB5918`) is the audio update, called through a function slot on the audio thread before the ordinary FMOD update. It owns cue operations: cues are safe to start, stop and release from here."""
+how = """Replacement hook used by the base-disc Rally adapter to schedule pace notes; v4 address by context mapping."""
+confidence = """probable"""
+source = """docs/TITLE_UPDATE_V4_BACKLOG.md Review of the base-disc Rally adapter; src/fh1_v4_addresses.inc"""
+
+[[finding]]
+group = """Audio engine"""
+base = """sub_82FA84E8, sub_830072D0"""
+name = """FMOD channel settings race"""
+what = """Cue cleanup `sub_82FA84E8` clears a channel's shared-settings pointer, and the channel-settings update `sub_830072D0` reads that pointer repeatedly. Cleanup on a thread other than the audio thread can crash the update with a null read at `0x38`, so cue work belongs in `CAudioEngine::Update`."""
+how = """Crash report and read-only thread trace; moving the cue work into `CAudioEngine::Update` removed the fault in later runs."""
+confidence = """probable"""
+note = """The crash was intermittent; the thread mismatch was observed."""
+source = """docs/DLC_BACKLOG.md Saved-garage stage-three finish; Rally audio update ownership"""
+
+[[finding]]
+group = """Audio engine"""
+base = """82FB4AF8"""
+name = """XMA audio output"""
+what = """The title's audio output is 48 kHz six-channel XMA, written by the audio thread through the XMA hardware registers. About 22 % of that thread's time goes to stores to the XMA MMIO range (15.6 %) and the XMA context decode they trigger (14.6 %), besides reverb (about 12 %) and biquad filters."""
+how = """`simpleperf` inclusive call-graph profiles on Android devices (Odin, 8 Elite)."""
+confidence = """confirmed"""
+note = """Shares are from the recompiled build on ARM devices, not console timings."""
+issue = """#469"""
+source = """docs/PERFORMANCE_BACKLOG.md PB-3.11; docs/ANDROID_PORT_BACKLOG.md; docs/RECOMP_OPTIMIZATION_SURVEY.md"""
+
+[[finding]]
+group = """Audio engine"""
+base = """sub_82A63F40, sub_82A63FE8, sub_823F2960"""
+name = """custom soundtrack and the radio mute"""
+what = """FH1 supports the console's custom soundtrack only minimally: it sends XMPSetPlaybackController (`0x0007001A`, from `sub_82A63F40`) and XMPGetPlaybackController (`0x0007001B`, from `sub_82A63FE8`) and never drives the player. It polls the controller every frame and mutes its own radio and music while the system player owns it (title music fell silent within a second and came back); effects and ambience keep playing. The `0x0A000003` notification and voice category 1's volume (`XAudioGetVoiceCategoryVolume`, read in a loop and cached by `sub_823F2960` at object+536) change nothing audible."""
+how = """Static reading, then a run-time probe that took the playback controller and measured the title music's RMS."""
+confidence = """confirmed"""
+issue = """#420 #445"""
+source = """docs/FEATURE_BACKLOG.md FB-1, FB-1.1; src/ui/music.h"""
+
+[[finding]]
+group = """Audio engine"""
+base = """AudioEngineConfig.xml, AudioMixerSnapshots.xml, audio/cars/CarModelTuning.zip"""
+v4 = """same"""
+name = """audio mix"""
+what = """Per-category levels (player engine, opponents, tyres, wind, music, ambience), a normal and a TV compressor set, per-state ducking, and the map from car to engine sound bank."""
+how = """Archive listing."""
+confidence = """probable"""
+source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Developer options and leftover systems"""
+
+# --------------------------------------------------- Speech and ambience banks
+
+[[finding]]
+group = """Speech and ambience banks"""
+v4 = """same"""
+name = """Rally co-driver speech banks"""
+what = """Rally ships co-driver FEV/FSB speech banks for English (`EN`) and Mexican Spanish (`MX`). Its calls play through the audio manager, either as a streaming cue such as `MedRight` or through the named-event cue factory for authored FEV events. Opening further FSB streams for streamed cues hits the base allocator's out-of-memory trap."""
+how = """Experiment: cue starts through the title's audio manager with non-silent PCM captures; a failed streaming trial."""
+confidence = """confirmed"""
+source = """docs/DLC_BACKLOG.md Private four-stage director and resume (pace notes, audio probe)"""
+
+[[finding]]
+group = """Speech and ambience banks"""
+v4 = """CCoDriverPepTalk, CPlayRallyChampionDialogue, CRallyPostChampMapVO, CWaitForVO, CSetNormalEQ"""
+name = """v4 Rally audio behaviours"""
+what = """v4 adds Rally audio behaviours: `CCoDriverPepTalk`, `CPlayRallyChampionDialogue`, `CRallyPostChampMapVO`, `CWaitForVO` and `CSetNormalEQ`."""
+how = """String comparison of the base and v4 images."""
+confidence = """confirmed"""
+source = """docs/TITLE_UPDATE_V4_BACKLOG.md What v4 adds"""
+
+[[finding]]
+group = """Speech and ambience banks"""
+v4 = """same"""
+name = """Autoshow ambience bank"""
+what = """While an XE car is shown, the Autoshow asks for the ambience bank `AMB_FA_Autoshow.fsb`, which XE does not ship. The miss is logged and harmless, and also happens on the console."""
+how = """File-open log with the XE mod; also seen on console."""
+confidence = """probable"""
+source = """docs/MODDING.md The Forza Horizon XE mod"""
+
+# --------------------------------------------------- Radio banks and playlists
+
+[[finding]]
+group = """Radio banks and playlists"""
+base = """media/audio/radio/Radio_Music.fsb"""
+v4 = """same"""
+name = """radio music bank"""
+what = """The radio uses FMOD Ex, not XACT. All music is one loose bank, `Radio_Music.fsb` (FSB4, 680 MB, 127 samples): plain MPEG-1 Layer III at 48 kHz, 160 kbps CBR, 480-byte frames, mono for the 3D location stations and stereo for Radio1-3, decoded in guest software rather than by XMA hardware. `Radio_Music.lst` lists the source WAVs, and DJ lines are in `Radio_VO_<lang>.fsb`."""
+how = """Parsing the bank headers and MPEG frames; a byte-for-byte rebuild of the music bank and all four VO banks."""
+confidence = """confirmed"""
+issue = """#420"""
+source = """docs/FEATURE_BACKLOG.md FB-1, FB-1.3; tools/build-fh1-radio.py; docs/REVERSE_ENGINEERING.md@a72a92a5f215 Radio"""
+
+[[finding]]
+group = """Radio banks and playlists"""
+base = """media/audio/radio/RadioSystem.xml"""
+v4 = """same"""
+name = """station list"""
+what = """`RadioSystem.xml` defines nine stations: `Radio1` Horizon Bass Arena, `Radio2` Horizon Pulse, `Radio3` Horizon Rocks (stereo music), `Radio4_Silent` (off), and the mono 3D location stations `Radio5_3d_PreRace`, `Radio6_3d_Autoshow`, `Radio7_3d_Workshop`, `Radio8_3d_Paintshop` and `Radio9_3d_Streetrace`. It also has 127 `MusicTrack` entries (name, artist, FMOD sample name and per-time-of-day likelihoods)."""
+how = """Reading the file; station changes in game."""
+confidence = """confirmed"""
+source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Radio; docs/FEATURE_BACKLOG.md FB-1.3"""
+
+[[finding]]
+group = """Radio banks and playlists"""
+base = """RadioSystem.xml Playlist noRepeat"""
+v4 = """same"""
+name = """station playlists accept added tracks"""
+what = """Each station's `<Playlist>` lists `MusicTrack` entries that name bank samples by FMOD name. The game plays samples appended to the bank (stock indexes unchanged) when they are added to or replace a station's playlist. The playlist's `noRepeat` attribute makes the picker skip that many recently played tracks, so a short replacement playlist needs it lowered."""
+how = """A custom-station mod with two test tones replacing all three stations: the title opened the mod's bank and XML and played both tones after station changes."""
+confidence = """confirmed"""
+note = """The `noRepeat` meaning is probable; the track-name popup and ident transitions are not checked."""
+issue = """#420"""
+source = """docs/FEATURE_BACKLOG.md FB-1.4; tools/build-fh1-radio.py merge_playlist"""
+
+[[finding]]
+group = """Radio banks and playlists"""
+base = """RadioSoundbankInfo_Music.xml, generateradiosoundbankinfo"""
+v4 = """same"""
+name = """radio soundbank info file"""
+what = """`RadioSoundbankInfo_Music.xml` repeats each sample's three sync points in milliseconds (rounded down) with its sample index and length (`FileLength`); `SyncpointIndexIdentStart` is always 2 and `OffsetStartNextTrack`/`SyncpointStartNextTrack` always 0/-1. Its header says the game generates it with the launch option `generateradiosoundbankinfo`, a string present in the v4 image."""
+how = """Computing the file from the bank and comparing it with the shipped one."""
+confidence = """confirmed"""
+note = """The generator option itself was not run."""
+issue = """#420"""
+source = """docs/FEATURE_BACKLOG.md FB-1, FB-1.3; tools/build-fh1-radio.py"""
+
+[[finding]]
+group = """Radio banks and playlists"""
+base = """FSB4 sample headers"""
+v4 = """same"""
+name = """FSB4 sample header layout"""
+what = """An FSB4 bank is little-endian: a 48-byte header (`FSB4`, sample count, sample-header bytes, data bytes, version, mode, then a reserved field and hash), then one header per sample: u16 header size, a 30-byte name, length in samples, compressed bytes, loop start and end, mode and default frequency. The radio's samples carry an extra `SYNC` block after the first 80 bytes: a count and 260-byte markers (u32 position in samples, then a NUL-padded name), `SongStart`, `EventStart` and `IdentStart` for every sample. The audio data starts right after the sample headers, each sample aligned."""
+how = """Parsed the shipped `Radio_Music.fsb` (127 samples) and rebuilt its header byte for byte with `tools/build-fh1-radio.py --check-bank`; the page's reader was run on the same bank."""
+confidence = """confirmed"""
+issue = """#420"""
+source = """tools/build-fh1-radio.py read_bank"""
+
+# ---------------------------------------------------------- Radio presentation
+
+[[finding]]
+group = """Radio presentation"""
+base = """executable strings"""
+name = """selectable stations are fixed in code"""
+what = '''The executable names the player-selectable stations itself: the `RadioN` names, `Radio4_Silent` for off, `ui\textures\horizon\hud\radio\radio1..3.xds` and the option strings `IDS_RadioStation_Option_1/2/3/Off`. Adding a fourth selectable station therefore needs guest code changes, not only data.'''
+how = """Strings in the executable."""
+confidence = """probable"""
+note = """The names are confirmed to be in the executable; that the selectable count is fixed in code is probable."""
+issue = """#453"""
+source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Radio"""
+
+[[finding]]
+group = """Radio presentation"""
+base = """Horizon.zip/Hud/Radio/RS_BassArena.xds, RS_Pulse.xds, RS_2Eleven.xds, RS_Off.xds"""
+v4 = """same"""
+name = """station popup logos"""
+what = """The logos shown at the right of the HUD when the station changes: 210x100 DXT5 (`k_DXT4_5_AS_16_16_16_16`), tiled, 8-in-16, one mip level. `RS_2Eleven` is Horizon Rocks. `RS_Off.xds` (32x32) is the radio-off icon."""
+how = """Decoding the textures; a re-encoded `RS_BassArena` showed in the Radio1 popup."""
+confidence = """confirmed"""
+issue = """#445"""
+source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Radio"""
+
+[[finding]]
+group = """Radio presentation"""
+base = """Horizon.zip/Hud/Radio/Radio1-3.xds"""
+v4 = """same"""
+name = """placeholder station logos"""
+what = """64x32 DXT1 images that only read "Radio N". Their paths are the ones named in the executable, but the station popup shows the `RS_*` textures instead."""
+how = """Decoding the textures; route captures of station changes."""
+confidence = """guess"""
+note = """Guess that they are unused in normal play."""
+source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Radio"""
+
+[[finding]]
+group = """Radio presentation"""
+base = """MyProfile.str 0xA29E, 0xA31E, 0xA39E, 0x7693; Tips.str 0x0B3A/0xE484, 0xF203/0x0063, 0x9730/0x94AE; Livery_Decals.str 0x6AF9, 0x328D, 0xAEF9"""
+v4 = """same"""
+name = """station strings"""
+what = """`MyProfile.str` keys `0xA29E`, `0xA31E` and `0xA39E` are the three station names, the values of the RADIO STATION option (`0x7693` is the row label). `Tips.str` pairs `0x0B3A`/`0xE484`, `0xF203`/`0x0063` and `0x9730`/`0x94AE` are the loading tips' title and text for Bass Arena, Pulse and Rocks, and `Livery_Decals.str` keys `0x6AF9`, `0x328D` and `0xAEF9` name the station decals."""
+how = """Reading the string tables."""
+confidence = """confirmed"""
+note = """Confirmed in the tables; their use on the option screen is probable (not seen on screen)."""
+source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Radio"""

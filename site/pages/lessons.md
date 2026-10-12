@@ -86,4 +86,4 @@ Other recompilers' published optimizations, and which applied here, are surveyed
 
 ## Keep the record
 
-Every finding about the game (a function's purpose, a structure offset, a setting's effect, an address in the title update) goes into the repository in the same change: semantic names in `config/mod/fh1-symbols.toml`, everything else as a row in [REVERSE_ENGINEERING.md](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/REVERSE_ENGINEERING.md) with how it was established and a confidence. Negative results count. The record holds analysis only, never disassembly, decompiled code or game data ([Legal](legal.md)).
+Every finding about the game (a function's purpose, a structure offset, a setting's effect, an address in the title update) goes into the repository in the same change: semantic names in `config/mod/fh1-symbols.toml`, everything else as a record in `site/findings/`, which the [Reverse engineering](reverse-engineering.md) pages render, with how it was established and a confidence. Negative results count. The record holds analysis only, never disassembly, decompiled code or game data ([Legal](legal.md)).

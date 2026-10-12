@@ -115,7 +115,7 @@ PINYON_MOD_EXPORT int rex_mod_create(const PinyonModApi* api, PinyonMod* mod);
 Through the API a mod can:
 
 - Subscribe to hook points: frame tick, the player's vehicle pose, save encrypt and decrypt, file open, pause menu buttons.
-- Read and write guest memory, and look up symbols and offsets by name. Mods never hard-code addresses.
+- Read and write guest memory, and look up functions, hook sites and offsets by name instead of hard-coding them. The table does not name data globals yet, so the [Game objects](game-objects.md) examples give the two they need for both executables.
 - Call guest functions from a guest task on the game's main thread.
 - Register settings and rebindable keys, show dialogs and write to the log.
 - Draw HUD labels, add rows to **SETTINGS > MOD ACTIONS** and replace text in the game's string tables.

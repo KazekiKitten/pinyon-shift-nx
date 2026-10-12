@@ -1,0 +1,311 @@
+# Reverse-engineering records for the "Threads and frame" page.
+
+# ---------------------------------------------------------------- Thread map
+
+[[finding]]
+group = """Thread map"""
+base = """8255AE10, 825A6320, 82FB4AF8, 82C0C8C8"""
+v4 = """825CEC88, 8261E318, 83075D18, 82CCC368"""
+name = """guest thread census"""
+what = """About 42 guest threads are live in a race. The busy ones are the main (simulation) thread `8255AE10`, about 55 % busy and blocked in the GPU fence wait for most of the rest, the render thread `825A6320` at 39 %, the audio thread `82FB4AF8` at 29 %, and eleven job workers started at `82C0C8C8`. About fourteen other threads use about half a core together. All hot work runs on ordinary threads; the title does not use fibers there."""
+how = """Thread sampler over all guest threads for 15 s of the `fh1-race-sync` route; v4 entries from per-thread `simpleperf` on the Astra, matched by their hot functions and CPU shares."""
+confidence = """confirmed"""
+note = """Shares are of recompiled code on a Ryzen 7 5800X, not console timings. The v4 entries are probable."""
+source = """docs/NATIVE_PORT_BACKLOG.md NP-3.8; docs/PERFORMANCE_BACKLOG.md Budget; docs/REVERSE_ENGINEERING.md@a72a92a5f215 Hot guest CPU functions; docs/RECOMP_OPTIMIZATION_SURVEY.md"""
+
+[[finding]]
+group = """Thread map"""
+base = """825A6320, sub_825A6208, sub_8259F3E8"""
+v4 = """8261E318, sub_826164D0"""
+name = """render thread"""
+what = """The render thread (entry `825A6320`) calls its frame function `sub_8259F3E8` in a loop from `sub_825A6208`. In a race it spends 6.5-7.8 ms a frame, about 68 % of it waiting on GPU fences (10-11 waits a frame)."""
+how = """Thread sampler and `simpleperf --call-graph fp` call chains."""
+confidence = """confirmed"""
+note = """Costs are of recompiled code on a Ryzen 7 5800X."""
+source = """docs/PERFORMANCE_BACKLOG.md Where the frame stands; docs/DESKTOP_RENDERER_BACKLOG.md DR-0.2; docs/REVERSE_ENGINEERING.md@a72a92a5f215 Hot guest CPU functions"""
+
+[[finding]]
+group = """Thread map"""
+base = """82FB4AF8"""
+v4 = """83075D18"""
+name = """audio thread"""
+what = """The audio thread (entry `82FB4AF8`) is the third busiest thread in a race, about 29 % busy. It produces the title's XMA output (see the audio page). Its hottest functions are the reverb `sub_8300D580` and a six-channel biquad filter `sub_82FC6CC0`."""
+how = """Thread sampler; per-thread `simpleperf` on the Astra (v4)."""
+confidence = """confirmed"""
+source = """docs/NATIVE_PORT_BACKLOG.md NP-3.8; docs/REVERSE_ENGINEERING.md@a72a92a5f215 Hot guest CPU functions; docs/PERFORMANCE_BACKLOG.md PB-3.11"""
+
+[[finding]]
+group = """Thread map"""
+base = """sub_82C0C8C8"""
+v4 = """82CCC368"""
+name = """job worker threads"""
+what = """Eleven guest threads start at `sub_82C0C8C8`. In a race one runs in 1.3-3 G-cycle bursts through `sub_82D18D60` > `sub_82D35390` > `sub_82D18C90` > `sub_82B8D9C0` > `sub_82B8ED78`, spread over the `sub_82D2xxxx` and `sub_82CB6xxx` families with no leaf above 7 %."""
+how = """Thread sampler on the simulated low-spec run."""
+confidence = """probable"""
+source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Hot guest CPU functions"""
+
+[[finding]]
+group = """Thread map"""
+base = """82E4B478, sub_82E4B2D0, 830C6918"""
+name = """asset worker and background thread"""
+what = """An asset worker thread does the decompression while loading: the LZX block decoder and the inflate loop are among its three hot functions. A background thread `830C6918` mostly formats text and allocates: its busiest leaves are the CRT printf engine (12 % of busy samples, about 1 % of a core in a race), the heap allocator (11 %) and a large load-heavy routine (11 %)."""
+how = """Thread sampler on desktop and on the simulated low-spec run."""
+confidence = """probable"""
+note = """The records name the asset worker both as thread `82E4B478` and as `sub_82E4B2D0`; which is the entry is not settled."""
+source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Hot guest CPU functions"""
+
+# ----------------------------------------------------------------- Main loop
+
+[[finding]]
+group = """Main loop"""
+base = """8255AE10, sub_823ED888, 0x823EDA10"""
+v4 = """825CEC88, 0x8241DAD0"""
+name = """main thread runs the simulation"""
+what = """The main thread runs the simulation loop `sub_823ED888` and also submits the scene. The site `0x823EDA10` is passed once per title frame and serves as the per-frame tick (`frame.tick`); there r28 is the frame root, whose word at `+2404` is a route state and byte at `+4168` a transition-active flag that the loop body reads right after, and r31 is the route root. A race step costs 4.6-5.1 ms, one step per frame at 120 fps. The loop is woken by the vblank callback (see the simulation vblank record), and much of its idle time is spent in the GPU fence wait."""
+how = """Thread sampler and WPR profiles mapped to guest functions; a midasm hook on the frame site, with telemetry recording the two frame-root fields every 200 ms."""
+confidence = """confirmed"""
+note = """Step costs are of recompiled code on a Ryzen 7 5800X. The meaning of the route-state values is not established."""
+source = """docs/PERFORMANCE_BACKLOG.md Where the frame stands; config/mod/fh1-symbols.toml frame.tick; docs/NATIVE_PORT_BACKLOG.md NP-3.8; src/pinyon_shift_runtime_hooks.cpp PinyonShiftTraceFrameTelemetry; config/rexglue/analysis/main-xex.toml midasm_hook 0x823EDA10"""
+
+[[finding]]
+group = """Main loop"""
+base = """0x823EE584, 0x82482264, 0x8247D534"""
+v4 = """0x8241E658, 0x824B18A4, 0x824ACB24"""
+name = """main loop exit and teardown"""
+what = """`0x823EE584` is where the title leaves its main loop. During teardown `0x82482264` checks a cleanup pointer at `owner+684` and a wait loop at `0x8247D534` watches the same field; the pointer going from nonzero to zero marks a teardown of the running title state and the start of a new title generation."""
+how = """Midasm hooks logging r29 to r31 at the exit, and on the cleanup check and the wait, detecting the teardown race."""
+confidence = """probable"""
+note = """The exit site and the cleanup pointer are confirmed; the logged registers' meaning and the object owning the pointer are not."""
+source = """config/rexglue/analysis/main-xex.toml main loop hooks; src/pinyon_shift_runtime_hooks.cpp PinyonShiftTraceMainLoopExit; src/pinyon_shift_runtime_hooks.cpp PinyonShiftTraceCleanupPointerCheck"""
+
+[[finding]]
+group = """Main loop"""
+base = """sub_82653300, sub_82DD2B78, sub_82801218"""
+name = """other constant-step updaters"""
+what = """Further per-update constant steps that run faster at higher frame rates: the showroom idle orbit `sub_82653300` (0.1 degree per update at `0x8265354C`), `CAnimatedModelPresentation::Update` `sub_82DD2B78` (1/60 s at `0x82DD2B84`) and the radio popup timer `sub_82801218` (1/30 s at `0x82801384`)."""
+how = """Static pass over the generated code; not hooked because no route reaches them."""
+confidence = """probable"""
+source = """docs/DESKTOP_RENDERER_BACKLOG.md DR-1.5"""
+
+[[finding]]
+group = """Main loop"""
+base = """owner+448"""
+v4 = """owner+448"""
+id = "delta-clamp-and-catch-up"
+name = """catch-up after long frames"""
+what = """At 3x and 4x internal scale the simulation at times speeds up as if catching up. This fits the time step below, which integrates a long frame as one large step instead of capping it, rather than a clamp that replays lost time."""
+how = """Play-test observation (2026-09-30) of frames longer than the title's step."""
+confidence = """guess"""
+note = """Not traced in code."""
+source = """docs/NATIVE_PORT_BACKLOG.md NP-4.10"""
+
+[[finding]]
+group = """Main loop"""
+name = """v4 load and grid timing"""
+what = """v4 adds one load hitch where the base game has none (3 invalid simulation deltas against 2 at the same hook site, on the pause and photo routes), and places the race grid more slowly, so a "vehicle moved" condition can be met while v4 still shows the countdown."""
+how = """Same render-test routes on both builds from one seed."""
+confidence = """probable"""
+source = """docs/TITLE_UPDATE_V4_BACKLOG.md TU-4, TU-5"""
+
+# -------------------------------------------------------------- Frame pacing
+
+[[finding]]
+group = """Frame pacing"""
+base = """sub_8247C678, 0x8247C6F0"""
+name = """simulation steps on the vblank"""
+what = """The simulation steps on its own vblank callback `sub_8247C678`, not on the swap. The callback counts guest vblanks and raises the simulation event every second vblank under the title switch `mainthread30fps` (decision at `0x8247C6F0`), so the simulation ticks once per two vblanks whatever the frame rate: the console ran at 30 fps on a 60 Hz vblank, with a present interval of ONE. When a frame spans more vblanks, the next frame runs extra steps. With a vblank ticking at 1 kHz the title ran 500 steps a second, and on screens where a step is expensive (race central's paused screens) each frame spanned ever more vblanks. With a correct vblank and frame-rate limits of 30, 60 and 120, free roam ran at 30.1, 59.4 and 117.5 fps with a simulation-to-wall ratio of 1.01."""
+how = """Reading the generated code; simulation ticks per frame in performance logs (2.3 steps per 18 ms frame at a 240 Hz vblank); a play-test log (50-80 steps in a 110 ms frame against 1-4 normally); a render-test route counting vblanks and steps per frame (10 and 5 before the vblank fix, 2.3 and 1.15 after); free-roam medians per limit."""
+confidence = """confirmed"""
+source = """docs/DESKTOP_RENDERER_BACKLOG.md DR-5.2; docs/PERFORMANCE_BACKLOG.md Where the frame stands, PB-4; docs/NATIVE_PORT_BACKLOG.md NP-1.8, NP-4.5"""
+
+[[finding]]
+group = """Frame pacing"""
+base = """sub_823ED888, 0x823EDB84, owner+448"""
+v4 = """0x8241DC44, owner+448"""
+name = """simulation time step"""
+what = """The simulation loop reads elapsed time from a millisecond clock as an integer (8 or 9 ms a tick at 120 Hz). 16 or 17 ms snaps to 1/59.94 s with a residual accumulator; the only clamp turns an elapsed time above 4000 ms into 16 ms, and the step (`f31`, in seconds) is held to at least 0.0001 s. A long frame or fence wait is therefore integrated as one large step. The step is stored at `owner+448` (`0x1C0`) at `0x823EDB84`, before the update systems run; the offset is unchanged in v4. When the title thread or the guest GPU frame sits at a two-vblank budget, the loop runs two ticks in the same millisecond and then none for 17 ms while frames still reach the display evenly, which reads as hitching (worst after a retired race); the guest clock, guest vblank pacing (steady 4.17 ms) and a display-rate mismatch were ruled out as causes."""
+how = """Reading the generated code; a hook reading `f31` every frame, and rewriting it before the store scales game time as expected (simulation-to-wall ratios of 0.503 at 0.5 and 2.010 at 2.0 in free roam); per-frame simulated time from the performance log at the 120 fps limit, one setting changed at a time."""
+confidence = """confirmed"""
+note = """The tick bunching is probable: its cause is narrowed, not fixed, and it comes and goes between runs. FB-0.3 gives the snap as 1/60 s."""
+issue = """#381"""
+source = """docs/PERFORMANCE_BACKLOG.md PB-4, PB-4.2; config/mod/fh1-symbols.toml simulation.delta_store; docs/NATIVE_PORT_BACKLOG.md NP-8.1; src/pinyon_shift_runtime_hooks.cpp PinyonShiftObserveSimulationDelta; docs/FEATURE_BACKLOG.md FB-0.3"""
+
+[[finding]]
+group = """Frame pacing"""
+base = """sub_8259F3E8, 0x8259FBEC"""
+v4 = """sub_826164D0, 0x82616CD4"""
+name = """render thread idle path"""
+what = """When the simulation has no new frame for the render thread (its frame counter has not passed the one last drawn), the render thread frame takes an idle path: the gamma transition (`sub_82586CD8`), a time read, then `SleepEx(0, TRUE)` returning to `0x8259FBEC`. A zero alertable sleep returns at once on the host, so this path runs back to back while the render thread waits. An optional spin earlier in the function (reading the timer until a delay from the field at `+3244` passes) runs only when that field is non-zero."""
+how = """Odin call-graph profile (`simpleperf --call-graph fp`) of a run where the render thread was 44 % of the process; reading the generated code."""
+confidence = """confirmed"""
+source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Hot guest CPU functions"""
+
+[[finding]]
+group = """Frame pacing"""
+base = """sub_823F4B30, 0x823F4F60, sub_82416A00"""
+v4 = """0x82424FB0"""
+name = """render job queue backpressure"""
+what = """When the render job queue is over its threshold, the producer `sub_823F4B30` waits in a loop that yields each iteration, up to twice the threshold ahead, with a counter at `84(r1)` running down from 1000; after 1000 yields it posts anyway. On the console that escape implied a real stall. On a fast host the producer can overfill the render thread's 12 slots, ending in an access violation in `sub_82416A00` or a hang."""
+how = """Midasm hook before each yield at `0x823F4F60`; the overflow reproduced 7 of 7 runs on the 8 Elite (hang or crash about 30 s in)."""
+confidence = """confirmed"""
+source = """config/rexglue/analysis/main-xex.toml midasm_hook 0x823F4F60; src/pinyon_shift_runtime_hooks.cpp PinyonShiftThrottleRenderJobs; docs/ANDROID_PORT_BACKLOG.md"""
+
+# -------------------------------------------------------- Present and fences
+
+[[finding]]
+group = """Present and fences"""
+base = """sub_829EEC48, sub_829EED78, 0x829EEE44"""
+v4 = """0x82AABDB4"""
+name = """vblank and swap interrupts"""
+what = """The D3D vblank handler `sub_829EEC48` bumps the vblank counter, completes queued swaps whose target vblank has arrived and sets an event. The swap interrupt `sub_829EED78` moves a swap to the next vblank when it arrives more than 20 % of a display period after the latest one, so frames land on whole vblanks: at `0x829EEE44` it compares the lateness (r7, percent of a display period) with the threshold (r27), with r8 the previous swap's target vblank and r10 the current count. With the guest vblank at twice the render limit, a late frame waits for the next one. Immediate flips do not update the title's last-flip time at `+16964`, which its video player reads."""
+how = """Reading the generated code; a timing trace (DR-5.2); a midasm hook at `0x829EEE44` that reports late swaps as on time, releasing a swap when two vblanks have passed."""
+confidence = """confirmed"""
+source = """docs/DESKTOP_RENDERER_BACKLOG.md DR-5.2; docs/PERFORMANCE_BACKLOG.md PB-4; config/rexglue/analysis/main-xex.toml midasm_hook 0x829EEE44; src/pinyon_shift_runtime_hooks.cpp PinyonShiftReleaseLateSwap"""
+
+[[finding]]
+group = """Present and fences"""
+base = """sub_829F04A8, sub_823E91F0"""
+v4 = """sub_82AAD418"""
+name = """GPU fence-wait predicate"""
+what = """Seven D3D fence-wait loops (`sub_823E91F0` among them) call `sub_829F04A8` while the fence word at `0xFFCA4000` in the `0xE0000000` physical view has not reached their target. The wait record (r3) holds the device at `+0` and the last fence value at `+8`; the device keeps the fence-word pointer at `+11024` (written by the GPU's `EVENT_WRITE_SHD`) and a lost-device flag in bit 1 of byte `+11069`. The predicate busy-polls briefly and has its own no-progress timeout and kick logic. It ran about a billion times per `fh1-race-sync` run: the title spends about two thirds of its time busy-polling, about 9.9 ms per race frame. The render thread's fences were at physical `0x1FCA5002`/`0x1FCA5006`."""
+how = """Midasm hook at the entry that blocks until the next GPU write (about 100,000 waits per run, 88 % ended by the signal, process CPU 15 % lower); a trace of every fence wait loop; race frame cost breakdowns (5.4-9.9 ms of a race frame on our renderer)."""
+confidence = """confirmed"""
+source = """docs/NATIVE_PORT_BACKLOG.md NP-3.2, NP-2.0; config/mod/fh1-symbols.toml gpu.fence_wait_predicate; config/rexglue/analysis/main-xex.toml midasm_hook 0x829F04A8; src/native_renderer/graphics_hooks.cpp; docs/PERFORMANCE_BACKLOG.md PB-6.4"""
+
+[[finding]]
+group = """Present and fences"""
+name = """command-stream synchronization through memory"""
+what = """The title's GPU command stream uses `WAIT_REG_MEM` packets that poll memory the title writes, and `EVENT_WRITE_SHD` stores that the title polls, so the CPU and GPU sides are ordered through words in guest memory."""
+how = """Profiling of the GPU command thread and the design study for moving packet decoding off it."""
+confidence = """probable"""
+source = """docs/NATIVE_PORT_BACKLOG.md NP-9.3"""
+
+[[finding]]
+group = """Present and fences"""
+base = """sub_82AE8AE0"""
+name = """presentation parameters at start"""
+what = """`sub_82AE8AE0` fills the 92-byte presentation parameters at start and multiplies the video mode's refresh rate by a constant into `obj+68`. It is not a per-frame animation stepper."""
+how = """Reading the generated code during the search for frame-rate-dependent steppers."""
+confidence = """probable"""
+note = """NP-3.7 listed it, with the consumers of the main-loop delta at `owner+448`, as a candidate for a per-frame-stepped NPC or title-UI animation; PB-4.3 found it only fills the parameters, but it remains the first candidate for a refresh-derived step."""
+negative = true
+source = """docs/PERFORMANCE_BACKLOG.md PB-4.3; docs/NATIVE_PORT_BACKLOG.md NP-3.7"""
+
+# ------------------------------------------------------------- Hot functions
+
+[[finding]]
+group = """Hot functions"""
+base = """sub_830F2210"""
+v4 = """sub_831B4090"""
+name = """LZX block decoder"""
+what = """Decodes LZX symbols into a sliding window until the requested length is produced; about 20 % of the asset worker's time while loading. Decoder state: `+0` window, `+8` window mask, `+12/16/20` repeated offsets R0-R2, `+24` main symbol table, `+2072` length table, `+2584` main code lengths, `+3256` length code lengths, `+3508` aligned table, `+3636` aligned lengths, `+3644` and `+9020` overflow trees, `+11012` input pointer, `+11016` input end, `+11952` bit buffer, `+11956` bits left (signed byte), `+11960` window position, `+12004` extra bits per position slot, `+12056` position slot bases. Copies of 16 or more bytes use 16-byte chunks that may write up to 16 bytes past the match; the last store keeps destination bytes through a select constant (`0x822D5360`, v4 `0x822E8480`)."""
+how = """Reading the generated code; a native port compared window, state and return value on every call of a route (0 mismatches in 17,535 calls)."""
+confidence = """confirmed"""
+source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Hot guest CPU functions"""
+
+[[finding]]
+group = """Hot functions"""
+base = """sub_83108C08"""
+name = """inflate loop"""
+what = """A deflate decoder loop. About 20 % of the asset worker during loading, but only one sample in about 1,160 across a sustained race, so it matters only for load times."""
+how = """Thread sampler on desktop and on the simulated low-spec run."""
+confidence = """confirmed"""
+source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Hot guest CPU functions"""
+
+[[finding]]
+group = """Hot functions"""
+base = """sub_8300D580"""
+v4 = """sub_830CE6C0"""
+name = """audio reverb"""
+what = """The audio thread's reverb, 2,230 generated lines with the same shape in v4; 12.3 % of the v4 audio thread on the 8 Elite."""
+how = """Shape match across both images and `simpleperf` on the Astra."""
+confidence = """probable"""
+source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Hot guest CPU functions"""
+
+[[finding]]
+group = """Hot functions"""
+base = """sub_82FC6CC0"""
+v4 = """sub_83087D70"""
+name = """audio six-channel biquad"""
+what = """A fused multiply-add chain over float filter state for six channels; 8.9 % of the v4 audio thread on the 8 Elite."""
+how = """Shape match and `simpleperf` on the Astra."""
+confidence = """probable"""
+source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Hot guest CPU functions"""
+
+[[finding]]
+group = """Hot functions"""
+base = """sub_82A6D7D8, sub_82A6D748, sub_82E2F0B0, sub_82BAC498, sub_82BB3E48, sub_82E386B8, sub_82D18588"""
+v4 = """sub_82B2A848, sub_82B2A7B8, sub_82EF10C0, sub_82C6ACF0, sub_82C72708, sub_82EFA628, sub_82DDA4B8"""
+name = """SleepEx wrapper and its spinners"""
+what = """`SleepEx` (`sub_82A6D7D8`) takes milliseconds in r3 and alertable in r4, calls the `KeDelayExecutionThread` wrapper (`sub_82A6D748`) and maps `STATUS_USER_APC` to 192. It was called about 5.4 million times in one `fh1-race-retire` run. Besides the render thread's idle path, `SleepEx(0, TRUE)` spin loops sit in `sub_82E2F0B0`, `sub_82BAC498`, `sub_82BB3E48`, `sub_82E386B8` and `sub_82D18588`."""
+how = """Code shape matched across both images; call counts from the native replacement's summary."""
+confidence = """confirmed"""
+source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Hot guest CPU functions"""
+
+[[finding]]
+group = """Hot functions"""
+base = """sub_82462050, sub_82462098, sub_823E6738"""
+name = """guest time reads"""
+what = """Read the tick count through the kernel's tick query; most of the render thread's clock reads in its idle loop come through them."""
+how = """Call graph."""
+confidence = """confirmed"""
+source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Hot guest CPU functions"""
+
+[[finding]]
+group = """Hot functions"""
+base = """sub_82452358"""
+name = """CRT printf format engine"""
+what = """The C runtime's formatted-output engine: 1,800 generated lines whose compares are format characters (`*`, `x`, `X`, `g`, `I32`/`I64`, flags `-+# `). The busiest leaf of the background thread `830C6918` (12 % of its busy samples, about 1 % of a core in a race)."""
+how = """Compare constants in the generated code; thread sampler on the simulated low-spec run."""
+confidence = """probable"""
+source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Hot guest CPU functions"""
+
+[[finding]]
+group = """Hot functions"""
+base = """sub_82470CB0, sub_8246F268"""
+name = """guest heap allocator"""
+what = """Takes a critical section and calls `NtAllocateVirtualMemory`, and `KeBugCheckEx` on failure. 11 % of the background thread `830C6918`'s busy samples, but in a race only 0.05 % inclusive (its neighbour `sub_8246F268` 0.52 %)."""
+how = """The imports it calls; thread sampler; `simpleperf --call-graph fp` inclusive share on the Odin."""
+confidence = """probable"""
+issue = """#468"""
+source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Hot guest CPU functions"""
+
+[[finding]]
+group = """Hot functions"""
+base = """sub_8307EDA8, sub_83048F00"""
+name = """large load-heavy routine"""
+what = """12,000 generated lines, mostly loads, stores and byte moves, with 16 calls to `sub_83048F00`. 11 % of the background thread `830C6918` and 4 % of the asset worker; its profile is flat."""
+how = """Thread sampler."""
+confidence = """guess"""
+note = """purpose unknown"""
+source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Hot guest CPU functions"""
+
+[[finding]]
+group = """Hot functions"""
+base = """sub_8282EA80, 0x8282EAB0, 0x8282EAC0"""
+v4 = """0x82D19DE8"""
+name = """16-byte array release walk"""
+what = """`sub_8282EA80` releases a {begin, end, capacity} array of 16-byte elements with trivial destructors: it steps a pointer from begin to end doing nothing, then frees begin, so jumping straight to the free is equivalent. The empty walk took about a fifth of a streaming worker thread."""
+how = """Thread sampler; a midasm hook at `0x8282EAB0` that jumps straight to the free."""
+confidence = """confirmed"""
+source = """src/pinyon_shift_runtime_hooks.cpp PinyonShiftArrayReleaseWalk; config/rexglue/analysis/main-xex.toml midasm_hook 0x8282EAB0"""
+
+[[finding]]
+group = """Hot functions"""
+base = """sub_82526248, sub_823F4B30, sub_824168B0"""
+v4 = """sub_824701B8"""
+name = """other hot leaves"""
+what = """No guest function is a dominant hot spot in a race. The next largest leaves are `sub_82526248` (per-object matrix math, 2.3-2.9 % of the simulation thread), the render job producer `sub_823F4B30` (2.3 % of the simulation thread on a slow 4-core part) and `sub_824168B0` (2.0 % of the render thread). In v4 the render thread's top leaf is `sub_824701B8`, a branchy draw-state routine (5.4 %)."""
+how = """Thread sampler and WPR profiles on desktop and simulated low-spec runs; `simpleperf` on the 8 Elite for v4."""
+confidence = """confirmed"""
+source = """docs/PERFORMANCE_BACKLOG.md PB-3.1, PB-3.12 candidates"""
+
+[[finding]]
+group = """Hot functions"""
+base = """sub_825A6208, sub_82450160, sub_823ED888, sub_823E40D8"""
+name = """render and simulation call chains"""
+what = """In race call graphs the render thread's time runs through `sub_825A6208`, then the render thread frame `sub_8259F3E8`, then `sub_82450160`; the simulation thread's runs through `sub_823ED888`, then `sub_823E40D8`. The roles of `sub_82450160` and `sub_823E40D8` are not known."""
+how = """`simpleperf --call-graph fp` inclusive report on the Odin."""
+confidence = """guess"""
+issue = """#469"""
+source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Hot guest CPU functions"""
