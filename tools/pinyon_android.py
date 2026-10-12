@@ -422,13 +422,16 @@ def package(args: argparse.Namespace, tools: Tools | None = None) -> int:
     run([tools.javac, "-source", "1.8", "-target", "1.8", "-nowarn", "-Xlint:-options",
          "-bootclasspath", tools.android_jar, "-classpath", tools.android_jar,
          "-encoding", "UTF-8", "-d", staging / "classes", *sources])
-    # Relative to the classes folder: d8 is a .bat on Windows, and cmd.exe
-    # refuses a command longer than 8191 characters, which absolute paths
-    # of every class reach in a checkout with a longer path.
-    classes = sorted(path.relative_to(staging / "classes")
-                     for path in (staging / "classes").rglob("*.class"))
+    # One jar of the classes rather than a path per class: d8 is a .bat on
+    # Windows, and cmd.exe refuses a command longer than 8191 characters,
+    # which the class list reached inside d8.bat even as relative paths
+    # (#538, a user folder with a space in its name).
+    classes = staging / "classes.jar"
+    with zipfile.ZipFile(classes, "w", zipfile.ZIP_DEFLATED) as jar:
+        for path in sorted((staging / "classes").rglob("*.class")):
+            jar.write(path, path.relative_to(staging / "classes").as_posix())
     run([tools.d8, "--release", "--min-api", str(CONFIG["min_sdk"]), "--lib", tools.android_jar,
-         "--output", staging / "dex", *classes], cwd=staging / "classes")
+         "--output", staging / "dex", classes])
 
     # The device gets libraries without debug sections; the PC keeps the
     # originals for symbolizing crash reports.
