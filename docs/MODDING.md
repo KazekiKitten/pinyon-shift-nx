@@ -209,6 +209,11 @@ lists the mods merged into each member.
 
 ### Textures
 
+**Texture replacement works only on the D3D12 renderer today.** The dump,
+the replacement and the reload are implemented in the D3D12 texture cache;
+the Vulkan renderer, which every platform uses by default, ignores
+`textures/` folders ([#518](https://github.com/arcanite24/pinyon-shift/issues/518)).
+
 A mod may replace textures without touching the archives that hold them:
 
 ```text

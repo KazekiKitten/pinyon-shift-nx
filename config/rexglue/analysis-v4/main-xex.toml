@@ -12,6 +12,11 @@ includes = ["fh1-post-processing.toml", "v4-additions.toml"]
 setjmp_address = 0x82B3F830
 longjmp_address = 0x82B3F300
 
+# Keep the condition-register fields a function uses in C++ locals instead of
+# ctx (#467). Calls follow the PowerPC ABI (only cr2-cr4 are written back);
+# hooks, the setjmp copy, longjmp and exceptions keep a full sync.
+cr_as_local = true
+
 # Scripted, default-off companion experiment: match the complete original
 # decoded member at the borrowed-buffer stream constructor. This avoids ZIP
 # repacking and does not enable the older scene_insert pointer repairs.

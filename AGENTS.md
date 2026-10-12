@@ -31,6 +31,39 @@ ci: update ReXGlue patch release contract
 docs: record AppData save launch procedure
 ```
 
+## Keep the docs site current
+
+The site in `site/pages/` is published from `dev` on every push
+(`.github/workflows/pages.yml`), so it must describe what `dev` does.
+Update it in the same change, or in a `docs(site): ...` commit pushed
+together with it, whenever work:
+
+- changes how the recompiler, runtime, renderer or a platform port
+  works, or changes a measured number a page quotes;
+- keeps or rejects an optimization or technique after measuring it
+  (kept results go on the matching Internals page, rejected ones in
+  the "What didn't pay off here" table in `lessons.md`, so they are not
+  retried without a new reason);
+- finds a method or lesson that other Xbox 360 recompilation projects
+  could reuse (`lessons.md`);
+- adds or changes something players see: a setting, a feature, an
+  install, build or troubleshooting step (the player pages and
+  `site/features.toml`).
+
+Before finishing, search `site/pages` for statements the change makes
+wrong (for example `rg -n "LTO|locals" site/pages`) and fix them.
+
+Write for the reader, not the change log:
+
+- Say what the thing does, why, and what it measured, with the device
+  and method. No marketing language.
+- Link to `docs/` for detail instead of copying it.
+- Write only our own analysis: no disassembly, decompiled code or game
+  data (docs/LEGAL.md).
+
+Build the site with `.local/site-venv/Scripts/python site/build.py`
+and check that new links and anchors resolve in `site/_build`.
+
 ## Launching with the AppData save
 
 When an AppData-backed gameplay run is needed, launch the locally built preview

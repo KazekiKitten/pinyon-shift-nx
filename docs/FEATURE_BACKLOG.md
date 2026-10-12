@@ -253,7 +253,7 @@ measured (512 MB guest, `CLoadAndWaitForLOD0Cars`).
 | FB-5.3 | **HDR output.** The presenter only selects sRGB swapchains (`src/ui/vulkan/vulkan_presenter.cpp:1258-1293`) and the guest tonemaps to SDR; take the scene before the tonemap and add HDR10 or scRGB presentation (NP-4.8: plumbing M, quality L). **Stage 1 done (2026-10-10, #417):** `present_hdr` presents to an scRGB swapchain where the surface offers it; the guest output and host UI paint into an SDR stand-in per swapchain image as before, and a last pass decodes its sRGB and scales white to `present_hdr_paper_white_nits` (DISPLAY > HDR, HDR PAPER WHITE, shown when the display has HDR on). Checked on Multivac's LG TV (Windows HDR on, 4K 120 Hz) by a temporary readback: within 0.5 % of the expected scRGB values; off, nothing changes. **Stage 2 done (2026-10-10):** FH1 resolves its float scene to an 8888 texture before the last composite, so no range above SDR white reaches the front buffer; instead the scene's highlights are expanded from linear luminance 0.5 up to `present_hdr_peak_nits` at SDR white (DISPLAY > HDR HIGHLIGHTS, OFF or 400 to 1500 nits, default 1000), and the HUD and menus stay at the paper white. The native executor copies the front buffer at the first draw through its `2_10_10_10_AS_10_10_10_10` view (the HUD) after the `2_10_10_10` composite; the swap compares that copy with the swapped frame (order-independent, so R/B swaps do not matter) and writes the HUD coverage into the guest output's alpha; the presenter carries it into the stand-in's alpha, where host UI adds its own, and the last pass expands only where the alpha is low. Frames without the composite (menus, loading) stay opaque, so all paper white. Readback on the race route: menus never expanded, HUD pixels at most 1.1 % above paper white (rounding), race highlights up to about 980 nits; `fh1-race-retire` passes with HDR on and off at the same present rate (115 Hz); validation clean. Judging the curve on the TV is left to the maintainer. **Stage 3 done (2026-10-10, #442):** the maintainer's TV check found washed-out colors, flames and headlights too bright and white, brake lights not expanded, and flicker on the translucent prestige meter. The last pass now decodes the stand-in with gamma 2.2 like an SDR display (`present_hdr_gamma`, 2.4 or piecewise sRGB on DISPLAY > HDR GAMMA). `present_hdr_peak_nits` is now the display's peak, and SDR white in the scene goes `present_hdr_highlights` of the way to it (HDR HIGHLIGHTS OFF, LOW, MEDIUM (0.5, default) or HIGH). The expansion follows a mix of 0.75 of the largest channel and 0.25 of the luminance, scaling all three channels, so a red brake light expands with its hue. The HUD mask is binary (any sorted-channel change above 0.006, grown by a pixel) instead of a soft 2-bit alpha. `present_hdr` switches at run time: the paint returns connection-outdated and the reconnection recreates the swapchain in the other format. DISPLAY > HDR COMPARE shows piecewise-sRGB SDR on the left half beside the HDR right half (not saved). DISPLAY > HDR CALIBRATION steps through test patterns that the last pass draws under the menu (`present_hdr_test_pattern`) in a band the menu leaves undimmed: black (1-6 % squares, for the TV's brightness), paper white (a white square beside gray steps on mid gray, setting `present_hdr_paper_white_nits`) and peak (a square at the tested peak in a 10000-nit field that disappears at the display's peak, setting `present_hdr_peak_nits`). Checked on Multivac by a temporary readback: gameplay highlights at 600 nits (paper white 200, peak 1000, MEDIUM) within 1.4 % of the formula; no gameplay pixel counted as HUD on the sampled rows; patterns, compare halves and divider exact; off, on, off and on again recreates the swapchain each time, validation clean. The look on the TV is again the maintainer's to judge | L | Done; TV check pending |
 | FB-5.4 | **Upscaling and AA.** FSR 1 quality presets and sharpness (README "next"), temporal upscaling (DR-5.4, researched), non-integer scale (NP-4.8). Tracked there. | - | Pointer |
 | FB-5.5 | **Modern bloom, motion blur and DOF** (LS "Requested defaults"). Tracked there. | - | Pointer |
-| FB-5.6 | **Texture packs on Vulkan.** Confirm the Vulkan path honours `texture_replacement_dirs` (the cvar is defined in the D3D12 texture cache) and fix if not. | S | Not started |
+| FB-5.6 | **Texture packs on Vulkan.** Confirmed missing (2026-10-11): the dump, replacement and reload exist only in the D3D12 texture cache. Port them ([#518](https://github.com/arcanite24/pinyon-shift/issues/518)). | S-M | Open |
 
 ### FB-6 Offline Rivals and leaderboards (M-L)
 
@@ -341,12 +341,166 @@ is unverified.
 | FB-11.4 | Android install and sustained performance | AP, A60 |
 | FB-11.5 | Nintendo Switch feasibility | ROADMAP_FEEDBACK |
 
+### FB-12 Second research round: play enhancements only a native build can offer
+
+Research pass of 2026-10-11 at `dev` `713a1c8`, not about performance:
+an inventory of shipped and proposed player features across every backlog,
+a survey of the mod API and `gamedb.slt` (221 tables), a static read of
+the base image's strings and archives, and a web survey of what made other
+recompiled and decompiled ports popular (Unleashed Recompiled,
+Zelda64Recomp, Ship of Harkinian, 2 Ship 2 Harkinian, SpaghettiKart, Banjo:
+Recompiled) and what FH1 players complain about (GTPlanet, forza.net,
+reviews; Reddit and ModDB comments were not reachable). Guest findings are
+in [REVERSE_ENGINEERING.md](REVERSE_ENGINEERING.md) (Developer options and
+leftover systems); only the launch options have been checked at run time (FB-12.0).
+
+**The main lever.** The retail executable still has about 300 developer
+launch options (`launch`, `trackname`, `numaicars`, `allowskipvoiceover`,
+`chooseillegalcarforevent`, `splitscreenlaunch`, ...) as byte flags in one
+object built at boot. FB-12.0 found that retail never fills them from the
+command line or `cmdline.txt`, but a host or mod that writes a flag at boot
+changes the game: `nohud` removed the whole HUD. So each option costs one
+write and one check, through the mod API's `write_guest`, and the string and
+number options behind FB-12.2 need their storage traced first.
+
+**What players ask for** (most to least often in the sources found):
+solid barriers and little off-road freedom; no tuning; repetitive events
+and wristband grind; too few cars; event car restrictions; a quiet engine
+mix. Other ports were best received for new ways to play (randomizers,
+track editors, co-op), drag-and-drop mods, restored original content and
+control options.
+
+Ranked by player value for the cost, then by how much is already in place.
+Effort as above; "route" names the cheapest path found.
+
+| Rank | ID | Enhancement | Route | Effort | Confidence |
+| --- | --- | --- | --- | --- | --- |
+| - | FB-12.0 | **Launch-option probe.** Find how to set the options in retail and check them | Probe mod on the free-roam route | S | Done 2026-10-11: the `cl` cvar and `cmdline.txt` do nothing (retail never parses them); writing the flag bytes at boot works (`nohud` hides the HUD; `showframerate` shows nothing). Addresses and offsets in [REVERSE_ENGINEERING.md](REVERSE_ENGINEERING.md) |
+| 1 | FB-12.1 | **Quality-of-life switches** ([#477](https://github.com/arcanite24/pinyon-shift/issues/477)) as F6 toggles: skip voice-over and tutorials, no splash or attract video, clean HUD, hide cockpit glass, zoomed-out minimap, no camera vibration, auto-reset off (`NoHandOfGodReset`) | Flag writes at boot (FB-12.0), or `GameTunableSettings.ini` merges | S each | Confirmed for the clean HUD; the others need one check each |
+| 2 | FB-12.2 | **Free Race.** ([#478](https://github.com/arcanite24/pinyon-shift/issues/478)) A host menu that builds any race FH1 never offered: route, laps, opponents and their cars, AI skill, time of day, traffic. 145 active tracks, 85 used by events | `launch`, `trackname`, `ribbon`, `numlaps`, `numaicars`, `aicar%d`, `aiskill`, `timeofdayindex`, `numtrafficcars` | S-M | Probable |
+| 3 | FB-12.3 | **Any car in any event** ([#479](https://github.com/arcanite24/pinyon-shift/issues/479)) (a new route to FB-10.1 and NP-8.7) | `chooseillegalcarforevent`, `eventrestrictions`; else `EventRestrictions` SQL | S | Probable |
+| 4 | FB-12.4 | **Split-screen spike.** ([#480](https://github.com/arcanite24/pinyon-shift/issues/480)) The code survives: `CSplitscreenLobby`, `CHudSplitscreen`, `948_HUD_Split_Screen`, `Splitscreen_Race.xml`, per-car split-screen camera offsets. Two-player local races would answer the strongest demand (multiplayer) without a network | `splitscreenlaunch`; the second pad through the input layer | S spike, L to ship | Code present; working unknown |
+| 5 | FB-12.5 | **Telemetry out.** ([#481](https://github.com/arcanite24/pinyon-shift/issues/481)) UDP in a "Data Out"-style layout for SimHub, dashboards and motion rigs; then the game's own telemetry pages (`CTelemetryHud`, `968_TELEMETRY`), whose data sources lead to RPM, gear and slip | Native mod; v1 from the pose hook, v2 needs vehicle-sim offsets | M | Probable |
+| 6 | FB-12.6 | **Fair AI.** ([#482](https://github.com/arcanite24/pinyon-shift/issues/482)) No rubber-banding, and a level above Unbeatable | `AIRubberbands`, `AISkills`, `AITemperaments` SQL; `[DynamicDifficulty]` merge | S | Probable |
+| 7 | FB-12.7 | **Day length.** ([#483](https://github.com/arcanite24/pinyon-shift/issues/483)) "A day lasts N minutes", real-time clock, golden-hour loop; today the trainer only holds an hour | `time_of_day.request` takes a rate; needs `call_guest_fp` (float arguments) in the mod ABI | S | Confirmed |
+| 8 | FB-12.8 | **Drive traffic and hidden cars.** ([#484](https://github.com/arcanite24/pinyon-shift/issues/484)) 23 cars are drivable but not selectable (tour bus, trucks, Leaf, Prius, showcase variants) | `Data_Car.IsSelectable` SQL, then showroom and garage checks | S-M | Probable |
+| 9 | FB-12.9 | **Teleport, fast travel anywhere and a custom GPS waypoint** ([#485](https://github.com/arcanite24/pinyon-shift/issues/485)) through the game's own fade-and-stream path, which avoids FB-10.1's physics-body blocker | `CTeleportCarToFastTravelDestination`, `fast_travel.xml`; `CSetSatNavDestinationPos` | M | Probable |
+| 10 | FB-12.10 | **Atmosphere presets** ([#422](https://github.com/arcanite24/pinyon-shift/issues/422)): clear, misty morning, the game's own fog templates and colour grades | `dynamicpost.zip` fog, bloom, vignette and grading templates | S-M | Probable |
+| 11 | FB-12.11 | **Audio mixer** ([#486](https://github.com/arcanite24/pinyon-shift/issues/486)): engine, tyres, wind, ambience and music sliders, and a dynamic-range option (the game has a TV compressor set). Answers the quiet-engine complaint; extends FB-1.6 | `AudioEngineConfig.xml` category levels, `AudioMixerSnapshots.xml` | S-M | Probable |
+| 12 | FB-12.12 | **Camera editor** ([#487](https://github.com/arcanite24/pinyon-shift/issues/487)): chase height, distance and FOV sliders, the wheel and car-relative replay cameras while driving, per-car fixes; and the immersive camera on v4 (today it does not load there) | `CameraSettings.ini`, `CarRelativeCams.xml`, `CameraOverrides`; v4's `camera/cameraphysics.xml` member | S-M | Probable |
+| 13 | FB-12.13 | **Photo mode unlocks** ([#488](https://github.com/arcanite24/pinyon-shift/issues/488)): camera through walls, wider aperture and zoom, larger free-camera bounds (a cheaper start on FB-10.3) | `disablephotomodecollisiondetection`, `allowhighzoomaperture`; `PhotoModeCam`, `FreeCam` sections | S | Probable |
+| 14 | FB-12.14 | **Head tracking** ([#489](https://github.com/arcanite24/pinyon-shift/issues/489)) from OpenTrack or TrackIR, fed into the game's Kinect head-tracking path (sensitivities and inputs survive) | `HeadTracking/*` settings, `HeadTrackingX..Pitch` inputs; host UDP receiver | M | Probable |
+| 15 | FB-12.15 | **Rally map in free roam.** ([#490](https://github.com/arcanite24/pinyon-shift/issues/490)) The UDLC mod already does this on consoles and Xenia, so the data allows it | Mod using the Rally DLC the player imported; fast travel in and out | M | Probable (prior art) |
+| 16 | FB-12.16 | **Festival pacing pack** ([#491](https://github.com/arcanite24/pinyon-shift/issues/491)): cheaper cars and upgrades, larger payouts, a shorter XP curve; answers the grind complaint | `Data_Car.BaseCost`, `List_Upgrade*`, `Events.CashPrize`, `PlayerLevelDef` SQL; check an existing save recomputes its level | S | Probable |
+| 17 | FB-12.17 | **Saved replays and video export.** ([#492](https://github.com/arcanite24/pinyon-shift/issues/492)) Keep replays as host files, and render one offline at a fixed time step at any resolution, which only a native build can do | `CWatchReplay`, `IDS_SaveReplay`, `ReplayTheater`, `savewmvtodevkit`, `WMV_Export` | L | Probable |
+| 18 | FB-12.18 | **Triple screens.** ([#493](https://github.com/arcanite24/pinyon-shift/issues/493)) Three angle-correct views from one PC, from the game's linked-console mode | `CMultiscreenServer`/`Client`, `MultiscreenView`, `MultiscreenDegreesBetweenScreens` | M-L | Probable |
+| 19 | FB-12.19 | **Second-screen map** ([#494](https://github.com/arcanite24/pinyon-shift/issues/494)): a LAN web page with the live map, position, collectibles and markers (FH1 had a SmartGlass map) | Pose hook, collectible offsets, a small host HTTP server | S-M | Confirmed inputs |
+| 20 | FB-12.20 | **Breakable barriers spike.** ([#495](https://github.com/arcanite24/pinyon-shift/issues/495)) The most common FH1 complaint is solid fences and walls. Find whether scenery objects carry a solid or breakable flag in data or code; ship only as an option | `SmashableObjectTypes.xml` lists the smashable types (`Fence`, `Flyer`, `Mailbox`, `RaceActivation`); `CollObjs.xml` places 21,877 objects with physics types | S spike | Guess |
+
+Added on request after the ranking, larger than the 20:
+
+| Rank | ID | Enhancement | Route | Effort | Confidence |
+| --- | --- | --- | --- | --- | --- |
+| + | FB-12.21 | **Import cars from Assetto Corsa** ([#496](https://github.com/arcanite24/pinyon-shift/issues/496)): a tool that turns a permitted car the player supplies into an FH1 car mod; refuses encrypted and Kunos cars | `.carbin` writer (round-trip an FH1 car first), `.xds` encoding, physics and database mapping, closest FH1 engine bank | XL; the `.carbin` spike is the go or no-go | Guess |
+| + | FB-12.22 | **World editor** ([#497](https://github.com/arcanite24/pinyon-shift/issues/497)): a `world/` mod format, an in-game placement editor on the free camera, custom routes and events, then re-used scenery and new geometry | `CollObjs.xml`, `GameObjs.xml`, `TrackRoute*.xml` and `gamedb` are plain data; `.bix`, PVS, `.col` and `.nav` need writers | S-M (format) to XL (new roads) | Probable for the data tiers |
+| + | FB-12.23 | **Dual-screen devices** ([#499](https://github.com/arcanite24/pinyon-shift/issues/499)): map, touch controls, dashboard and quick actions on the AYN Thor's bottom screen, later on any second display | An Android `Presentation` with its own host-drawn Vulkan surface; shares the map with #494 | M | Probable; display discovery on the device decides |
+| + | FB-12.24 | **FH2 world and cars** ([#501](https://github.com/arcanite24/pinyon-shift/issues/501)): FH2's Xbox 360 world and cars from the player's disc, first as a separate destination like the Rally map, then joined to Colorado by a road that hides the track switch | Rally's separate track (`ColoradoDirt`, `RibbonConfiguration`); XE's FH2 cars; format survey shared with Lavender Shift | Cars M-L; world L-XL; joined XL | Cars probable; world a guess until the format survey |
+
+Also considered, kept out of the 20: tuning menu (second most common
+complaint; no evidence yet that FM4's tuning code survives; check in
+FB-12.0's string pass), debug menus (`forceEnableDebugMenus`, likely
+compiled out), an E3 demo mode, the Forza 4 party modes (Car Soccer,
+Bowling: code only, no ball or pin assets), tyre and fuel wear, the
+offline Auction House (needs FB-7.3's server emulation), a randomizer
+(after FB-12.2 and FB-12.3 exist), and a drag-and-drop in-game mod list
+(FB-9.1; XE's crash reports show added cars need a check before loading).
+
+ABI work that unlocks several rows: `call_guest_fp` (FB-12.7, FB-12.9),
+HUD rectangles and images (FB-12.5 pages, lap deltas), vehicle-sim symbols
+for speed, RPM and gear (FB-12.5, FB-6.2), and a built-in mod with
+selectable variants (FB-12.6, FB-12.10, FB-12.16).
+
+Working order: FB-12.0, then FB-12.1 to FB-12.3 from what it finds;
+FB-12.4's spike in parallel because it can reopen split-screen; the data
+mods (FB-12.6, FB-12.8, FB-12.10, FB-12.11, FB-12.16) as one built-in pack;
+then `call_guest_fp` and FB-12.5, FB-12.7, FB-12.9.
+
+### FB-13 Custom content on top of the game
+
+Analysis of 2026-10-11 at `dev` `a98998f`: what custom brands, cars, shops,
+liveries, events and activities would take, from read-only reads of
+`gamedb.slt`, the game's archives and executable strings, the DLC, XE and
+Rally data, and a seed's save. Nothing was run in game; each issue names the
+experiment that confirms it. Findings are in
+[REVERSE_ENGINEERING.md](REVERSE_ENGINEERING.md) (Custom content).
+
+Most of FH1's content is data: cars, makes, parts, colours, events,
+prizes, opponents and activities are database rows; routes, checkpoints,
+shops and activities are plain XML; liveries are vector designs the game
+renders. What the mod system lacks is adding *new* archive members and
+string keys (FB-13.1), so that comes first, after a check of whether plain
+text in name columns is enough. The online Storefront is not worth
+emulating (no captured server replies); content is shared as mod packs and
+files instead.
+
+| ID | Content | Route | Effort | Confidence |
+| --- | --- | --- | --- | --- |
+| FB-13.1 | **Mod tooling: new archive members and string keys** ([#503](https://github.com/arcanite24/pinyon-shift/issues/503)) | Blocks most rows below; first check whether plain-text names work | M | Probable |
+| FB-13.2 | **Custom car brands** ([#504](https://github.com/arcanite24/pinyon-shift/issues/504)) | `List_CarMake` rows; the Autoshow make grid is one query; 37 dormant logos on the disc | S-M | Probable |
+| FB-13.3 | **Clone cars: new ids on existing models with their own specs** ([#505](https://github.com/arcanite24/pinyon-shift/issues/505)) | About 47 car tables; Rally and XE precedent; a clone tool | S-M | Probable to confirmed |
+| FB-13.4 | **Custom dealers and shop locations** ([#506](https://github.com/arcanite24/pinyon-shift/issues/506)) | Shops are XML activities on `GameObjs` triggers; own car lists need an `IsCarVisible` hook; the online Storefront is XL and not recommended | S, L for own lists | Probable |
+| FB-13.5 | **Custom liveries, decals and car skins** ([#507](https://github.com/arcanite24/pinyon-shift/issues/507)) | Liveries are encrypted vector `.liv` files in the save; decals by texture hash; skins by car texture; new decals and shapes need added members | S to L | Probable |
+| FB-13.6 | **Import FM4 vinyl groups** ([#508](https://github.com/arcanite24/pinyon-shift/issues/508)) | The game's own cross-title importer; FM4 is an alternate title id; the SDK enumerates alternate titles | S-M | Probable |
+| FB-13.7 | **Custom event packs** ([#509](https://github.com/arcanite24/pinyon-shift/issues/509)) | Events, routes with checkpoints, opponents, prizes and entry activities are data; a pack format with stable id allocation | S-M, L-XL for championships | Probable (Rally) |
+| FB-13.8 | **Unused event types** ([#510](https://github.com/arcanite24/pinyon-shift/issues/510)) | Elimination mode 4 unused; drag, drift and autocross scoring from Forza 4 | S to L | Probable to guess |
+| FB-13.9 | **Custom free-roam activities** ([#511](https://github.com/arcanite24/pinyon-shift/issues/511)) | Speed traps, stunts, photo shoots, barn finds and head-to-head drivers are XML and database rows | S-M each | Probable |
+| FB-13.10 | **Custom upgrade parts, rims and paints** ([#512](https://github.com/arcanite24/pinyon-shift/issues/512)) | `List_Upgrade*`, `List_Wheels`, `Combo_Colors`; no new part types (code enum) | S | Probable |
+
+Working order: FB-13.1's plain-text check and FB-13.3 (clone cars) first,
+since brands, dealers and barn finds need a car to show; then FB-13.2,
+FB-13.7 tiers 1-2 and FB-13.9; FB-13.6 as a cheap experiment at any time.
+Car models from other games are FB-12.21 (#496) and FB-12.24 (#501).
+
+### FB-14 What the native renderer makes possible
+
+Research of 2026-10-11: features the FH1 Vulkan renderer (`Fh1NativeExecutor`)
+allows that Xenos emulation did not. The renderer recognises render targets
+(the scene, depth, the shadow mask, the sun shadow map and the HUD
+boundary), not what each draw is, so features that need to tell cars, sky,
+terrain or materials apart stay expensive. Draw distance is a guest problem
+(the game culls before it submits), and ray tracing, screen-space
+reflections and new materials have no inputs (no G-buffer or material ids).
+Frame generation is planned since this round, opt-in (FB-14.6 to FB-14.9).
+
+| ID | Feature | Effort | Confidence |
+| --- | --- | --- | --- |
+| FB-14.1 | **Texture packs on the Vulkan renderer (bug; FB-5.6)** ([#518](https://github.com/arcanite24/pinyon-shift/issues/518)) | S-M | Confirmed |
+| FB-14.2 | **Screenshots without the HUD and a HUD toggle key** ([#519](https://github.com/arcanite24/pinyon-shift/issues/519)) | S | Confirmed inputs |
+| FB-14.3 | **HUD scale and safe-zone setting** ([#520](https://github.com/arcanite24/pinyon-shift/issues/520)) | S-M | Probable |
+| FB-14.4 | **Colour grading mods: grading maps and a host LUT** ([#521](https://github.com/arcanite24/pinyon-shift/issues/521)) | S | Confirmed / probable |
+| FB-14.5 | **Shader replacement as a mod folder** ([#522](https://github.com/arcanite24/pinyon-shift/issues/522)) | S-M | Confirmed hook |
+| FB-14.6 | **Temporal upscaling and frame generation inputs, FSR 3.1 first (DR-5.4)** ([#523](https://github.com/arcanite24/pinyon-shift/issues/523)) | L | Probable |
+| FB-14.7 | **FSR 4 upscaling and frame generation** ([#524](https://github.com/arcanite24/pinyon-shift/issues/524)) | M after FB-14.6 | Probable |
+| FB-14.8 | **DLSS upscaling and frame generation from a player-supplied DLL** ([#525](https://github.com/arcanite24/pinyon-shift/issues/525)) | M after FB-14.6 | Probable |
+| FB-14.9 | **Lossless Scaling frame generation from the player's own `Lossless.dll`** ([#526](https://github.com/arcanite24/pinyon-shift/issues/526)) | M | Probable |
+| FB-14.10 | **Resolution scale per render target: shadows, post, reflections (FB-5.1, DR-2.1)** ([#527](https://github.com/arcanite24/pinyon-shift/issues/527)) | L | Probable |
+| FB-14.11 | **Anti-aliasing and anisotropic filtering on the scene only** ([#528](https://github.com/arcanite24/pinyon-shift/issues/528)) | S-M | Probable |
+| FB-14.12 | **Frame inspector for modders and developers** ([#529](https://github.com/arcanite24/pinyon-shift/issues/529)) | S-M | High |
+
+Working order: FB-14.1, FB-14.2, FB-14.3, FB-14.4, FB-14.5, then FB-14.6
+stage 1, whose inputs feed FB-14.7 and FB-14.8; FB-14.9 needs only the
+composed frames. FB-14.10 unlocks shadow resolution, 1x post at high scales
+and photo mode at a higher scale.
+
 ## Not to build
 
 - **Weather.** FH1 has no rain or snow assets, shaders or simulation, even in
-  Rally; adding it is new content, not restoration.
-- **Split-screen.** FH1 shipped none, and it means two open-world renders.
-- **Frame generation.** Already rejected (config migration removes it).
+  Rally; adding it is new content, not restoration. Confirmed again
+  2026-10-11: the only wet strings are tyre friction scales, and
+  `realtimesky.zip` holds one cloud set.
+- **Split-screen as new work.** FH1 shipped none, and it means two
+  open-world renders. Its code survives, though (FB-12.4): revisit only if
+  that spike shows it running.
 - **Connecting to Xbox LIVE or Forza services**, or anything presented as
   them. Replacements are local or self-hosted under the project's name.
 - **Shipping game content**: music, cars, liveries or captured server data.

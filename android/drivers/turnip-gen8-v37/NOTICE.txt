@@ -3,7 +3,7 @@ Turnip Gen8 V37 (Mesa Turnip, the open-source Vulkan driver for Adreno GPUs)
 Built by StevenMXZ from Mesa 26.3.0-devel (git a995eaeda4) and distributed
 as an adrenotools driver package ("Turnip Gen8 V37", package version 7).
 Pinyon Shift bundles it unmodified as the recommended driver for Adreno 7xx
-GPUs; android_gpu_driver chooses another driver or the system's.
+and 8xx GPUs; android_gpu_driver chooses another driver or the system's.
 
 Mesa source: https://gitlab.freedesktop.org/mesa/mesa
 

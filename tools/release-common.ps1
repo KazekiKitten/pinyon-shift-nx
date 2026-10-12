@@ -663,6 +663,11 @@ function Assert-PinyonDownloadHosts {
 }
 
 function Enter-PinyonBuildEnvironment {
+    # Some systems have no ComSpec (#541); cmd.exe is always in the system
+    # folder, and the tools the build starts inherit the repaired value.
+    if (-not $env:ComSpec -or -not (Test-Path -LiteralPath $env:ComSpec -PathType Leaf)) {
+        $env:ComSpec = Join-Path ([Environment]::SystemDirectory) 'cmd.exe'
+    }
     $root = Get-PinyonRepoRoot
     $config = Get-PinyonReleaseToolchain
     $vsRoot = Get-PinyonVisualStudioRoot

@@ -417,6 +417,34 @@ h2:hover .anchor, h3:hover .anchor, .anchor:focus-visible { opacity: 1; }
 }
 .prose blockquote > :last-child { margin-bottom: 0; }
 
+/* Inline SVG diagrams (site/diagrams). Wide ones scroll inside their frame. */
+.prose .diagram {
+  margin: 0.5rem 0 1.75rem;
+  padding: 1rem;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.prose .diagram svg { display: block; width: 100%; height: auto; min-width: 42rem; max-width: 52rem; margin: 0 auto; }
+.prose .diagram figcaption { margin-top: 0.75rem; color: var(--muted); font-size: 0.875rem; }
+.diagram text { fill: var(--text); font-family: var(--font-body); font-size: 13px; }
+.diagram .t-head { fill: var(--text-strong); font-weight: 600; }
+.diagram .t-small { fill: var(--muted); font-size: 11px; }
+.diagram .t-mono { font-family: var(--font-mono); font-size: 11px; }
+.diagram .t-lane { fill: var(--faint); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; }
+.diagram .box { fill: var(--bg); stroke: var(--line-strong); stroke-width: 1.5; }
+.diagram .host { fill: var(--bg); stroke: var(--accent); stroke-width: 2; }
+.diagram .guest { fill: var(--bg); stroke: var(--amber); stroke-width: 2; }
+.diagram .gpu { fill: var(--bg); stroke: var(--tok-variable); stroke-width: 2; }
+.diagram .lane { fill: none; stroke: var(--line-strong); stroke-dasharray: 4 4; }
+.diagram .edge { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+.diagram .edge-dash { stroke-dasharray: 5 4; }
+.diagram .arrowhead { fill: var(--muted); }
+.diagram .bar-host { fill: var(--accent); }
+.diagram .bar-guest { fill: var(--amber); }
+.diagram .bar-gpu { fill: var(--tok-variable); }
+.diagram .bar-idle { fill: var(--line); }
 .prose img {
   display: block;
   max-width: 100%;

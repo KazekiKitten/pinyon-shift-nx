@@ -105,10 +105,13 @@ ran, are in [benchmarks/low-spec](../benchmarks/low-spec); the plan is in the
 ## Android handhelds
 
 Measured in free roam and races at 1x (1280×720 internal) with the in-game
-presets, from the same save. SMOOTH 60 is no MSAA, no sun shadows and a
+presets, from the same save. SMOOTH 60 is 2x MSAA, no sun shadows and a
 60 fps limit; QUALITY 30 keeps the game's 4x MSAA and shadows at 30 fps.
 Both draw FH1's three predicated tiles once and redraw the reflection map
-at a quarter rate.
+at a quarter rate. The Thor and Astra rows and the 2x and 4x columns
+predate the specialized EDRAM passes, when SMOOTH 60 had no MSAA; on the
+Odin, SMOOTH 60 with 2x now holds 60 fps (p95 16.9 ms, about 15.4 ms of
+GPU a frame).
 
 | Device | SoC, GPU, memory | Driver | SMOOTH 60 | 2x MSAA, 60 limit | 4x MSAA, 60 limit | QUALITY 30 |
 | --- | --- | --- | ---: | ---: | ---: | ---: |

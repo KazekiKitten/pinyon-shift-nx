@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <mutex>
+#include <set>
 #include <string>
 #include <thread>
 
@@ -63,8 +64,12 @@ void DumpThreads() {
   REXLOG_WARN("Stall: {:.1f} s since the last title frame; {} threads",
               double(NowNs() - g_last_frame_ns.load(std::memory_order_acquire)) / 1e9,
               threads.size());
+  // The table lists a thread once per handle, and a thread often has two
+  // (#542's dump printed most threads twice).
+  std::set<uint32_t> dumped;
   for (const auto& thread : threads) {
     if (!thread->is_guest_thread() || !thread->thread_state()) continue;
+    if (!dumped.insert(thread->thread_id()).second) continue;
     const PPCContext* c = thread->thread_state()->context();
     if (!c) continue;
     REXLOG_WARN(

@@ -75,7 +75,19 @@ function Invoke-BuildToolsInstaller {
             -JsonEvents:$JsonEvents | Out-Host
     }
     if ($elevated.ExitCode -notin @(0, 3010)) {
-        throw "Microsoft C++ Build Tools installation stopped with exit code $($elevated.ExitCode)."
+        # The helper passes the Visual Studio Installer's exit code on; these
+        # are the ones a player can act on.
+        $reason = switch ($elevated.ExitCode) {
+            1001 { ' The Visual Studio Installer is already running: close it, then start the build again.' }
+            { $_ -in 1003, 8006 } { ' Visual Studio or one of its tools is running: close it, then start the build again.' }
+            { $_ -in 1602, 5004 } { ' The installation was cancelled.' }
+            1618 { ' Another installation is running: wait for it to finish, then start the build again.' }
+            5007 { ' The installer says this PC does not meet its requirements.' }
+            -1073720687 { ' The installer could not download its files: check the internet connection.' }
+            default { '' }
+        }
+        throw ("Microsoft C++ Build Tools installation stopped with exit code $($elevated.ExitCode).$reason " +
+            "The Visual Studio Installer's own logs are the dd_*.log files in $env:TEMP.")
     }
     $elevated.ExitCode -eq 3010
 }

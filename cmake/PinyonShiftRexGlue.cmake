@@ -121,6 +121,11 @@ if(REXSDK_DIR)
     else()
         set(_codegen_arch arm64)
     endif()
+    # A path cached by a configure against the wrong SDK folder would
+    # otherwise outlive the fix (#459).
+    if(NOT EXISTS "${PINYON_SHIFT_REXGLUE_CODEGEN}")
+        unset(PINYON_SHIFT_REXGLUE_CODEGEN CACHE)
+    endif()
     set(PINYON_SHIFT_REXGLUE_CODEGEN
         "${REXSDK_DIR}/out/${_codegen_os}-${_codegen_arch}/Release/rexglue${CMAKE_HOST_EXECUTABLE_SUFFIX}"
         CACHE FILEPATH "The standalone ReXGlue generator")

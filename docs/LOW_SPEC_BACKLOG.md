@@ -307,9 +307,9 @@ alone.
 
 | ID | Item | Expected | Effort | Status |
 | --- | --- | --- | --- | --- |
-| LS-5.1 | **Guest profile on the constrained CPU.** The thread sampler with `--lines 1` and `tools/map-generated-lines.py`, per guest thread (simulation, render, others). | The hot set for LS-5.2-5.4 | S | Not started |
-| LS-5.2 | **Profile-guided register locality.** `non_volatile_as_local`, `cr_as_local` and `non_argument_as_local` per function for the hot set, rather than a global switch. State syncs back to the guest context at calls, hooks, exceptional exits, fiber boundaries and interior resume points. Functions that must share register state (exception funclets) stay excluded, as the SDK's config already handles. | 15-30 % of guest CPU (PB-3.2's estimate) on the hot set | L | Not started |
-| LS-5.3 | **Offset-free stack and TLS accesses** (PB-3.3). | 4-10 % | M | Not started |
+| LS-5.1 | **Guest profile on the constrained CPU.** The thread sampler with `--lines 1` and `tools/map-generated-lines.py`, per guest thread (simulation, render, others). | The hot set for LS-5.2-5.4. Done (simulated, 4 cores, siblings loaded): flat; no guest function above 2.3 % of the simulation thread or 7 % of a job worker. See PB-3.12 candidates. | S | Done |
+| LS-5.2 | **Profile-guided register locality.** `non_volatile_as_local`, `cr_as_local` and `non_argument_as_local` per function for the hot set, rather than a global switch. State syncs back to the guest context at calls, hooks, exceptional exits, fiber boundaries and interior resume points. Functions that must share register state (exception funclets) stay excluded, as the SDK's config already handles. | 15-30 % of guest CPU (PB-3.2's estimate) on the hot set CR part measured and not kept: `cr_as_local` with the CR fields loaded from ctx on entry, written back before every call, return, tail call, longjmp, setjmp copy and ctx hook, and reloaded after calls (exact by construction; all generated compares then write locals). Route passes, but libmain.so grows 13 MB (exe 26 %) and Odin guest instructions a second do not move (render 0.67-0.69 against 0.68-0.69 G, simulation 0.74-0.80 against 0.77-0.85 G, 3 runs each): the syncs around calls cost what the compares save. Worth retrying only with liveness, so that a sync covers just the fields live across that call. Retried in #467 with the PowerPC ABI in place of liveness (calls write back only cr2-cr4 and reload nothing): render -11 % and simulation -12 % Odin guest instructions, kept (`cr_as_local = true`). The other locals are not started. | L | CR part done |
+| LS-5.3 | **Offset-free stack and TLS accesses** (PB-3.3). | 4-10 %. Stack part done (ShiftGlue `a0f2b58`): loads and stores based on r1, and the `stwu r1` frame push, use `REX_STACK_*` macros without the select. pinyon_shift.exe 5.7 % and libmain.so 5.4 % smaller; on the Odin (fh1-race-sustained, 30 fps limit, 4 baseline runs against 5) guest instructions a second fell 17 % on the simulation thread (0.88-0.93 to 0.71-0.79 G), 18 % on the render thread (0.77-0.82 to 0.59-0.69 G) and about 5 % on the audio thread. TLS (r13) is not worth it: r13 is not among the common bases. `lis`-derived constant bases need no change, because the compiler already folds the select for a constant address, and the MMIO base tracking does not clear on other writes, so it cannot be reused to prove an address virtual. | M | Done (stack) |
 | LS-5.4 | **Runtime overheads on guest threads** (PB-3.11, PB-4.5). Count write-watch faults (60-70 `VirtualProtect` a race frame) and global-lock contention (149 a frame, 0.34 ms) on T1, where each costs more. | Unknown until counted | S to count, M to fix | Not started |
 | LS-5.5 | **Numerics apart from locality.** Fused `vmaddfp` (PB-3.4), MXCSR propagation (PB-3.5) and SIMD `vmsum` (PB-3.7), each as its own change with differential tests for rounding, special values and resume. | Small each | S-M | Not started |
 
@@ -344,7 +344,9 @@ folded clears (A60-1).
 - **Internal resolution below 1x.** The scale is an integer and baked into the
   translated shaders, and 1x is the console's resolution.
 - **A simulation slower than the source rate with interpolated frames.** Frame
-  interpolation was rejected (its setting is removed by config migration).
+  generation is now planned (#523-#526) as an opt-in on top of a
+  steady base rate, not as a way to run the simulation slower; the old
+  interpolation setting stays removed by config migration.
 - **Repeating measured knobs without a new hypothesis.** PGO and AVX2 builds,
   priority boosts and MMCSS, broad sleep changes on Windows, constant
   coalescing and compare-before-upload, speculative shader shortcuts (fast

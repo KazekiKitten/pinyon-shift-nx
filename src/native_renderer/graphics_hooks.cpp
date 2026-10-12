@@ -54,6 +54,10 @@ REXCVAR_DEFINE_BOOL(pinyon_shift_block_on_gpu_fence, true, "Pinyon Shift",
                     "Block the title's GPU fence polling until the command processor next "
                     "writes guest memory (bounded to 1 ms) instead of spinning")
     .lifecycle(rex::cvar::Lifecycle::kHotReload);
+REXCVAR_DEFINE_UINT32(pinyon_shift_gpu_fence_spin_us, 20, "Pinyon Shift",
+                      "Microseconds a blocked GPU fence wait polls the fence word before "
+                      "it sleeps until the command processor writes guest memory")
+    .lifecycle(rex::cvar::Lifecycle::kHotReload);
 
 namespace pinyon_shift::native_renderer {
 namespace {
@@ -268,7 +272,8 @@ void PinyonShiftGpuFenceWait(PPCRegister& r3) {
     return;
   }
   // Fences a few microseconds away are cheaper to catch spinning.
-  const auto spin_end = Clock::now() + std::chrono::microseconds(20);
+  const auto spin_end =
+      Clock::now() + std::chrono::microseconds(REXCVAR_GET(pinyon_shift_gpu_fence_spin_us));
   do {
     if (load(fence_address) != last_seen) {
       return;

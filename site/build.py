@@ -32,7 +32,7 @@ REPO = "arcanite24/pinyon-shift"
 REPO_URL = f"https://github.com/{REPO}"
 # The site documents the development branch, ahead of the latest release.
 BRANCH = "dev"
-SECTIONS = ["Start", "Playing", "Technical", "Project"]
+SECTIONS = ["Start", "Playing", "Technical", "Internals", "Project"]
 
 # Files copied from the repository into the site, by output name.
 STATIC_FROM_REPO = {
@@ -42,6 +42,8 @@ STATIC_FROM_REPO = {
     "favicon.ico": "launcher/PinyonShift.Launcher/Branding/pinyon-shift.ico",
 }
 
+# A paragraph of its own, {{diagram:name|Caption}}, inlines site/diagrams/name.svg.
+DIAGRAM = re.compile(r"<p>\{\{diagram:([\w-]+)\|([^}]*)\}\}</p>")
 MD_LINK = re.compile(r'href="(?!https?:|mailto:|#)([^"#]+?)\.md(#[^"]*)?"')
 
 
@@ -176,6 +178,17 @@ def render_markdown(text: str) -> tuple[str, list[dict]]:
     return body, converter.toc_tokens
 
 
+def diagram_html(name: str, caption: str) -> str:
+    """An inline SVG diagram, themed by the site's colours through CSS classes."""
+    path = SITE / "diagrams" / f"{name}.svg"
+    if not path.is_file():
+        raise SystemExit(f"missing diagram {path.relative_to(ROOT)}")
+    svg = path.read_text(encoding="utf-8").strip()
+    # Marker ids are page-global once inlined; keep each diagram's own.
+    svg = svg.replace('id="arrow"', f'id="arrow-{name}"').replace("url(#arrow)", f"url(#arrow-{name})")
+    return f'<figure class="diagram">{svg}<figcaption>{caption}</figcaption></figure>'
+
+
 def flatten_toc(tokens: list[dict]) -> list[dict]:
     items = []
     for token in tokens:
@@ -271,6 +284,9 @@ def build(out: Path) -> None:
             text = text.replace("{{features}}", features_markdown())
         body, toc = render_markdown(text)
         body = rewrite_links(body, page, slugs)
+        body = DIAGRAM.sub(lambda m: diagram_html(m.group(1), m.group(2)), body)
+        if "{{diagram:" in body:
+            raise SystemExit(f"{page.source.name}: a diagram placeholder must be a paragraph of its own")
         body = body.replace("<table>", '<div class="table-wrap"><table>').replace("</table>", "</table></div>")
         prefix = "../" * page.depth
         body = body.replace('src="img/', f'src="{prefix}img/')

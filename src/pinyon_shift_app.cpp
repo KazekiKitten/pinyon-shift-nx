@@ -1019,6 +1019,19 @@ void PinyonShiftApp::OnPostSetup() {
           }
         });
       });
+  // The Vulkan presenter picks its present mode from vsync (#539) when it
+  // creates the swapchain, which the surface update does.
+  rex::cvar::RegisterChangeCallback("vsync", [this](std::string_view, std::string_view) {
+    if (!window()) {
+      return;
+    }
+    window()->app_context().CallInUIThreadDeferred([this] {
+      if (runtime() && runtime()->graphics_system() &&
+          runtime()->graphics_system()->presenter()) {
+        runtime()->graphics_system()->presenter()->OnSurfaceResizeFromUIThread();
+      }
+    });
+  });
   // SETTINGS in the pause menu (NP-1.5): the hook runs on the guest thread.
   PinyonShiftSetPauseSettingsHandler([this] {
     if (window()) {
@@ -1275,6 +1288,7 @@ void PinyonShiftApp::OnShutdown() {
   pinyon_shift::ui::WaitForPhoto();
   PinyonShiftSetPauseSettingsHandler(nullptr);
   rex::cvar::UnregisterChangeCallbacks("d3d12_allow_variable_refresh_rate_and_tearing");
+  rex::cvar::UnregisterChangeCallbacks("vsync");
   // Before the presenter, drawer and kernel it uses are torn down.
   if (achievement_listener_ && runtime() && runtime()->kernel_state()) {
     achievements().UnregisterCallback(achievement_listener_);

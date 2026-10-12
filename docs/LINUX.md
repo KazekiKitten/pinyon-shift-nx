@@ -121,6 +121,7 @@ microSD card under `/run/media/`.
 | --- | --- |
 | Steam Deck LCD, SteamOS 3.7 | Builds and plays; 60 fps at 1x |
 | Ubuntu 24.04 (WSL) | Release archive to a built game in 20 minutes; Add to Steam writes the shortcut and art; runs with a null GPU |
+| Arch Linux (container, libxml2 2.15) | The pinned toolchain configures and links with setup's `ld.lld` wrapper (#472); a full build not run |
 | Other distributions, NVIDIA, Intel | Not tested yet |
 
 Work still open, such as DLC import and the title update build on Linux, is
