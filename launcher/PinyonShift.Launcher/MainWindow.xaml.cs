@@ -718,6 +718,16 @@ public partial class MainWindow : Window
                 return;
             }
 
+            if (string.Equals(result?.Result, "config-unavailable", StringComparison.OrdinalIgnoreCase))
+            {
+                SetFailure("The settings file could not be read",
+                    "The game could not read or write its settings file" +
+                    (string.IsNullOrWhiteSpace(result?.Config) ? "" : $" ({result.Config})") +
+                    ". Close other copies of the game, and check that the folder is not read-only " +
+                    "or held by a sync app. To start from default settings, rename the file, then retry.");
+                return;
+            }
+
             DetectPendingReport();
             if (_pendingReport is null && result is not null &&
                 !string.IsNullOrWhiteSpace(result.CrashId) &&
@@ -2604,7 +2614,8 @@ public partial class MainWindow : Window
         [property: JsonPropertyName("crash_id")] string? CrashId,
         [property: JsonPropertyName("bundle")] string? Bundle,
         [property: JsonPropertyName("issue_url")] string? IssueUrl,
-        [property: JsonPropertyName("exit_code")] long ExitCode);
+        [property: JsonPropertyName("exit_code")] long ExitCode,
+        [property: JsonPropertyName("config")] string? Config = null);
     private sealed record CrashReport(
         [property: JsonPropertyName("crash_id")] string CrashId,
         [property: JsonPropertyName("bundle")] string Bundle,

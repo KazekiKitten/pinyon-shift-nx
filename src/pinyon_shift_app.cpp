@@ -223,6 +223,12 @@ bool EnsureSupportedConfig(const std::filesystem::path& path, bool& created,
     if (schema == kConfigSchema) {
       return true;
     }
+    if (schema > kConfigSchema) {
+      // A newer launcher or game wrote it: an update whose build did not
+      // finish, or a downgrade (#536). Its settings are a superset of this
+      // build's, so keep the file unchanged; unknown settings are ignored.
+      return true;
+    }
     if (schema < 1 || schema >= kConfigSchema) {
       return false;
     }

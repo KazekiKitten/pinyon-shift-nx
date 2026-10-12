@@ -600,8 +600,10 @@ catch { [Console]::Error.Write($_.Exception.Message); exit 2 }
         self.assertIn("for (const auto& key : pinyon_shift::config::kSchema28Keys)", app)
         self.assertIn('{"keybind_a", "LMB,Space"}', keys)
         self.assertIn('{"keybind_right_trigger", "W"}', keys)
-        # Schemas 1..24 migrate; the current schema is accepted unchanged.
+        # Older schemas migrate; the current and newer ones are accepted
+        # unchanged (#536).
         self.assertIn("schema < 1 || schema >= kConfigSchema", app)
+        self.assertIn("if (schema > kConfigSchema) {", app)
         self.assertNotIn('"fh1_renderer = \\"native\\"\\n"', app)
         self.assertNotIn('\\"xenos\\"', app)
         retired_block = app[app.index("for (const char* retired_setting : {"):]

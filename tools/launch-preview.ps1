@@ -324,6 +324,19 @@ if ($exitCode -eq 1308) {
     if ($Json) { $result | ConvertTo-Json -Compress } else { $result }
     exit 1
 }
+if ($exitCode -eq 1306) {
+    # The game could not read or write its settings file and said so
+    # (src/pinyon_shift_app.cpp, EnsureSupportedConfig). The player can fix
+    # the file or its folder; a crash report would not help (#536).
+    $result = [ordered]@{
+        result = 'config-unavailable'
+        process_id = $process.Id
+        exit_code = $exitCode
+        config = Join-Path $resolvedStateRoot 'config\pinyon_shift.toml'
+    }
+    if ($Json) { $result | ConvertTo-Json -Compress } else { $result }
+    exit 1
+}
 if ($exitCode -eq 1307) {
     # The game stopped before dereferencing a missing saved tyre record.
     # This needs the player's content restored, not a crash report.
