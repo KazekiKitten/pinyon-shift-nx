@@ -227,17 +227,23 @@ MenuRow SettingsPages::Setting(std::string label, std::vector<Choice> choices) {
     const int index = Find(*shared, [this](const std::string& name) { return Saved(name); });
     return index >= 0 ? (*shared)[size_t(index)].label : std::string("CUSTOM");
   };
-  row.adjust = [this, shared](int direction) {
+  row.adjust = [this, shared, label = row.label](int direction) {
     const auto& choices = *shared;
     const int count = int(choices.size());
     const int current = Find(choices, [this](const std::string& name) { return Saved(name); });
     const int next = current < 0 ? 0 : (current + direction + count) % count;
+    // A crash report then shows what was changed just before (#542).
+    std::string values;
     for (const auto& [name, literal] : choices[size_t(next)].values) {
       config_.Set(name, literal);
       if (!NeedsRestart(name)) {
         rex::cvar::SetFlagByName(name, Unquote(literal));
       }
+      values += (values.empty() ? "" : " ") + name + "=" + Unquote(literal);
     }
+    diagnostics::RecordEvent("settings.changed", {{"row", label},
+                                                  {"choice", choices[size_t(next)].label},
+                                                  {"values", values}});
     Save();
   };
   if (restart) {
