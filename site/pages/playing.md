@@ -46,6 +46,7 @@ Keys can be rebound in **F6 > CONTROLS**, and **RESET KEYS** returns to this lay
 
 | Preset | Resolution | MSAA | Output | Rate | Notes |
 | --- | --- | --- | --- | ---: | --- |
+| Ultra Low 30 | 1x | Off | Bilinear | 30 | For integrated graphics on 2 CPU cores, which the launcher recommends it for. As Low-spec 60 without the sun's shadows, with the car reflections updated at a quarter rate and the scene drawn in one pass, at the console's own 30 fps. Choosing another preset turns these back on |
 | Low-spec 60 | 1x | Off | Bilinear | 60 | The default for a new install. The game's own texture filtering, no FXAA. Needs 4 CPU cores and about 1.1 GB of graphics memory |
 | Balanced 40 | 1x | Off | Bilinear | 40 | As Low-spec 60 at a third of the CPU work of 120. Paces evenly on 120 Hz and 40 Hz displays. Recommended below 4 CPU cores |
 | Performance 120 | 1x | Off | FSR 1 | 120 | The default on a discrete GPU with 6 GB or more, 6 or more CPU threads and a 120 Hz display |

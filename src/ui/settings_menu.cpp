@@ -573,8 +573,24 @@ std::unique_ptr<MenuScreen> SettingsPages::Graphics() {
   // anisotropic filtering: FSR 1 at the panel's 2400x1504 cost 1.4 ms a
   // frame and forced 4x anisotropy 0.4 ms, measured by alternating each in
   // one run.
+  // ULTRA LOW 30 (#515), for entry-level phones: QUALITY 30's rate without
+  // MSAA or shadows.
   rows.push_back(Setting("GRAPHICS PRESET",
-                         {{"QUALITY 30",
+                         {{"ULTRA LOW 30",
+                           {{"gpu_backend", "\"vulkan\""},
+                            {"gpu_record_thread", "true"},
+                            {"draw_resolution_scale_x", "1"},
+                            {"draw_resolution_scale_y", "1"},
+                            {"present_effect", "\"bilinear\""},
+                            {"anisotropic_override", "-1"},
+                            {"fh1_msaa_single_sample", "true"},
+                            {"fh1_msaa_2x", "false"},
+                            {"fh1_untile_predicated_tiling", "true"},
+                            {"pinyon_shift_fh1_env_map_rate", "0.25"},
+                            {"pinyon_shift_fh1_shadows", "false"},
+                            {"host_present_fps_limit", "0"},
+                            {"pinyon_shift_fh1_render_fps_limit", "30"}}},
+                          {"QUALITY 30",
                            {{"gpu_backend", "\"vulkan\""},
                             {"gpu_record_thread", "true"},
                             {"draw_resolution_scale_x", "1"},
@@ -668,6 +684,12 @@ std::unique_ptr<MenuScreen> SettingsPages::Graphics() {
   // third; 40 paces evenly on 120 Hz displays and the Steam Deck's 40 Hz mode.
   // Every preset clears the presentation limit, so the frames the game
   // renders are the frames shown.
+  // ULTRA LOW 30 (#515) is for machines below that: also no shadows (about
+  // 6 ms a frame on the Odin 2 Portal), the reflection cubemap at a quarter
+  // rate, the scene's three tiles in one pass (about 3 ms on the Odin), and
+  // 30 fps, the console's own rate and half the CPU work of 60. The other
+  // presets set those three back to the desktop defaults, so leaving ULTRA
+  // LOW does not keep them.
   const auto preset = [](const char* scale, const char* effect, const char* msaa_off,
                          const char* fps,
                          std::vector<std::pair<std::string, std::string>> extra = {}) {
@@ -680,15 +702,31 @@ std::unique_ptr<MenuScreen> SettingsPages::Graphics() {
         {"fh1_msaa_single_sample", msaa_off},
         {"fh1_msaa_2x", "false"},
         {"host_present_fps_limit", "0"},
-        {"pinyon_shift_fh1_render_fps_limit", fps}};
-    values.insert(values.end(), extra.begin(), extra.end());
+        {"pinyon_shift_fh1_render_fps_limit", fps},
+        {"pinyon_shift_fh1_shadows", "true"},
+        {"pinyon_shift_fh1_env_map_rate", "1"},
+        {"fh1_untile_predicated_tiling", "false"}};
+    for (auto& [name, value] : extra) {
+      const auto it = std::find_if(values.begin(), values.end(),
+                                   [&](const auto& setting) { return setting.first == name; });
+      if (it != values.end()) {
+        it->second = value;
+      } else {
+        values.emplace_back(name, value);
+      }
+    }
     return values;
   };
   const std::vector<std::pair<std::string, std::string>> cheapest = {
       {"anisotropic_override", "-1"}, {"swap_post_effect", "\"none\""}};
+  auto ultra_low = cheapest;
+  ultra_low.insert(ultra_low.end(), {{"pinyon_shift_fh1_shadows", "false"},
+                                     {"pinyon_shift_fh1_env_map_rate", "0.25"},
+                                     {"fh1_untile_predicated_tiling", "true"}});
   rows.push_back(Setting(
       "GRAPHICS PRESET",
-      {{"LOW-SPEC 60", preset("1", "\"bilinear\"", "true", "60", cheapest)},
+      {{"ULTRA LOW 30", preset("1", "\"bilinear\"", "true", "30", ultra_low)},
+       {"LOW-SPEC 60", preset("1", "\"bilinear\"", "true", "60", cheapest)},
        {"BALANCED 40", preset("1", "\"bilinear\"", "true", "40", cheapest)},
        // The reference desktop (Ryzen 7 5800X, RTX 4080) holds the 120 limit
        // in the race at 1x (8.3 ms median) and runs it at 9.5 ms at 3x.
