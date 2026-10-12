@@ -112,6 +112,38 @@ class PreflightTests(unittest.TestCase):
         self.assertIn("--add A.One --add B.Two", calls[1])
         self.assertIn("--passive", calls[1])
 
+    def test_install_starts_the_installer_once_with_every_switch(self):
+        # #458, #533: the single Install run was unrolled into its switches
+        # and the installer was started once per switch.
+        import tempfile
+        with tempfile.TemporaryDirectory() as temp:
+            temp = pathlib.Path(temp)
+            log = temp / "calls.txt"
+            fake = temp / "setup.cmd"
+            fake.write_text(f'@echo %*>>"{log}"\r\n@exit /b 0\r\n', encoding="ascii")
+            result = subprocess.run(
+                [POWERSHELL, "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+                 str(ROOT / "tools/install-build-tools.ps1"), "-Bootstrapper", str(fake)],
+                capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            calls = log.read_text(encoding="ascii").splitlines()
+        self.assertEqual(len(calls), 1)
+        self.assertIn("--add Microsoft.VisualStudio.Workload.VCTools", calls[0])
+        self.assertIn("--passive", calls[0])
+
+    def test_a_failed_installer_passes_its_exit_code_on(self):
+        # #498, #502: the code says why the installer stopped.
+        import tempfile
+        with tempfile.TemporaryDirectory() as temp:
+            fake = pathlib.Path(temp) / "setup.cmd"
+            fake.write_text('@exit /b 8006\r\n', encoding="ascii")
+            result = subprocess.run(
+                [POWERSHELL, "-NoLogo", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File",
+                 str(ROOT / "tools/install-build-tools.ps1"), "-Bootstrapper", str(fake),
+                 "-Mode", "Repair", "-InstallPath", temp, "-Add", "A.One"],
+                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 8006, result.stderr)
+
     def test_provisioning_repairs_once_and_asks_for_a_restart(self):
         provision = (ROOT / "tools/provision-toolchain.ps1").read_text(encoding="utf-8")
         config = json.loads((ROOT / "config/release-toolchain.json").read_text(encoding="utf-8"))

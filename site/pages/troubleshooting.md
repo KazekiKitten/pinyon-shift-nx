@@ -19,6 +19,8 @@ Check the connection and run the launcher again. Network failures are retried, a
 
 Restart Windows after a Build Tools install, free at least 30 GB, and close any running game before trying again. When a step fails, the launcher shows which one, its exit code and the first real compiler, CMake or file-copy error, with a hint for common causes: a full disk, low memory, antivirus, a file in use. The same report is saved in `.local/logs/setup-error.json`. Attach it to a bug report; the final "build failed" line alone can't identify the cause.
 
+When the Visual Studio Installer stops, the error gives its exit code and, for the common ones, the reason: the installer or Visual Studio is already open, or another installation is running. The installer's own logs are the `dd_*.log` files in `%TEMP%`.
+
 ## A portable install can't start or build
 
 - **"Portable folder is not writable"**: move the folder somewhere you own, such as `D:\Games\PinyonShift`, or delete `portable.txt`.
