@@ -222,6 +222,12 @@ A map is a DDS volume texture, A8R8G8B8, with red varying fastest, then
 green, then blue; start from a copy of `NormalGrading.dds` built on the
 player's machine.
 
+For a look over the whole scene without a mod, a player can drop a `.cube`
+3D LUT (2 to 256 points, `DOMAIN_MIN`/`DOMAIN_MAX` 0 to 1) into the state
+folder's `luts` folder and pick it in F6 > GRAPHICS > COLOUR LUT
+(`scene_lut_path`, `scene_lut_strength`). It applies after the game's
+grading, on the scene only.
+
 ### Settings merged by key
 
 Several mods can change the same settings file when each ships only the

@@ -476,15 +476,15 @@ Frame generation is planned since this round, opt-in (FB-14.6 to FB-14.9).
 | --- | --- | --- | --- |
 | FB-14.1 | **Texture packs on the Vulkan renderer (bug; FB-5.6)** ([#518](https://github.com/arcanite24/pinyon-shift/issues/518)) | S-M | Done |
 | FB-14.2 | **Screenshots without the HUD and a HUD toggle key** ([#519](https://github.com/arcanite24/pinyon-shift/issues/519)). F2 (`bind_hud`, setting `hud_hidden`) holds the game's own HUD-hidden byte, so F8 photos and any capture tool get the frame without the HUD at no render cost; menus and photo mode still draw ([REVERSE_ENGINEERING.md](REVERSE_ENGINEERING.md#developer-options-and-leftover-systems)). The pre-HUD snapshot was not needed | S | Done |
-| FB-14.3 | **HUD scale and safe-zone setting** ([#520](https://github.com/arcanite24/pinyon-shift/issues/520)) | S-M | Probable |
-| FB-14.4 | **Colour grading mods: grading maps and a host LUT** ([#521](https://github.com/arcanite24/pinyon-shift/issues/521)) | S | Confirmed / probable |
+| FB-14.3 | **HUD scale and safe-zone setting** ([#520](https://github.com/arcanite24/pinyon-shift/issues/520)) | S-M | Done: F6 > DISPLAY > HUD, HUD draws scaled through the viewport (`fh1_hud_scale`, `fh1_hud_safe_zone`) |
+| FB-14.4 | **Colour grading mods: grading maps and a host LUT** ([#521](https://github.com/arcanite24/pinyon-shift/issues/521)) | S | Done: grading maps by mod (MODDING.md), `.cube` LUT on the scene (F6 > GRAPHICS > COLOUR LUT) |
 | FB-14.5 | **Shader replacement as a mod folder** ([#522](https://github.com/arcanite24/pinyon-shift/issues/522)) | S-M | Confirmed hook |
 | FB-14.6 | **Temporal upscaling and frame generation inputs, FSR 3.1 first (DR-5.4)** ([#523](https://github.com/arcanite24/pinyon-shift/issues/523)) | L | Probable |
 | FB-14.7 | **FSR 4 upscaling and frame generation** ([#524](https://github.com/arcanite24/pinyon-shift/issues/524)) | M after FB-14.6 | Probable |
 | FB-14.8 | **DLSS upscaling and frame generation from a player-supplied DLL** ([#525](https://github.com/arcanite24/pinyon-shift/issues/525)) | M after FB-14.6 | Probable |
 | FB-14.9 | **Lossless Scaling frame generation from the player's own `Lossless.dll`** ([#526](https://github.com/arcanite24/pinyon-shift/issues/526)) | M | Probable |
 | FB-14.10 | **Resolution scale per render target: shadows, post, reflections (FB-5.1, DR-2.1)** ([#527](https://github.com/arcanite24/pinyon-shift/issues/527)) | L | Probable |
-| FB-14.11 | **Anti-aliasing and anisotropic filtering on the scene only** ([#528](https://github.com/arcanite24/pinyon-shift/issues/528)) | S-M | Probable |
+| FB-14.11 | **Anti-aliasing and anisotropic filtering on the scene only** ([#528](https://github.com/arcanite24/pinyon-shift/issues/528)) | S-M | Done: FXAA on the scene (`swap_post_effect_scene_only`), anisotropy and LOD bias off depth-only and HUD draws. Cost not measured: the GPU was throttled when tested. SMAA not added |
 | FB-14.12 | **Frame inspector for modders and developers** ([#529](https://github.com/arcanite24/pinyon-shift/issues/529)) | S-M | High |
 
 Working order: FB-14.1, FB-14.2, FB-14.3, FB-14.4, FB-14.5, then FB-14.6

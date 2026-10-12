@@ -171,6 +171,7 @@ class SettingsPages : public std::enable_shared_from_this<SettingsPages> {
   std::unique_ptr<MenuScreen> Audio();
   std::unique_ptr<MenuScreen> Controls();
   std::unique_ptr<MenuScreen> Wheel();
+  std::unique_ptr<MenuScreen> Hud();
   std::unique_ptr<MenuScreen> Gameplay();
   std::unique_ptr<MenuScreen> Profile();
   std::unique_ptr<MenuScreen> Gamertag();
@@ -473,6 +474,7 @@ std::unique_ptr<MenuScreen> SettingsPages::Display() {
                           {"40", {{"pinyon_shift_fh1_render_fps_limit", "40"}}},
                           {"60", {{"pinyon_shift_fh1_render_fps_limit", "60"}}},
                           {"120", {{"pinyon_shift_fh1_render_fps_limit", "120"}}}}));
+  rows.push_back(Page("HUD", &SettingsPages::Hud));
   auto note = [this, restart = RestartNote(rows)] {
     const std::string pending = restart ? restart() : std::string();
     if (!pending.empty()) {
@@ -776,6 +778,36 @@ std::unique_ptr<MenuScreen> SettingsPages::Graphics() {
   rows.push_back(Toggle("BLOOM", "disable_bloom", true));
   rows.push_back(Toggle("MOTION BLUR", "disable_motion_blur", true));
   rows.push_back(Toggle("DEPTH OF FIELD", "disable_depth_of_field", true));
+  // POST-PROCESS AA covers the scene only, so HUD text stays sharp; ON also
+  // smooths the HUD, as it did before. Menus without a scene get none.
+  rows.push_back(Toggle("AA ON THE HUD", "swap_post_effect_scene_only", true));
+  // A .cube colour LUT from state/luts on the scene; the HUD keeps its
+  // colours. Applies on the next frame.
+  {
+    std::vector<Choice> luts = {{"OFF", {{"scene_lut_path", "\"\""}}}};
+    std::vector<std::filesystem::path> files;
+    std::error_code error;
+    const std::filesystem::path root = services_.mods_root.parent_path() / "luts";
+    for (auto it = std::filesystem::directory_iterator(root, error);
+         !error && it != std::filesystem::directory_iterator(); it.increment(error)) {
+      std::string extension = it->path().extension().string();
+      std::transform(extension.begin(), extension.end(), extension.begin(),
+                     [](unsigned char c) { return char(std::tolower(c)); });
+      if (it->is_regular_file(error) && extension == ".cube") files.push_back(it->path());
+    }
+    std::sort(files.begin(), files.end());
+    for (const auto& file : files) {
+      luts.push_back({Upper(file.stem().string()),
+                      {{"scene_lut_path", config::Quote(file.generic_string())}}});
+    }
+    rows.push_back(Setting("COLOUR LUT", std::move(luts)));
+    std::vector<Choice> strengths;
+    for (int strength : {25, 50, 75, 100}) {
+      strengths.push_back(
+          {std::to_string(strength) + "%", {{"scene_lut_strength", std::to_string(strength)}}});
+    }
+    rows.push_back(Setting("LUT STRENGTH", std::move(strengths)));
+  }
   auto note = [this, restart = RestartNote(rows)] {
     const std::string pending = restart ? restart() : std::string();
     if (!pending.empty()) return pending;
@@ -787,6 +819,27 @@ std::unique_ptr<MenuScreen> SettingsPages::Graphics() {
 #endif
   };
   return std::make_unique<MenuScreen>("GRAPHICS", std::move(rows), std::move(note));
+}
+
+std::unique_ptr<MenuScreen> SettingsPages::Hud() {
+  std::vector<MenuRow> rows;
+  // The same switch as F2: the HUD's elements hide while it is off.
+  rows.push_back(Toggle("HUD", "hud_hidden", true));
+  // Size around the screen's centre, over the game world; menus without one
+  // keep theirs. Vulkan renderer only; applies at once.
+  std::vector<Choice> scales;
+  for (int percent = 80; percent <= 120; percent += 5) {
+    scales.push_back({std::to_string(percent) + "%",
+                      {{"fh1_hud_scale", std::to_string(percent / 100.0)}}});
+  }
+  rows.push_back(Setting("HUD SCALE", std::move(scales)));
+  // A margin kept clear on each side, for TVs that crop the picture.
+  rows.push_back(Setting("SAFE ZONE", {{"OFF", {{"fh1_hud_safe_zone", "0.0"}}},
+                                       {"2.5%", {{"fh1_hud_safe_zone", "0.025"}}},
+                                       {"5%", {{"fh1_hud_safe_zone", "0.05"}}},
+                                       {"7.5%", {{"fh1_hud_safe_zone", "0.075"}}},
+                                       {"10%", {{"fh1_hud_safe_zone", "0.1"}}}}));
+  return std::make_unique<MenuScreen>("HUD", std::move(rows));
 }
 
 // Switches from FH1's developer launch options (#477), which the retail game
