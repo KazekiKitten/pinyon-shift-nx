@@ -125,9 +125,48 @@ def total_memory_gb() -> float:
     return 0.0
 
 
+def _macos_available_bytes(path: Path) -> int:
+    """What Finder shows as available: free space plus the purgeable space
+    (local snapshots, caches) macOS frees when an app needs it (#461).
+    0 when it cannot be read."""
+    import ctypes
+    try:
+        cf = ctypes.CDLL("/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation")
+        key = ctypes.c_void_p.in_dll(cf, "kCFURLVolumeAvailableCapacityForImportantUsageKey")
+    except (OSError, ValueError):
+        return 0
+    cf.CFURLCreateFromFileSystemRepresentation.restype = ctypes.c_void_p
+    cf.CFURLCreateFromFileSystemRepresentation.argtypes = [
+        ctypes.c_void_p, ctypes.c_char_p, ctypes.c_long, ctypes.c_bool]
+    cf.CFURLCopyResourcePropertyForKey.restype = ctypes.c_bool
+    cf.CFURLCopyResourcePropertyForKey.argtypes = [
+        ctypes.c_void_p, ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p), ctypes.c_void_p]
+    cf.CFNumberGetValue.restype = ctypes.c_bool
+    cf.CFNumberGetValue.argtypes = [ctypes.c_void_p, ctypes.c_long, ctypes.c_void_p]
+    cf.CFRelease.argtypes = [ctypes.c_void_p]
+    raw = os.fsencode(str(path))
+    url = cf.CFURLCreateFromFileSystemRepresentation(None, raw, len(raw), True)
+    if not url:
+        return 0
+    value = ctypes.c_void_p()
+    try:
+        if not cf.CFURLCopyResourcePropertyForKey(url, key, ctypes.byref(value), None) \
+                or not value.value:
+            return 0
+        number = ctypes.c_int64()
+        ok = cf.CFNumberGetValue(value, 4, ctypes.byref(number))  # kCFNumberSInt64Type
+        cf.CFRelease(value)
+        return number.value if ok else 0
+    finally:
+        cf.CFRelease(url)
+
+
 def free_space_gb(path: Path) -> float:
     path.mkdir(parents=True, exist_ok=True)
-    return shutil.disk_usage(str(path)).free / (1 << 30)
+    free = shutil.disk_usage(str(path)).free
+    if sys.platform == "darwin":
+        free = max(free, _macos_available_bytes(path))
+    return free / (1 << 30)
 
 
 def used_space_gb(*paths: Path) -> float:
