@@ -131,8 +131,12 @@ try {
             Write-PinyonEvent extract 46 'Extracting your disc image locally. The original file is not modified.' -JsonEvents:$JsonEvents
             & $extractExe -q -s -x -d $gameRoot $resolvedIso
             if ($LASTEXITCODE -ne 0) { throw 'Disc-image extraction failed.' }
-            $check = if ($contentCheck) {
+            # The event goes out before the assignment: with -JsonEvents it is
+            # pipeline output and would land in $check beside the result (#462).
+            if ($contentCheck) {
                 Write-PinyonEvent extract 54 'Checking every extracted file against the supported retail disc.' -JsonEvents:$JsonEvents
+            }
+            $check = if ($contentCheck) {
                 & (Join-Path $PSScriptRoot 'verify-extracted-game.ps1') -ExtractedRoot $gameRoot -Json | ConvertFrom-Json
             } else {
                 & (Join-Path $PSScriptRoot 'verify-game.ps1') -IsoPath $resolvedIso `
