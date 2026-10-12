@@ -408,6 +408,12 @@ recommendations when its class fits the event. Without `pi` (or a raw
 estimate is loose, so set it when the class matters. Its thumbnail is the
 source's.
 
+Cars bought from a database mod live in the separate modded profile, not
+the player's own save. Removing the mod later leaves that profile
+loadable: the game switches to another owned car and leaves the clone out
+of car select. Whether the car returns when the mod is turned back on
+has not been tested.
+
 ## The Forza Horizon XE mod
 
 [Forza Horizon XE](https://www.moddb.com/mods/forza-horizon-xe-mod) by

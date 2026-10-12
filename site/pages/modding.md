@@ -70,7 +70,7 @@ A mod that only changes how the game looks or sounds, and never what it saves, c
 | Strings (`strings/<language or ALL>/<Table>.toml`) | `IDS_` names with their text: existing names are changed, new ones added with their key, which the database refers to as `_&N` (`tools/fh1-strings.py`) |
 | Merged settings (`merge/`) | `.ini` keys and `.xml` elements are merged into the file, so several mods can change one settings file |
 | Database (`db/*.sql`) | SQL scripts run in load order on a copy of `media/db/gamedb.slt`, or of the database an enabled mod replaces it with |
-| New cars (`tools/clone-fh1-car.py`) | A spec of cars that reuse an existing model with their own name, price, power, weight and class becomes a `db/` script and `strings/` names |
+| New cars (`tools/clone-fh1-car.py`) | A spec of cars that reuse an existing model with their own name, price, power, weight and class becomes a `db/` script and `strings/` names. Bought cars stay in the modded profile, which still loads if the mod is removed |
 | Textures (`textures/<hash>.dds`) | Find a texture's hash with `--texture_dump_dir`. A replacement keeps the format and may be 2, 4 or 8 times larger. **SETTINGS > MODS > RELOAD TEXTURES** reloads them in game. On a GPU without BC formats (most Android GPUs) only 8_8_8_8 replacements apply |
 
 For example, a merge that removes free-roam traffic:
