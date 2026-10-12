@@ -31,6 +31,7 @@ set(PINYON_SHIFT_HOST_SOURCES
     src/save_backups.cpp
     src/cheats.cpp
     src/cheats_map.cpp
+    src/audio_mix.cpp
     src/dev_options.cpp
     src/dlc_token_unlocks.cpp
     src/dlc_treasure_map.cpp

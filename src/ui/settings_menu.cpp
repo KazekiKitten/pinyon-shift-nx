@@ -812,6 +812,22 @@ std::unique_ptr<MenuScreen> SettingsPages::Audio() {
   }
   rows.push_back(Setting("MASTER VOLUME", std::move(volumes)));
   rows.push_back(Toggle("MUTE", "audio_mute"));
+  // The mixer (#486): the game's own level of each category, scaled; the
+  // game reads the levels when it starts.
+  const auto mix = [&](std::string label, std::string name) {
+    std::vector<Choice> levels;
+    for (int percent = 0; percent <= 200; percent += 10) {
+      levels.push_back({std::to_string(percent) + "%", {{name, std::to_string(percent)}}});
+    }
+    rows.push_back(Setting(std::move(label), std::move(levels)));
+  };
+  mix("ENGINE", "pinyon_shift_mix_engine");
+  mix("OTHER CARS", "pinyon_shift_mix_opponents");
+  mix("TYRES", "pinyon_shift_mix_tyres");
+  mix("WIND", "pinyon_shift_mix_wind");
+  mix("AMBIENCE", "pinyon_shift_mix_ambience");
+  mix("GAME MUSIC", "pinyon_shift_mix_music");
+  rows.push_back(Toggle("FULL DYNAMIC RANGE", "pinyon_shift_mix_full_dynamic_range"));
   // Your music (#420): the player's own files instead of the game's radio,
   // which the game mutes once the host player has the music.
   rows.push_back(Toggle("YOUR MUSIC", "pinyon_shift_music"));
@@ -830,7 +846,11 @@ std::unique_ptr<MenuScreen> SettingsPages::Audio() {
   previous.label = "PREVIOUS TRACK";
   previous.activate = [] { music::Previous(); };
   rows.push_back(std::move(previous));
-  return std::make_unique<MenuScreen>("AUDIO", std::move(rows), [] { return music::StatusLine(); });
+  auto note = [restart = RestartNote(rows)] {
+    const std::string pending = restart ? restart() : std::string();
+    return pending.empty() ? music::StatusLine() : pending;
+  };
+  return std::make_unique<MenuScreen>("AUDIO", std::move(rows), std::move(note));
 }
 
 // The controller mapping assistant (#432): for a controller SDL's database

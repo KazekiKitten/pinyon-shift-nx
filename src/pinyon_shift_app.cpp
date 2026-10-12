@@ -1,6 +1,7 @@
 #include "pinyon_shift_app.h"
 #include "pinyon_shift_init.h"
 #include "fh1_render_test.h"
+#include "audio_mix.h"
 #include "dlc/rally_audio_probe.h"
 #include "dlc/rally_pace_notes.h"
 
@@ -1087,6 +1088,15 @@ void PinyonShiftApp::OnPostSetup() {
   auto overlays = pinyon_shift::mod::OverlayRoots();
   const bool builtin_rally = PinyonShiftUseBuiltinRallyAdapter();
   if (builtin_rally) overlays.push_back(PinyonShiftRallyAdapterRoot() / "game");
+  // The audio mixer's copy of the levels, made from the mods' or the disc's.
+  {
+    auto sources = overlays;
+    sources.push_back(game_data_root());
+    if (auto mix = pinyon_shift::audio_mix::Prepare(pinyon_shift::diagnostics::StateRoot(),
+                                                    sources)) {
+      overlays.insert(overlays.begin(), std::move(*mix));
+    }
+  }
   if (!overlays.empty()) {
     for (auto& root : overlays) root = LongHostPath(root);
     constexpr const char* kGameMount = "\\Device\\Harddisk0\\Partition1";

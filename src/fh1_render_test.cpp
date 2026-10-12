@@ -36,6 +36,7 @@
 #include <rex/ui/window.h>
 #include <rex/ui/windowed_app_context.h>
 
+#include "dlc/rally_audio_probe.h"
 #include "guest_native/guest_native.h"
 #include "pinyon_shift_diagnostics.h"
 
@@ -98,6 +99,8 @@ struct HostKeyStep {
   std::string snapshot;
   // poke: store a big-endian float at a guest physical address.
   bool poke = false;
+  // audiocapture: record eight seconds of the native mix (the audio probe).
+  bool audio_capture = false;
   uint32_t poke_address = 0;
   float poke_value = 0.0f;
   // mark: keep a copy of the title's committed virtual heap pages for
@@ -159,6 +162,7 @@ const char* PresenterName(rex::system::NativeGuestOutputPresenter presenter) {
 
 struct TestState {
   bool enabled = false;
+  bool audio_capture = false;
   std::filesystem::path output;
   std::vector<InputStep> inputs;
   std::vector<WaitStep> waits;
@@ -430,6 +434,16 @@ void LoadScript(const std::filesystem::path& path) {
         Fail("script_hostkey_order");
       }
       g_test.host_keys.push_back(step);
+    } else if (command == "audiocapture") {
+      std::string frame, extra;
+      if (!(row >> frame) || row >> extra) Fail("script_audiocapture_columns");
+      HostKeyStep step{ParseUnsigned(frame, 10, "audiocapture_frame")};
+      step.audio_capture = true;
+      if (!g_test.host_keys.empty() && step.frame <= g_test.host_keys.back().frame) {
+        Fail("script_hostkey_order");
+      }
+      g_test.host_keys.push_back(step);
+      g_test.audio_capture = true;
     } else if (command == "snapshot" || command == "poke") {
       std::string frame, first, second, extra;
       HostKeyStep step;
@@ -867,6 +881,8 @@ void Configure(rex::RuntimeConfig& config) {
 
 bool Enabled() { return g_test.enabled; }
 
+bool WantsAudioCapture() { return g_test.enabled && g_test.audio_capture; }
+
 std::filesystem::path OutputDirectory() {
   return g_test.enabled ? g_test.output : std::filesystem::path{};
 }
@@ -877,6 +893,7 @@ bool ObserveOutput(
     return false;
   }
   g_test.output_frame.store(context.frame_sequence, std::memory_order_release);
+  if (g_test.audio_capture) rally::FlushAudioProbeCapture();
   // Script frame: the output frame less the frames spent waiting.
   const uint64_t sequence = ApplyWaits(context.frame_sequence);
   if (g_test.stopping) return false;
@@ -1014,6 +1031,11 @@ bool ObserveOutput(
                                 {"addresses", listed}});
       g_test.marks.clear();
       g_test.marks.shrink_to_fit();
+      continue;
+    }
+    if (step.audio_capture) {
+      rally::BeginAudioProbeCapture();
+      diagnostics::RecordEvent("fh1.render_test.audio_capture", {});
       continue;
     }
     if (!step.snapshot.empty() || step.poke) {

@@ -55,6 +55,12 @@ xbox = "Three stations; a dashboard soundtrack replaces them"
 pinyon = "Your own music files in game, and up to three [custom radio stations](playing.md#custom-radio-stations) with their own names and logos"
 
 [[original]]
+feature = "Sound mix"
+link = "playing.md#sound-mix"
+xbox = "Fixed"
+pinyon = "Engine, other cars, tyres, wind, ambience and music levels, and the compressor on or off"
+
+[[original]]
 feature = "Mods"
 link = "modding.md"
 xbox = "No"
@@ -161,6 +167,11 @@ cells = [
 feature = "Immersive camera"
 link = "playing.md#immersive-camera"
 cells = ["yes", "yes", "yes", "not yet"]
+
+[[platform]]
+feature = "Sound mix"
+link = "playing.md#sound-mix"
+cells = ["yes", "yes", "yes", "yes"]
 
 [[platform]]
 feature = "Your music"
