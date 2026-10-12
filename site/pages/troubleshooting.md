@@ -19,7 +19,7 @@ Check the connection and run the launcher again. Network failures are retried, a
 
 Restart Windows after a Build Tools install, free at least 30 GB, and close any running game before trying again. When a step fails, the launcher shows which one, its exit code and the first real compiler, CMake or file-copy error, with a hint for common causes: a full disk, low memory, antivirus, a file in use. The same report is saved in `.local/logs/setup-error.json`. Attach it to a bug report; the final "build failed" line alone can't identify the cause.
 
-When the Visual Studio Installer stops, the error gives its exit code and, for the common ones, the reason: the installer or Visual Studio is already open, or another installation is running. The installer's own logs are the `dd_*.log` files in `%TEMP%`.
+When the Visual Studio Installer stops, the error gives its exit code and, for the common ones, the reason: the installer or Visual Studio is already open, or another installation is running. The installer's own logs, the `dd_*.log` files in `%TEMP%`, explain the other codes. The launcher copies the ones from the failed attempt to `.local/logs/build-tools-installer`; attach them with `setup-error.json`. If the installer keeps failing, open **Visual Studio Installer** from the Start menu, repair or remove an incomplete Build Tools install, and restart Windows. Or install the Build Tools yourself with **Desktop development with C++**; the launcher uses an existing install.
 
 ## A portable install can't start or build
 

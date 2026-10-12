@@ -372,6 +372,14 @@ catch { [Console]::Error.Write($_.Exception.Message); exit 2 }
         self.assertIn("NativeErrorCode -eq 1223", provision)
         self.assertIn("administrator permission was declined", provision)
 
+    def test_failed_build_tools_install_keeps_the_installer_logs(self):
+        # Exit code 87 has no documented meaning; only the installer's
+        # dd_*.log files explain it (#549).
+        provision = (ROOT / "tools/provision-toolchain.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("-Filter 'dd_*.log'", provision)
+        self.assertIn("'.local/logs/build-tools-installer'", provision)
+
     @unittest.skipUnless(shutil.which("powershell"), "Windows PowerShell is required")
     def test_command_path_removes_entry_quotes_without_losing_parentheses(self):
         command = (

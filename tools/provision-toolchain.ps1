@@ -86,8 +86,22 @@ function Invoke-BuildToolsInstaller {
             -1073720687 { ' The installer could not download its files: check the internet connection.' }
             default { '' }
         }
-        throw ("Microsoft C++ Build Tools installation stopped with exit code $($elevated.ExitCode).$reason " +
-            "The Visual Studio Installer's own logs are the dd_*.log files in $env:TEMP.")
+        # Only the installer's logs say why an unlisted code (87 in #549)
+        # happened; copy this run's beside setup-error.json so a report has them.
+        $where = "The Visual Studio Installer's own logs are the dd_*.log files in $env:TEMP."
+        $since = (Get-Date).Add(-$started.Elapsed).AddMinutes(-1)
+        $installerLogs = @(Get-ChildItem -LiteralPath $env:TEMP -Filter 'dd_*.log' -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.LastWriteTime -ge $since })
+        if ($installerLogs.Count -gt 0) {
+            $copy = Resolve-PinyonLocalPath -RelativePath '.local/logs/build-tools-installer'
+            try {
+                [void](New-Item -ItemType Directory -Force -Path $copy)
+                $installerLogs | Copy-Item -Destination $copy -Force
+                $where = "The Visual Studio Installer's own logs from this attempt were copied to $copy."
+            }
+            catch { }
+        }
+        throw ("Microsoft C++ Build Tools installation stopped with exit code $($elevated.ExitCode).$reason $where")
     }
     $elevated.ExitCode -eq 3010
 }
