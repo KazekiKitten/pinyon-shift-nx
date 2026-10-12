@@ -45,6 +45,43 @@ $environment = Enter-PinyonBuildEnvironment
 $logs = Resolve-PinyonLocalPath -RelativePath '.local/logs'
 [void](New-Item -ItemType Directory -Force -Path $logs)
 if ($Parallel -eq 0) { $Parallel = Get-PinyonBuildJobCount }
+
+# Configure reads the generated tree's sources.cmake, so a first v4 build
+# generates it here; later builds regenerate through the build's own
+# dependency-tracked step (#540). The generator is the one the base build
+# made.
+$generatedRoot = Resolve-PinyonLocalPath -RelativePath '.local/generated-v4'
+$generatedTrees = @('default', 'speech', 'xmedia')
+$requiresBootstrap = -not (Test-Path -LiteralPath (Join-Path $generatedRoot 'default/codegen.build.stamp') -PathType Leaf)
+foreach ($tree in $generatedTrees) {
+    if (-not (Test-Path -LiteralPath (Join-Path $generatedRoot "$tree/sources.cmake") -PathType Leaf)) {
+        $requiresBootstrap = $true
+    }
+}
+if ($requiresBootstrap) {
+    $rexglueExe = Join-Path (Resolve-PinyonRexGlueRoot) 'out/win-amd64/Release/rexglue.exe'
+    if (-not (Test-Path -LiteralPath $rexglueExe -PathType Leaf)) {
+        throw 'The ReXGlue generator is missing. Build the base game first (tools/build-preview.ps1).'
+    }
+    [void](New-Item -ItemType Directory -Force -Path $generatedRoot)
+    $codegenLog = Join-Path $logs 'codegen-v4.log'
+    $codegenConsoleLog = Join-Path $logs 'codegen-v4-console.log'
+    if (Test-Path -LiteralPath $codegenLog) { Remove-Item -LiteralPath $codegenLog -Force }
+    $codegenArguments = @('--log-level', 'info', '--log-file', $codegenLog, 'codegen',
+        (Join-Path $root 'config/rexglue/pinyon_shift_v4_manifest.toml'), '--xex_apply_patches=true')
+    Invoke-PinyonLoggedCommand -FilePath $rexglueExe -Arguments $codegenArguments `
+        -LogPath $codegenConsoleLog -Utf8Output | Out-Host
+    $codegenExit = $LASTEXITCODE
+    if ($codegenExit -ne 0) {
+        foreach ($tree in $generatedTrees) {
+            $stamp = Join-Path $generatedRoot "$tree/codegen.build.stamp"
+            if (Test-Path -LiteralPath $stamp) { Remove-Item -LiteralPath $stamp -Force }
+        }
+        throw (New-PinyonCommandFailure -FailureMessage 'v4 code generation failed; incomplete generation stamps were removed.' `
+            -Step 'Translate the v4 game code' -LogPath $codegenConsoleLog -ExitCode $codegenExit `
+            -CommandLine (Format-PinyonCommandLine -FilePath $rexglueExe -Arguments $codegenArguments))
+    }
+}
 # A release install keeps the SDK in .local/rexglue, not in the submodule
 # path the preset names (#459).
 Invoke-PinyonBuildCommand $environment.CMake @('--preset', 'win-amd64-v4',
