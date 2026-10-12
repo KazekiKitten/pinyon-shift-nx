@@ -22,6 +22,11 @@
 </p>
 
 <p align="center">
+  <a href="https://discord.gg/SFQKFrTvww"><img alt="Join the Discord" src="https://img.shields.io/badge/Discord-join%20the%20server-5865F2?logo=discord&logoColor=white&style=for-the-badge"></a>
+  <a href="https://ko-fi.com/nerijs"><img alt="Support on Ko-fi" src="https://img.shields.io/badge/Ko--fi-support%20the%20project-FF5E5B?logo=kofi&logoColor=white&style=for-the-badge"></a>
+</p>
+
+<p align="center">
   <img src=".github/launcher-ready.png" alt="The Pinyon Shift launcher, ready to play: Vulkan at 1x (1280 × 720), with Play and Settings buttons" width="800">
 </p>
 
@@ -192,7 +197,8 @@ influence over the roadmap. Support is for the work on this project, not for
 *Forza Horizon*, which remains the property of its owners.
 
 Sharing the project, reporting bugs with a diagnostic ZIP and contributing
-code help just as much.
+code help just as much. Come say hi, ask for help or report bugs on the
+[Discord server](https://discord.gg/SFQKFrTvww).
 
 [sponsor arcanite24 on GitHub]: https://github.com/sponsors/arcanite24
 [buy me a coffee on Ko-fi]: https://ko-fi.com/nerijs
