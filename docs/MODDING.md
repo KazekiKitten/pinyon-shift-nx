@@ -372,6 +372,36 @@ earliest enabled mod in the load order that ships one is the base, recorded as
 `base` in `patches.json`. Archive members and merges likewise start from a
 mod's replacement archive or `zipmanifest.xml` when one is enabled.
 
+### New cars from existing models
+
+`tools/clone-fh1-car.py` turns a short spec into a database script and the
+cars' names, so a mod adds cars that reuse a model the game has, with their
+own name, price, power, weight and class:
+
+```toml
+# cars.toml
+[[car]]
+id = 1700            # new id; 1700 and up are free of the game's and its DLC's
+source = 1496        # the Jaguar XKR-S's model, physics and upgrades
+name = "Pinyon XK"
+price = 85000
+torque_scale = 1.15
+pi = 579             # as the game shows it; sets the class (A here)
+```
+
+```powershell
+python tools/clone-fh1-car.py cars.toml <state>/mods/my_cars --game-db <game>/media/db/gamedb.slt
+```
+
+It writes `db/50-clone-cars.sql`, which copies the source car's rows inside
+the player's own database when the mod is built (so the mod carries no game
+data), and `strings/ALL/Data_Car.toml` with the names. The new car is sold
+in the Autoshow under the source's make and appears in an event's
+recommendations when its class fits the event. Without `pi` (or a raw
+`performance_index`) the index is estimated from the two scales; the
+estimate is loose, so set it when the class matters. Its thumbnail is the
+source's.
+
 ## The Forza Horizon XE mod
 
 [Forza Horizon XE](https://www.moddb.com/mods/forza-horizon-xe-mod) by
