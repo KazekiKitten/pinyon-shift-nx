@@ -19,6 +19,7 @@
 #include <rex/audio/downmix.h>
 #include <rex/input/pad_remap.h>
 #include <rex/input/sdl/joystick_mapping.h>
+#include <rex/input/sdl/wheel.h>
 #if defined(__ANDROID__)
 #include <rex/ui/vulkan/android_gpu_driver.h>
 #endif
@@ -169,6 +170,7 @@ class SettingsPages : public std::enable_shared_from_this<SettingsPages> {
   std::unique_ptr<MenuScreen> Graphics();
   std::unique_ptr<MenuScreen> Audio();
   std::unique_ptr<MenuScreen> Controls();
+  std::unique_ptr<MenuScreen> Wheel();
   std::unique_ptr<MenuScreen> Profile();
   std::unique_ptr<MenuScreen> Gamertag();
   std::unique_ptr<MenuScreen> Backups();
@@ -864,6 +866,26 @@ std::unique_ptr<MenuScreen> SettingsPages::MapControllerOptions(
                        : "Your mapping is removed. The default one applies after a restart.");
   };
   rows.push_back(std::move(reset));
+  // A wheel SDL does not know as one: its steering and pedals are reshaped by
+  // the RACING WHEEL page once it is marked here.
+  MenuRow wheel;
+  wheel.label = "RACING WHEEL";
+  wheel.value = [guid = joystick.guid, known = joystick.wheel_type] {
+    if (known) return std::string("YES (DETECTED)");
+    return std::string(rex::input::sdl::IsListedWheel(guid) ? "YES" : "NO");
+  };
+  wheel.enabled = [known = joystick.wheel_type] { return !known; };
+  wheel.adjust = [this, guid = joystick.guid](int) {
+    rex::input::sdl::SetListedWheel(guid, !rex::input::sdl::IsListedWheel(guid));
+    config_.Set("hid_wheel_guids", config::Quote(rex::cvar::GetFlagByName("hid_wheel_guids")));
+    diagnostics::RecordEvent("settings.changed",
+                             {{"row", "RACING WHEEL"},
+                              {"values", "hid_wheel_guids=" +
+                                             rex::cvar::GetFlagByName("hid_wheel_guids")}});
+    Save();
+  };
+  wheel.activate = [adjust = wheel.adjust] { adjust(1); };
+  rows.push_back(std::move(wheel));
   auto screen = std::make_unique<MenuScreen>(Upper(joystick.name), std::move(rows));
   *screen_ref = screen.get();
   screen->set_body(joystick.user_mapping ? "This controller uses a mapping you made."
@@ -1425,6 +1447,56 @@ std::unique_ptr<MenuScreen> SettingsPages::TrainerDebug() {
   return std::make_unique<MenuScreen>("DEBUG", std::move(rows));
 }
 
+// Racing wheels (#337) through the SDL gamepad path: steering on the left
+// stick's X axis and the pedals on the triggers, from SDL's database or MAP
+// CONTROLLER. FH1 shapes that input for a thumbstick, so these rows reshape a
+// wheel's input first; gamepads are untouched. All apply at once.
+std::unique_ptr<MenuScreen> SettingsPages::Wheel() {
+  std::vector<MenuRow> rows;
+  const auto percents = [](const char* name, std::initializer_list<int> values) {
+    std::vector<Choice> choices;
+    for (int value : values) {
+      choices.push_back({std::to_string(value) + "%", {{name, std::to_string(value)}}});
+    }
+    return choices;
+  };
+  // Full lock at this share of the wheel's rotation: 50% on a 900-degree
+  // wheel locks at 225 degrees each side.
+  rows.push_back(Setting("STEERING SATURATION",
+                         percents("hid_wheel_steering_saturation",
+                                  {100, 90, 80, 70, 60, 50, 40, 30, 20})));
+  // Skips the game's stick deadzone so the car answers the first degrees.
+  rows.push_back(Setting("STEERING DEADZONE",
+                         percents("hid_wheel_steering_deadzone", {0, 5, 10, 15, 20, 25, 30})));
+  std::vector<Choice> curves;
+  for (const auto& [label, value] : std::initializer_list<std::pair<const char*, int>>{
+           {"LINEAR", 100}, {"SOFT CENTRE", 150}, {"SOFTER CENTRE", 200}, {"SHARP CENTRE", 75}}) {
+    curves.push_back({label, {{"hid_wheel_steering_linearity", std::to_string(value)}}});
+  }
+  rows.push_back(Setting("STEERING CURVE", std::move(curves)));
+  rows.push_back(
+      Setting("PEDAL DEADZONE", percents("hid_wheel_pedal_deadzone", {0, 5, 10, 15, 20})));
+  MenuRow map;
+  map.label = "MAP A WHEEL";
+  map.activate = [this] { host_ui_.Push(MapController()); };
+  rows.push_back(std::move(map));
+  auto screen = std::make_unique<MenuScreen>("RACING WHEEL", std::move(rows), [] {
+    int wheels = 0;
+    for (const auto& joystick : rex::input::sdl::ListJoysticks()) {
+      if (joystick.wheel_type || rex::input::sdl::IsListedWheel(joystick.guid)) ++wheels;
+    }
+    return wheels == 0   ? std::string("NO WHEEL CONNECTED")
+           : wheels == 1 ? std::string("1 WHEEL CONNECTED")
+                         : std::to_string(wheels) + " WHEELS CONNECTED";
+  });
+  screen->set_body(
+      "A wheel drives through its controller mapping: steering on the left stick, throttle on "
+      "the right trigger and brake on the left trigger. If the game does not see it, choose MAP "
+      "A WHEEL, then the wheel, and mark it as a racing wheel. Force feedback is not supported "
+      "yet.");
+  return screen;
+}
+
 std::unique_ptr<MenuScreen> SettingsPages::Controls() {
   std::vector<MenuRow> rows;
   MenuRow controller;
@@ -1435,6 +1507,7 @@ std::unique_ptr<MenuScreen> SettingsPages::Controls() {
   map.label = "MAP CONTROLLER";
   map.activate = [this] { host_ui_.Push(MapController()); };
   rows.push_back(std::move(map));
+  rows.push_back(Page("RACING WHEEL", &SettingsPages::Wheel));
   rows.push_back(Setting("RUMBLE",
                          {{"OFF", {{"pad_rumble_strength", "0"}}},
                           {"25%", {{"pad_rumble_strength", "25"}}},

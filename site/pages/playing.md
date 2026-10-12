@@ -75,7 +75,11 @@ The game runs in any of the disc's 18 languages. Press <kbd>F6</kbd>, open **Pro
 
 ## Controllers
 
-Connect the controller before starting the game. XInput controllers work as they are; DirectInput devices use SDL's mappings. If one isn't recognized, or its buttons are in the wrong places, open **F6 > CONTROLS > MAP CONTROLLER**, choose it, then **MAP BUTTONS** and press each control it asks for; a control the controller lacks is skipped after a few seconds. Then try the controller: hold **Start** to save the mapping or **Back** to start over. It is kept in `config/controller_mappings.txt`, and **RESET TO DEFAULT MAPPING** removes it. If a controller doesn't show up at all, close Steam or other remapping software, reconnect it and relaunch. Racing wheels aren't supported yet.
+Connect the controller before starting the game. XInput controllers work as they are; DirectInput devices use SDL's mappings. If one isn't recognized, or its buttons are in the wrong places, open **F6 > CONTROLS > MAP CONTROLLER**, choose it, then **MAP BUTTONS** and press each control it asks for; a control the controller lacks is skipped after a few seconds. Then try the controller: hold **Start** to save the mapping or **Back** to start over. It is kept in `config/controller_mappings.txt`, and **RESET TO DEFAULT MAPPING** removes it. If a controller doesn't show up at all, close Steam or other remapping software, reconnect it and relaunch.
+
+### Racing wheels
+
+A wheel drives through the same controller path: steering on the left stick, throttle on the right trigger and brake on the left trigger. Wheels that SDL knows are detected; for another, open **F6 > CONTROLS > MAP CONTROLLER**, map it, and set **RACING WHEEL** to **YES** on its page. **F6 > CONTROLS > RACING WHEEL** then shapes its input, since the game expects a thumbstick: **STEERING SATURATION** (full lock at that share of the wheel's rotation, so 50% on a 900-degree wheel locks at 225 degrees each way), **STEERING DEADZONE** (skips the game's stick deadzone), **STEERING CURVE** and **PEDAL DEADZONE**. Gamepads are not affected. Force feedback isn't supported yet, and the shaping has been tested with simulated input, not yet on a physical wheel.
 
 ## Saves
 
