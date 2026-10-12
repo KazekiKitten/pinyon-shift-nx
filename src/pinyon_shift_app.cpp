@@ -919,6 +919,9 @@ void PinyonShiftApp::UpdateHorPlus() {
 
 void PinyonShiftApp::ApplyMapView(bool open) {
   map_view_open_ = open;
+  // The HUD scale (#520) is for the gameplay HUD; the map's and the menus'
+  // screens are drawn through the same HUD view and keep their size.
+  rex::cvar::SetFlagByName("fh1_hud_scale_suspended", open ? "true" : "false");
   if (!REXCVAR_GET(pinyon_shift_hor_plus)) return;
   // Wider View stretches the widened gameplay frame over the window; the
   // title's 16:9 screens (menus, Autoshow, map) are letterboxed (#363).

@@ -58,7 +58,7 @@ Keys can be rebound in **F6 > CONTROLS**, and **RESET KEYS** returns to this lay
 
 ## HUD
 
-**F6 > DISPLAY > HUD** shows or hides the HUD (the same as <kbd>F2</kbd>), and sets **HUD SCALE** (80 to 120 %) and **SAFE ZONE**, a margin of up to 10 % on each side for TVs that crop the picture. Both scale the HUD around the centre of the screen while you drive; menus without the game world behind them keep their size. Labels that follow the world, such as event banners and driver names, move with the HUD.
+**F6 > DISPLAY > HUD** shows or hides the HUD (the same as <kbd>F2</kbd>), and sets **HUD SCALE** (80 to 120 %) and **SAFE ZONE**, a margin of up to 10 % on each side for TVs that crop the picture. Both scale the HUD around the centre of the screen while you drive; the map, the pause menu and other menus keep their size. Labels that follow the world, such as event banners and driver names, move with the HUD.
 
 ## HDR
 
