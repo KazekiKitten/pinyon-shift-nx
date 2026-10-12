@@ -169,9 +169,58 @@ Before each start, `tools/build-mod-archives.py` (run by
 copy: other members keep their compressed bytes, replaced ones are stored
 uncompressed, and a matching `zipmanifest.xml` goes with it, all as the
 generated mod `zz-archive-patches`. An earlier mod wins a member two mods
-replace. Only existing members can be replaced, and archives whose end
-record disagrees with the manifest (the largest track archive) must still be
-replaced whole. `zz-archive-patches/archives.json` lists what was rebuilt.
+replace. Archives whose end record disagrees with the manifest (the largest
+track archive) must still be replaced whole.
+`zz-archive-patches/archives.json` lists what was rebuilt.
+
+A new file goes under `add/` with the same layout, and is appended to the
+archive stored:
+
+```text
+<state>/mods/<name>/add/<archive path>/<member path>
+e.g. mods/my_mod/add/media/dynamicpost.zip/ColourGradingMaps/Sunset.dds
+```
+
+The build refuses a `members/` or `merge/` file the archive does not have
+(it belongs under `add/`) and an `add/` file it already has (it belongs under
+`members/`), so a typo cannot silently do nothing.
+
+### Strings
+
+New or changed text goes in `strings/<language>/<Table>.toml`, where
+`<language>` is the string archive's name (`EN`, `FR`, ...) or `ALL` for
+every language, and each line names a string by its `IDS_` name:
+
+```toml
+# mods/my_mod/strings/ALL/List_CarMake.toml
+IDS_Make_PinyonMotors = "Pinyon Motors"
+```
+
+A name the table has takes the new text; a new name is added to the table
+with its key. The database refers to a string as `_&N`, where N is
+`(table_hash << 16) | key`; `tools/fh1-strings.py` computes both
+(`string_reference("List_CarMake", "IDS_Make_PinyonMotors")`). A new name
+whose 16-bit key another name in the table already holds is refused. Seven
+tables keep no name order (no chunk 3) and take only changes to existing
+names. For a key two mods set, the earlier mod wins.
+
+### Colour grading
+
+The game grades the scene (not the HUD) with 16x16x16 colour maps in
+`media/dynamicpost.zip` (`ColourGradingMaps/*.dds`, `NormalGrading.dds` is
+the identity), chosen per area of the map by the loose
+`media/tracks/colorado/Ribbon_00/PostProcessingZones_Safe.xml`. A look mod
+either replaces maps under `members/`, or adds its own under `add/` and ships
+an edited copy of the zones file under `game/` that names them:
+
+```text
+mods/my_look/add/media/dynamicpost.zip/ColourGradingMaps/Warm.dds
+mods/my_look/game/media/tracks/colorado/Ribbon_00/PostProcessingZones_Safe.xml
+```
+
+A map is a DDS volume texture, A8R8G8B8, with red varying fastest, then
+green, then blue; start from a copy of `NormalGrading.dds` built on the
+player's machine.
 
 ### Settings merged by key
 
