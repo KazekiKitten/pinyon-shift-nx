@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.5.1 - 2026-10-12
+
+- VSYNC on no longer tears on Vulkan, and changing it applies at once (#539).
+- Start laptops on the high-performance GPU (#534).
+- Setup: start the Build Tools installer once, report a failed repair's
+  own error (#458, #533, #498, #502), work without `ComSpec` (#541), check
+  non-reference disc images file by file (#462), count macOS purgeable
+  space (#461), and build on Linux with libxml2 2.14 or newer (#472, #474,
+  #514).
+- Build the title update v4 from a release install on the first try
+  (#459, #540).
+- Package the Android build when the user folder's path is long or has a
+  space (#538), and show HDR10 correctly on the Odin 2 Portal (#500).
+- Native replacements for `pow`, the LZX decoder and the render thread's
+  idle wait, with each checked against the game's code; condition flags in
+  locals and direct stack accesses in the recompiled code; event-driven
+  waits on Android, Linux and macOS.
+- Pick the bundled Turnip gen8 v37 driver on Adreno 8xx, as on 7xx.
+- Log settings changes in the session log (#542).
+
 ## 0.5.0 - 2026-10-11
 
 - Built natively for Linux and the Steam Deck (not Proton), with a Linux
