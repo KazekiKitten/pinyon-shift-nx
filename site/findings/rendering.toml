@@ -393,6 +393,16 @@ how = """Archive listing."""
 confidence = """probable"""
 source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Developer options and leftover systems"""
 
+
+[[finding]]
+group = """Post effects"""
+base = """dynamicpost.zip ColourGradingMaps/*.dds, PostProcessingZones_Safe.xml"""
+v4 = """same"""
+name = """colour grading maps"""
+what = """22 maps, each a 16x16x16 volume DDS (A8R8G8B8, texel bytes B, G, R, A; red varies fastest, then green, then blue); `NormalGrading.dds` is the identity. The loose zones file in `media/tracks/colorado/Ribbon_00` names a map per zone (`GradingMap="Mountains.dds"`). A map added to the archive by a mod and named by an overridden zones file is used: a red/blue swap of the identity turned the red car blue while the HUD kept its colours, so grading applies to the scene only."""
+how = """Archive listing; free-roam route from a pinned seed with and without the mod."""
+confidence = """confirmed"""
+source = """docs/REVERSE_ENGINEERING.md@fc1751fe2a38 Custom content"""
 # ---------------------------------------------------------------------------
 # Render scenarios
 # ---------------------------------------------------------------------------

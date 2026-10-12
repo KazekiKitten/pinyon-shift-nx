@@ -21,6 +21,8 @@ PINYON_SYMBOL("graphics.frame", 0x82AACE28)
 PINYON_SYMBOL("hook.PinyonShiftAcceptModdedBlock", 0x82CC4C00)
 PINYON_SYMBOL("hook.PinyonShiftAcceptModdedFileSize", 0x82CC359C)
 PINYON_SYMBOL("hook.PinyonShiftAcceptModdedLastBlock", 0x82CC4C3C)
+PINYON_SYMBOL("hook.PinyonShiftAnyCarEventClass", 0x8269B3C4)
+PINYON_SYMBOL("hook.PinyonShiftAnyCarEventRestriction", 0x826AF10C)
 PINYON_SYMBOL("hook.PinyonShiftArrayReleaseWalk", 0x82D19DE8)
 PINYON_SYMBOL("hook.PinyonShiftBloomScale", 0x82494E44)
 PINYON_SYMBOL("hook.PinyonShiftCameraFieldOfView", 0x828FF264)
@@ -149,6 +151,7 @@ PINYON_SYMBOL("hook.PinyonShiftValidateGeometryOutput", 0x82DFEE38)
 PINYON_SYMBOL("hook.PinyonShiftValidateGeometrySecondaryIndexList", 0x82DFFD3C)
 PINYON_SYMBOL("hook.PinyonShiftViewportAspect", 0x8241228C)
 PINYON_SYMBOL("kernel.get_av_pack", 0x832B881C)
+PINYON_SYMBOL("launch_options.get", 0x824A94B8)
 PINYON_SYMBOL("map_marker.create", 0x8299BDC8)
 PINYON_SYMBOL("map_marker.remove", 0x82996D18)
 PINYON_SYMBOL("map_marker.show", 0x82995330)
@@ -187,6 +190,7 @@ PINYON_OFFSET("flyer.smashed", 140)  // verified on v4
 PINYON_OFFSET("flyer.state", 148)  // verified on v4
 PINYON_OFFSET("game.components", 76)  // verified on v4
 PINYON_OFFSET("game.user", 108)  // verified on v4
+PINYON_OFFSET("launch_options.nohud", 3217)  // verified on v4; base 3213
 PINYON_OFFSET("main_loop.delta", 448)  // verified on v4
 PINYON_OFFSET("map_entity.on_map", 52)  // verified on v4
 PINYON_OFFSET("map_marker.entity", 4)  // verified on v4

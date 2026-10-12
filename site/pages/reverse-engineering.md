@@ -58,7 +58,7 @@ Every record has a link: click its name to get an address like `game-world/#worl
 
 ## Using the records in a disassembler
 
-The build writes [`symbols.json`](../symbols.json) next to these pages: every address on the site with its name, kind, v4 address and the page that explains it, plus the mod structure offsets. It can name functions in a disassembler. This Ghidra script (Jython, run from the Script Manager with the base `default.xex` loaded) labels each one:
+The build writes [`symbols.json`](https://arcanite24.github.io/pinyon-shift/symbols.json) next to these pages: every address on the site with its name, kind, v4 address and the page that explains it, plus the mod structure offsets. It can name functions in a disassembler. This Ghidra script (Jython, run from the Script Manager with the base `default.xex` loaded) labels each one:
 
 ```python
 # Label Forza Horizon addresses from Pinyon Shift's symbols.json.

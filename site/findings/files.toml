@@ -116,10 +116,10 @@ group = """String tables"""
 base = """.str (LSB2)"""
 v4 = """same"""
 name = """LSB2 string table format"""
-what = """A `.str` table is big-endian, with a 24-byte `LSB2` header whose u32 at +12 is the offset of the string chunk and whose u32 at +16 counts chunk-directory pointers (at most 16, from +20). The string chunk is [u32 size][u32 count], then count + 1 entries of (u16 key hash, u32 character offset into the pool) in ascending key order, the last a `0xFFFF` sentinel whose offset points at the pool's last terminator, then a pool of NUL-terminated UTF-16BE strings. Tables live LZX-compressed in `media/StringTables/<language>.zip`."""
-how = """Parser and writer in `tools/fh1-strings.py`; replaced tables load in game (mod string overrides, custom station names)."""
+what = """A `.str` table is big-endian, with an `LSB2` header whose u32 at +12 is the offset of the string chunk and whose u32 at +16 counts the chunk pointers from +20 (four in a 36-byte header). The chunks are contiguous and unaligned: the strings ([u32 size][u32 count], then count + 1 entries of (u16 key, u32 character offset) in ascending key order, the last a `0xFFFF` sentinel pointing at a trailing empty string, then a pool of NUL-terminated UTF-16BE strings), the `IDS_` names (key, 1-based position in the key-order chunk, byte offset, an ASCII pool in source order), optional translator notes, and the key order. A key is a 16-bit hash of the lower-case name: start at 0xFFFF and, for each character, XOR it in and rotate left by 7; it matches all 10,415 names in the 113 English tables. A new key must go into chunks 0, 1 and 3 (7 tables have no chunk 3); `tools/fh1-strings.py` adds keys and rebuilds tables byte-identical to the originals. `set_ui_string` replaces only existing keys, because the game's own count of a loaded table is kept apart from the chunk, where was not found. Tables live LZX-compressed in `media/StringTables/<language>.zip`."""
+how = """Parser and writer in `tools/fh1-strings.py`; the hash fitted to every name; replaced tables load in game (mod string overrides, custom station names)."""
 confidence = """confirmed"""
-source = """tools/fh1-strings.py; src/pinyon_shift_runtime_hooks.cpp NP-1.5 comment"""
+source = """docs/REVERSE_ENGINEERING.md@fc1751fe2a38 Custom content; tools/fh1-strings.py; src/pinyon_shift_runtime_hooks.cpp NP-1.5 comment"""
 
 [[finding]]
 group = """String tables"""

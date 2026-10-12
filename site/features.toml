@@ -28,7 +28,7 @@ pinyon = "60 or 120 fps at the correct game speed"
 feature = "Graphics"
 link = "playing.md#graphics-presets"
 xbox = "Fixed"
-pinyon = "Presets, MSAA up to 4x, anisotropic filtering, optional bloom, motion blur and depth of field"
+pinyon = "Presets, MSAA up to 4x, FXAA on the world only, anisotropic filtering, a colour LUT, optional bloom, motion blur and depth of field; HUD scale and safe zone"
 
 [[original]]
 feature = "HDR"
@@ -55,6 +55,12 @@ xbox = "Three stations; a dashboard soundtrack replaces them"
 pinyon = "Your own music files in game, and up to three [custom radio stations](playing.md#custom-radio-stations) with their own names and logos"
 
 [[original]]
+feature = "Sound mix"
+link = "playing.md#sound-mix"
+xbox = "Fixed"
+pinyon = "Engine, other cars, tyres, wind, ambience and music levels, and the compressor on or off"
+
+[[original]]
 feature = "Mods"
 link = "modding.md"
 xbox = "No"
@@ -77,6 +83,12 @@ feature = "Saves"
 link = "playing.md#saves"
 xbox = "Console storage"
 pinyon = "Automatic save backups, PNG photos, saves imported from Xenia"
+
+[[original]]
+feature = "Cheats"
+link = "playing.md#trainer"
+xbox = "None"
+pinyon = "A trainer on a separate profile: credits, wristbands, game speed, time of day, free camera, collectibles on the map, any car in any event"
 
 [[original]]
 feature = "Online services"
@@ -157,6 +169,11 @@ link = "playing.md#immersive-camera"
 cells = ["yes", "yes", "yes", "not yet"]
 
 [[platform]]
+feature = "Sound mix"
+link = "playing.md#sound-mix"
+cells = ["yes", "yes", "yes", "yes"]
+
+[[platform]]
 feature = "Your music"
 link = "playing.md#your-music"
 cells = ["yes: MP3 and WAV", "yes: MP3 and WAV", "partly: WAV only", "partly: WAV only"]
@@ -169,7 +186,7 @@ cells = ["yes", "yes", "yes", "not yet"]
 [[platform]]
 feature = "Asset and texture mods"
 link = "modding.md"
-cells = ["partly: texture replacement not on the Vulkan renderer yet ([#518](https://github.com/arcanite24/pinyon-shift/issues/518))", "partly: texture replacement not on the Vulkan renderer yet ([#518](https://github.com/arcanite24/pinyon-shift/issues/518))", "partly: texture replacement not on the Vulkan renderer yet ([#518](https://github.com/arcanite24/pinyon-shift/issues/518))", "partly: texture replacement not on the Vulkan renderer yet ([#518](https://github.com/arcanite24/pinyon-shift/issues/518))"]
+cells = ["yes", "yes", "yes", "partly: DXT texture replacements need a GPU with BC formats ([#516](https://github.com/arcanite24/pinyon-shift/issues/516))"]
 
 [[platform]]
 feature = "Forza Horizon XE"
@@ -208,12 +225,12 @@ cells = ["yes", "yes", "yes: Cmd shortcuts for the F-keys", "n/a"]
 
 [[platform]]
 feature = "Racing wheels"
-link = "playing.md#controllers"
+link = "playing.md#racing-wheels"
 cells = [
-  "not yet: [#337](https://github.com/arcanite24/pinyon-shift/issues/337)",
-  "not yet: [#337](https://github.com/arcanite24/pinyon-shift/issues/337)",
-  "not yet: [#337](https://github.com/arcanite24/pinyon-shift/issues/337)",
-  "not yet: [#337](https://github.com/arcanite24/pinyon-shift/issues/337)",
+  "partly: steering and pedals with saturation, deadzones and a curve; no force feedback yet ([#337](https://github.com/arcanite24/pinyon-shift/issues/337))",
+  "partly: steering and pedals with saturation, deadzones and a curve; no force feedback yet ([#337](https://github.com/arcanite24/pinyon-shift/issues/337))",
+  "partly: steering and pedals with saturation, deadzones and a curve; no force feedback yet ([#337](https://github.com/arcanite24/pinyon-shift/issues/337))",
+  "partly: steering and pedals with saturation, deadzones and a curve; no force feedback yet ([#337](https://github.com/arcanite24/pinyon-shift/issues/337))",
 ]
 
 [[platform]]

@@ -7,7 +7,7 @@ description: Every guest address named on the reverse-engineering pages in one s
 
 # Address index
 
-Every address the reverse-engineering records name, sorted, with a link to the record that explains it. The same data is in [`symbols.json`](../symbols.json) for scripts and disassemblers; the [Overview](reverse-engineering.md#using-the-records-in-a-disassembler) has a Ghidra script that loads it.
+Every address the reverse-engineering records name, sorted, with a link to the record that explains it. The same data is in [`symbols.json`](https://arcanite24.github.io/pinyon-shift/symbols.json) for scripts and disassemblers; the [Overview](reverse-engineering.md#using-the-records-in-a-disassembler) has a Ghidra script that loads it.
 
 Addresses are in the base game's `default.xex`. The v4 column gives the title update's address where it is known: for records, as the record states it; for mod symbols and hooks, from the generated v4 symbol table, which only holds addresses the mapping tool verified ([Methods](game-methods.md#mapping-base-addresses-to-the-title-update)).
 

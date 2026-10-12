@@ -16,6 +16,7 @@ source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Developer options and lefto
 [[finding]]
 group = """Launch options"""
 base = """0x832E29A0, 0x832E2680, vtable 0x8200E724, getter sub_82479E88, constructor sub_824ECF48"""
+v4 = """0x833D02E0, vtable 0x82014B1C, visitor 0x82563570"""
 name = """launch-options object"""
 what = """A static singleton at `0x832E29A0`, built by its getter on the first call (once-guard bit in `0x832E4A70`) and read on demand; the getter has 356 call sites. Every call also stores the object's address in the word at `0x832E2680`. Its flags are bytes at fixed offsets: `nohud` +3213, `timeofdayindex` +2412, `showframerate` +4170, `zoomoutminimap` +4869, `allowskipvoiceover` +4924, `skiptutorials` +8362; `hidecockpitglass` is a global at `0x832B8700`. At run time the defaults read 1 for `zoomoutminimap` and `hidecockpitglass` and 0 for the others."""
 how = """Constructor and getter read in the generated code; probe mod reading the bytes at frames 1, 300 and 1200."""
@@ -27,12 +28,49 @@ source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Developer options and lefto
 group = """Launch options"""
 base = """options object flags"""
 name = """flags written at boot take effect"""
-what = """A mod writing `nohud` = 1 from the first file open and every frame removed the whole HUD (minimap, speedometer, event banner) in free roam, and the route still passed. `showframerate` = 1 drew nothing visible. Each other flag needs its own check."""
+what = """A mod writing `nohud` = 1 from the first file open and every frame removed the whole HUD (minimap, speedometer, event banner) in free roam, and the route still passed. Writing it only once the game runs changes nothing on screen: the HUD reads it only before an element first shows (see the HUD hidden byte on UI, HUD and input). `showframerate` = 1 drew nothing visible. Each other flag needs its own check."""
 how = """Probe mod writing the bytes with `write_guest`; capture compared with a run without it."""
 confidence = """confirmed"""
 note = """Confirmed for `nohud`; `showframerate` showed nothing."""
 source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Developer options and leftover systems"""
 
+
+[[finding]]
+group = """Launch options"""
+base = """options object +4924, +4222, +4937"""
+v4 = """0x833D02E0 (vtable 0x82014B1C, visitor 0x82563570): +4952, +4238, +4965"""
+name = """host-set quality-of-life flags"""
+what = """Pinyon Shift sets three option bytes once the object's vtable word is in place (from the first guest file open and every frame) and restores the game's value when turned off. `noattractvideo` (+4222, read in `sub_827A27E0`): after about 53 s idle on the title screen (a stopwatch against a 53.0 constant) the game replays `forza_intro.wmv` and reloads the press-start scene; with the flag set it never does. `allowskipvoiceover` (+4924): `sub_8269BF60` reports a dialog unskippable while it has a voice-over and the flag is clear, and `sub_826BC830` skips its wait on the same test. `NoHandOfGodReset` (+4937): `sub_824BA660`, a per-car update, skips the automatic off-track reset while it is set."""
+how = """Visitors read in both builds; readers in the generated code; a 120 s title-idle route with the file-open log."""
+confidence = """probable"""
+note = """Confirmed for `noattractvideo`; probable for the voice-over and reset flags (readers only)."""
+issue = """#477"""
+source = """src/dev_options.cpp; docs/REVERSE_ENGINEERING.md@fc1751fe2a38 Developer options and leftover systems"""
+
+[[finding]]
+group = """Launch options"""
+base = """options object +3809, +4976, +8362"""
+v4 = """+3817, +5012, +8399"""
+name = """options that do nothing in retail"""
+what = """`nocameravibration` (+3809) and `hidepoipins` (+4976) have no reader: no byte load at those offsets in the generated code, and a map route with `hidepoipins` set at boot is pixel-identical. `skiptutorials` (+8362) is read once, in `sub_8273B170`, only to skip the `Main/ShowroomKinectTutorialCompleted` check; a fresh-profile opening route with it set is pixel-identical."""
+how = """Byte-load scan of the generated code; map and fresh-profile opening routes with and without each flag."""
+confidence = """confirmed"""
+negative = true
+issue = """#477"""
+source = """docs/REVERSE_ENGINEERING.md@fc1751fe2a38 Developer options and leftover systems"""
+
+[[finding]]
+group = """Launch options"""
+base = """options object +8380, +8384, +8388, +4260"""
+v4 = """visitor 0x82563570"""
+name = """restriction options are read nowhere"""
+what = """`eventrestrictions` is a byte at +8380 (bare-name matcher) and `showallcars` a byte at +4260; `chooselegalcarforevent` (+8384) and `chooseillegalcarforevent` (+8388) are 32-bit numbers set by the value matcher `sub_82C09468`, which takes `name=<number>` with an optional `K`, `M` or `B` scale. No code reads any of the four: none of the getter's 356 callers loads those offsets, while the same scan finds the known readers of `nohud` (`sub_826BEC10`), `skiptutorials` (`sub_8273B170`) and `allowskipvoiceover` (`sub_8269BF60`, `sub_826BC830`). Writing them cannot lift event restrictions; the trainer hooks the restriction parser instead (Cars, events and DLC)."""
+how = """Visitor and matcher read in the generated code; scan of the getter's callers for loads from its result."""
+confidence = """confirmed"""
+note = """Static analysis."""
+negative = true
+issue = """#479"""
+source = """docs/REVERSE_ENGINEERING.md@fc1751fe2a38 Developer options and leftover systems"""
 [[finding]]
 group = """Launch options"""
 base = """sub_824F8150"""

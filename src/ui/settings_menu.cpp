@@ -19,6 +19,7 @@
 #include <rex/audio/downmix.h>
 #include <rex/input/pad_remap.h>
 #include <rex/input/sdl/joystick_mapping.h>
+#include <rex/input/sdl/wheel.h>
 #if defined(__ANDROID__)
 #include <rex/ui/vulkan/android_gpu_driver.h>
 #endif
@@ -169,6 +170,9 @@ class SettingsPages : public std::enable_shared_from_this<SettingsPages> {
   std::unique_ptr<MenuScreen> Graphics();
   std::unique_ptr<MenuScreen> Audio();
   std::unique_ptr<MenuScreen> Controls();
+  std::unique_ptr<MenuScreen> Wheel();
+  std::unique_ptr<MenuScreen> Hud();
+  std::unique_ptr<MenuScreen> Gameplay();
   std::unique_ptr<MenuScreen> Profile();
   std::unique_ptr<MenuScreen> Gamertag();
   std::unique_ptr<MenuScreen> Backups();
@@ -470,6 +474,7 @@ std::unique_ptr<MenuScreen> SettingsPages::Display() {
                           {"40", {{"pinyon_shift_fh1_render_fps_limit", "40"}}},
                           {"60", {{"pinyon_shift_fh1_render_fps_limit", "60"}}},
                           {"120", {{"pinyon_shift_fh1_render_fps_limit", "120"}}}}));
+  rows.push_back(Page("HUD", &SettingsPages::Hud));
   auto note = [this, restart = RestartNote(rows)] {
     const std::string pending = restart ? restart() : std::string();
     if (!pending.empty()) {
@@ -568,8 +573,24 @@ std::unique_ptr<MenuScreen> SettingsPages::Graphics() {
   // anisotropic filtering: FSR 1 at the panel's 2400x1504 cost 1.4 ms a
   // frame and forced 4x anisotropy 0.4 ms, measured by alternating each in
   // one run.
+  // ULTRA LOW 30 (#515), for entry-level phones: QUALITY 30's rate without
+  // MSAA or shadows.
   rows.push_back(Setting("GRAPHICS PRESET",
-                         {{"QUALITY 30",
+                         {{"ULTRA LOW 30",
+                           {{"gpu_backend", "\"vulkan\""},
+                            {"gpu_record_thread", "true"},
+                            {"draw_resolution_scale_x", "1"},
+                            {"draw_resolution_scale_y", "1"},
+                            {"present_effect", "\"bilinear\""},
+                            {"anisotropic_override", "-1"},
+                            {"fh1_msaa_single_sample", "true"},
+                            {"fh1_msaa_2x", "false"},
+                            {"fh1_untile_predicated_tiling", "true"},
+                            {"pinyon_shift_fh1_env_map_rate", "0.25"},
+                            {"pinyon_shift_fh1_shadows", "false"},
+                            {"host_present_fps_limit", "0"},
+                            {"pinyon_shift_fh1_render_fps_limit", "30"}}},
+                          {"QUALITY 30",
                            {{"gpu_backend", "\"vulkan\""},
                             {"gpu_record_thread", "true"},
                             {"draw_resolution_scale_x", "1"},
@@ -663,6 +684,12 @@ std::unique_ptr<MenuScreen> SettingsPages::Graphics() {
   // third; 40 paces evenly on 120 Hz displays and the Steam Deck's 40 Hz mode.
   // Every preset clears the presentation limit, so the frames the game
   // renders are the frames shown.
+  // ULTRA LOW 30 (#515) is for machines below that: also no shadows (about
+  // 6 ms a frame on the Odin 2 Portal), the reflection cubemap at a quarter
+  // rate, the scene's three tiles in one pass (about 3 ms on the Odin), and
+  // 30 fps, the console's own rate and half the CPU work of 60. The other
+  // presets set those three back to the desktop defaults, so leaving ULTRA
+  // LOW does not keep them.
   const auto preset = [](const char* scale, const char* effect, const char* msaa_off,
                          const char* fps,
                          std::vector<std::pair<std::string, std::string>> extra = {}) {
@@ -675,15 +702,31 @@ std::unique_ptr<MenuScreen> SettingsPages::Graphics() {
         {"fh1_msaa_single_sample", msaa_off},
         {"fh1_msaa_2x", "false"},
         {"host_present_fps_limit", "0"},
-        {"pinyon_shift_fh1_render_fps_limit", fps}};
-    values.insert(values.end(), extra.begin(), extra.end());
+        {"pinyon_shift_fh1_render_fps_limit", fps},
+        {"pinyon_shift_fh1_shadows", "true"},
+        {"pinyon_shift_fh1_env_map_rate", "1"},
+        {"fh1_untile_predicated_tiling", "false"}};
+    for (auto& [name, value] : extra) {
+      const auto it = std::find_if(values.begin(), values.end(),
+                                   [&](const auto& setting) { return setting.first == name; });
+      if (it != values.end()) {
+        it->second = value;
+      } else {
+        values.emplace_back(name, value);
+      }
+    }
     return values;
   };
   const std::vector<std::pair<std::string, std::string>> cheapest = {
       {"anisotropic_override", "-1"}, {"swap_post_effect", "\"none\""}};
+  auto ultra_low = cheapest;
+  ultra_low.insert(ultra_low.end(), {{"pinyon_shift_fh1_shadows", "false"},
+                                     {"pinyon_shift_fh1_env_map_rate", "0.25"},
+                                     {"fh1_untile_predicated_tiling", "true"}});
   rows.push_back(Setting(
       "GRAPHICS PRESET",
-      {{"LOW-SPEC 60", preset("1", "\"bilinear\"", "true", "60", cheapest)},
+      {{"ULTRA LOW 30", preset("1", "\"bilinear\"", "true", "30", ultra_low)},
+       {"LOW-SPEC 60", preset("1", "\"bilinear\"", "true", "60", cheapest)},
        {"BALANCED 40", preset("1", "\"bilinear\"", "true", "40", cheapest)},
        // The reference desktop (Ryzen 7 5800X, RTX 4080) holds the 120 limit
        // in the race at 1x (8.3 ms median) and runs it at 9.5 ms at 3x.
@@ -773,6 +816,36 @@ std::unique_ptr<MenuScreen> SettingsPages::Graphics() {
   rows.push_back(Toggle("BLOOM", "disable_bloom", true));
   rows.push_back(Toggle("MOTION BLUR", "disable_motion_blur", true));
   rows.push_back(Toggle("DEPTH OF FIELD", "disable_depth_of_field", true));
+  // POST-PROCESS AA covers the scene only, so HUD text stays sharp; ON also
+  // smooths the HUD, as it did before. Menus without a scene get none.
+  rows.push_back(Toggle("AA ON THE HUD", "swap_post_effect_scene_only", true));
+  // A .cube colour LUT from state/luts on the scene; the HUD keeps its
+  // colours. Applies on the next frame.
+  {
+    std::vector<Choice> luts = {{"OFF", {{"scene_lut_path", "\"\""}}}};
+    std::vector<std::filesystem::path> files;
+    std::error_code error;
+    const std::filesystem::path root = services_.mods_root.parent_path() / "luts";
+    for (auto it = std::filesystem::directory_iterator(root, error);
+         !error && it != std::filesystem::directory_iterator(); it.increment(error)) {
+      std::string extension = it->path().extension().string();
+      std::transform(extension.begin(), extension.end(), extension.begin(),
+                     [](unsigned char c) { return char(std::tolower(c)); });
+      if (it->is_regular_file(error) && extension == ".cube") files.push_back(it->path());
+    }
+    std::sort(files.begin(), files.end());
+    for (const auto& file : files) {
+      luts.push_back({Upper(file.stem().string()),
+                      {{"scene_lut_path", config::Quote(file.generic_string())}}});
+    }
+    rows.push_back(Setting("COLOUR LUT", std::move(luts)));
+    std::vector<Choice> strengths;
+    for (int strength : {25, 50, 75, 100}) {
+      strengths.push_back(
+          {std::to_string(strength) + "%", {{"scene_lut_strength", std::to_string(strength)}}});
+    }
+    rows.push_back(Setting("LUT STRENGTH", std::move(strengths)));
+  }
   auto note = [this, restart = RestartNote(rows)] {
     const std::string pending = restart ? restart() : std::string();
     if (!pending.empty()) return pending;
@@ -786,6 +859,41 @@ std::unique_ptr<MenuScreen> SettingsPages::Graphics() {
   return std::make_unique<MenuScreen>("GRAPHICS", std::move(rows), std::move(note));
 }
 
+std::unique_ptr<MenuScreen> SettingsPages::Hud() {
+  std::vector<MenuRow> rows;
+  // The same switch as F2: the HUD's elements hide while it is off.
+  rows.push_back(Toggle("HUD", "hud_hidden", true));
+  // Size around the screen's centre, over the game world; menus without one
+  // keep theirs. Vulkan renderer only; applies at once.
+  std::vector<Choice> scales;
+  for (int percent = 80; percent <= 120; percent += 5) {
+    scales.push_back({std::to_string(percent) + "%",
+                      {{"fh1_hud_scale", std::to_string(percent / 100.0)}}});
+  }
+  rows.push_back(Setting("HUD SCALE", std::move(scales)));
+  // A margin kept clear on each side, for TVs that crop the picture.
+  rows.push_back(Setting("SAFE ZONE", {{"OFF", {{"fh1_hud_safe_zone", "0.0"}}},
+                                       {"2.5%", {{"fh1_hud_safe_zone", "0.025"}}},
+                                       {"5%", {{"fh1_hud_safe_zone", "0.05"}}},
+                                       {"7.5%", {{"fh1_hud_safe_zone", "0.075"}}},
+                                       {"10%", {{"fh1_hud_safe_zone", "0.1"}}}}));
+  return std::make_unique<MenuScreen>("HUD", std::move(rows));
+}
+
+// Switches from FH1's developer launch options (#477), which the retail game
+// keeps but never reads from a command line; the host sets the flags. All
+// off by default and applied at once.
+std::unique_ptr<MenuScreen> SettingsPages::Gameplay() {
+  std::vector<MenuRow> rows;
+  // Dialogs wait for their voice-over to end before A closes them.
+  rows.push_back(Toggle("SKIP VOICE-OVERS WITH A", "pinyon_shift_skip_voiceover"));
+  // The game puts the car back on the road when it strays too far.
+  rows.push_back(Toggle("AUTOMATIC CAR RESET", "pinyon_shift_no_auto_reset", true));
+  // After about 55 s idle on the title screen the game replays its intro.
+  rows.push_back(Toggle("REPLAY INTRO WHEN IDLE", "pinyon_shift_no_attract_video", true));
+  return std::make_unique<MenuScreen>("GAMEPLAY", std::move(rows));
+}
+
 std::unique_ptr<MenuScreen> SettingsPages::Audio() {
   std::vector<MenuRow> rows;
   std::vector<Choice> volumes;
@@ -795,6 +903,22 @@ std::unique_ptr<MenuScreen> SettingsPages::Audio() {
   }
   rows.push_back(Setting("MASTER VOLUME", std::move(volumes)));
   rows.push_back(Toggle("MUTE", "audio_mute"));
+  // The mixer (#486): the game's own level of each category, scaled; the
+  // game reads the levels when it starts.
+  const auto mix = [&](std::string label, std::string name) {
+    std::vector<Choice> levels;
+    for (int percent = 0; percent <= 200; percent += 10) {
+      levels.push_back({std::to_string(percent) + "%", {{name, std::to_string(percent)}}});
+    }
+    rows.push_back(Setting(std::move(label), std::move(levels)));
+  };
+  mix("ENGINE", "pinyon_shift_mix_engine");
+  mix("OTHER CARS", "pinyon_shift_mix_opponents");
+  mix("TYRES", "pinyon_shift_mix_tyres");
+  mix("WIND", "pinyon_shift_mix_wind");
+  mix("AMBIENCE", "pinyon_shift_mix_ambience");
+  mix("GAME MUSIC", "pinyon_shift_mix_music");
+  rows.push_back(Toggle("FULL DYNAMIC RANGE", "pinyon_shift_mix_full_dynamic_range"));
   // Your music (#420): the player's own files instead of the game's radio,
   // which the game mutes once the host player has the music.
   rows.push_back(Toggle("YOUR MUSIC", "pinyon_shift_music"));
@@ -813,7 +937,11 @@ std::unique_ptr<MenuScreen> SettingsPages::Audio() {
   previous.label = "PREVIOUS TRACK";
   previous.activate = [] { music::Previous(); };
   rows.push_back(std::move(previous));
-  return std::make_unique<MenuScreen>("AUDIO", std::move(rows), [] { return music::StatusLine(); });
+  auto note = [restart = RestartNote(rows)] {
+    const std::string pending = restart ? restart() : std::string();
+    return pending.empty() ? music::StatusLine() : pending;
+  };
+  return std::make_unique<MenuScreen>("AUDIO", std::move(rows), std::move(note));
 }
 
 // The controller mapping assistant (#432): for a controller SDL's database
@@ -864,6 +992,26 @@ std::unique_ptr<MenuScreen> SettingsPages::MapControllerOptions(
                        : "Your mapping is removed. The default one applies after a restart.");
   };
   rows.push_back(std::move(reset));
+  // A wheel SDL does not know as one: its steering and pedals are reshaped by
+  // the RACING WHEEL page once it is marked here.
+  MenuRow wheel;
+  wheel.label = "RACING WHEEL";
+  wheel.value = [guid = joystick.guid, known = joystick.wheel_type] {
+    if (known) return std::string("YES (DETECTED)");
+    return std::string(rex::input::sdl::IsListedWheel(guid) ? "YES" : "NO");
+  };
+  wheel.enabled = [known = joystick.wheel_type] { return !known; };
+  wheel.adjust = [this, guid = joystick.guid](int) {
+    rex::input::sdl::SetListedWheel(guid, !rex::input::sdl::IsListedWheel(guid));
+    config_.Set("hid_wheel_guids", config::Quote(rex::cvar::GetFlagByName("hid_wheel_guids")));
+    diagnostics::RecordEvent("settings.changed",
+                             {{"row", "RACING WHEEL"},
+                              {"values", "hid_wheel_guids=" +
+                                             rex::cvar::GetFlagByName("hid_wheel_guids")}});
+    Save();
+  };
+  wheel.activate = [adjust = wheel.adjust] { adjust(1); };
+  rows.push_back(std::move(wheel));
   auto screen = std::make_unique<MenuScreen>(Upper(joystick.name), std::move(rows));
   *screen_ref = screen.get();
   screen->set_body(joystick.user_mapping ? "This controller uses a mapping you made."
@@ -1389,6 +1537,9 @@ std::unique_ptr<MenuScreen> SettingsPages::TrainerWorld() {
   // The discount signs and barn finds not yet found, on the map and minimap
   // (NP-8.6).
   rows.push_back(Toggle("SHOW COLLECTIBLES", "cheat_show_collectibles"));
+  // Events load without their class, make, year and other car limits (FB-12.3);
+  // an event's ticket picks it up the next time it loads.
+  rows.push_back(Toggle("ANY CAR IN ANY EVENT", "cheat_any_car_events"));
   return std::make_unique<MenuScreen>("WORLD", std::move(rows));
 }
 
@@ -1422,6 +1573,56 @@ std::unique_ptr<MenuScreen> SettingsPages::TrainerDebug() {
   return std::make_unique<MenuScreen>("DEBUG", std::move(rows));
 }
 
+// Racing wheels (#337) through the SDL gamepad path: steering on the left
+// stick's X axis and the pedals on the triggers, from SDL's database or MAP
+// CONTROLLER. FH1 shapes that input for a thumbstick, so these rows reshape a
+// wheel's input first; gamepads are untouched. All apply at once.
+std::unique_ptr<MenuScreen> SettingsPages::Wheel() {
+  std::vector<MenuRow> rows;
+  const auto percents = [](const char* name, std::initializer_list<int> values) {
+    std::vector<Choice> choices;
+    for (int value : values) {
+      choices.push_back({std::to_string(value) + "%", {{name, std::to_string(value)}}});
+    }
+    return choices;
+  };
+  // Full lock at this share of the wheel's rotation: 50% on a 900-degree
+  // wheel locks at 225 degrees each side.
+  rows.push_back(Setting("STEERING SATURATION",
+                         percents("hid_wheel_steering_saturation",
+                                  {100, 90, 80, 70, 60, 50, 40, 30, 20})));
+  // Skips the game's stick deadzone so the car answers the first degrees.
+  rows.push_back(Setting("STEERING DEADZONE",
+                         percents("hid_wheel_steering_deadzone", {0, 5, 10, 15, 20, 25, 30})));
+  std::vector<Choice> curves;
+  for (const auto& [label, value] : std::initializer_list<std::pair<const char*, int>>{
+           {"LINEAR", 100}, {"SOFT CENTRE", 150}, {"SOFTER CENTRE", 200}, {"SHARP CENTRE", 75}}) {
+    curves.push_back({label, {{"hid_wheel_steering_linearity", std::to_string(value)}}});
+  }
+  rows.push_back(Setting("STEERING CURVE", std::move(curves)));
+  rows.push_back(
+      Setting("PEDAL DEADZONE", percents("hid_wheel_pedal_deadzone", {0, 5, 10, 15, 20})));
+  MenuRow map;
+  map.label = "MAP A WHEEL";
+  map.activate = [this] { host_ui_.Push(MapController()); };
+  rows.push_back(std::move(map));
+  auto screen = std::make_unique<MenuScreen>("RACING WHEEL", std::move(rows), [] {
+    int wheels = 0;
+    for (const auto& joystick : rex::input::sdl::ListJoysticks()) {
+      if (joystick.wheel_type || rex::input::sdl::IsListedWheel(joystick.guid)) ++wheels;
+    }
+    return wheels == 0   ? std::string("NO WHEEL CONNECTED")
+           : wheels == 1 ? std::string("1 WHEEL CONNECTED")
+                         : std::to_string(wheels) + " WHEELS CONNECTED";
+  });
+  screen->set_body(
+      "A wheel drives through its controller mapping: steering on the left stick, throttle on "
+      "the right trigger and brake on the left trigger. If the game does not see it, choose MAP "
+      "A WHEEL, then the wheel, and mark it as a racing wheel. Force feedback is not supported "
+      "yet.");
+  return screen;
+}
+
 std::unique_ptr<MenuScreen> SettingsPages::Controls() {
   std::vector<MenuRow> rows;
   MenuRow controller;
@@ -1432,6 +1633,7 @@ std::unique_ptr<MenuScreen> SettingsPages::Controls() {
   map.label = "MAP CONTROLLER";
   map.activate = [this] { host_ui_.Push(MapController()); };
   rows.push_back(std::move(map));
+  rows.push_back(Page("RACING WHEEL", &SettingsPages::Wheel));
   rows.push_back(Setting("RUMBLE",
                          {{"OFF", {{"pad_rumble_strength", "0"}}},
                           {"25%", {{"pad_rumble_strength", "25"}}},
@@ -1732,6 +1934,8 @@ std::unique_ptr<MenuScreen> SettingsPages::Root() {
     rows.push_back(std::move(row));
   }
   if (PinyonShiftUseBuiltinRallyAdapter()) rows.push_back(Page("HORIZON RALLY", &SettingsPages::Rally));
+  // Last, so the rows above keep their places for scripted routes.
+  rows.push_back(Page("GAMEPLAY", &SettingsPages::Gameplay));
   return std::make_unique<MenuScreen>("SETTINGS", std::move(rows));
 }
 

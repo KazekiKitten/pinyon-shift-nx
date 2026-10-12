@@ -17,7 +17,9 @@ Mods live in the state folder, never in the game files. They can replace files, 
   code/<name>.dll        a native mod (optional)
   game/...               whole files that replace the game's (optional)
   members/...            single members of the game's archives
+  add/...                new members added to the game's archives
   merge/...              settings merged by key
+  strings/<lang>/*.toml  new or changed text in the string tables
   db/*.sql               database patches
   textures/<hash>.dds    texture replacements
 ```
@@ -64,9 +66,12 @@ A mod that only changes how the game looks or sounds, and never what it saves, c
 | --- | --- |
 | Whole files (`game/`) | Replace the file with the same path, case-insensitively. The earlier mod in the load order wins |
 | Archive members (`members/<archive>/<member>`) | Before each start, the affected archives are rebuilt from your own copy with only those members replaced |
+| New archive members (`add/<archive>/<member>`) | Appended to the rebuilt archive, for example a new colour grading map in `dynamicpost.zip`. A name the archive already has is refused, as is a `members/` name it lacks |
+| Strings (`strings/<language or ALL>/<Table>.toml`) | `IDS_` names with their text: existing names are changed, new ones added with their key, which the database refers to as `_&N` (`tools/fh1-strings.py`) |
 | Merged settings (`merge/`) | `.ini` keys and `.xml` elements are merged into the file, so several mods can change one settings file |
 | Database (`db/*.sql`) | SQL scripts run in load order on a copy of `media/db/gamedb.slt`, or of the database an enabled mod replaces it with |
-| Textures (`textures/<hash>.dds`) | Find a texture's hash with `--texture_dump_dir`. A replacement keeps the format and may be 2, 4 or 8 times larger. **SETTINGS > MODS > RELOAD TEXTURES** reloads them in game. Not on the default Vulkan renderer yet ([#518](https://github.com/arcanite24/pinyon-shift/issues/518)) |
+| New cars (`tools/clone-fh1-car.py`) | A spec of cars that reuse an existing model with their own name, price, power, weight and class becomes a `db/` script and `strings/` names. Bought cars stay in the modded profile, which still loads if the mod is removed |
+| Textures (`textures/<hash>.dds`) | Find a texture's hash with `--texture_dump_dir`. A replacement keeps the format and may be 2, 4 or 8 times larger. **SETTINGS > MODS > RELOAD TEXTURES** reloads them in game. On a GPU without BC formats (most Android GPUs) only 8_8_8_8 replacements apply |
 
 For example, a merge that removes free-roam traffic:
 

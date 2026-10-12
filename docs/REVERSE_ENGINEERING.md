@@ -30,5 +30,5 @@ lists them with the records. Only our own analysis goes in a record: no
 disassembly listings, decompiled code or game data ([LEGAL.md](LEGAL.md)).
 
 The table this file held until 2026-10-12 is at commit
-[`a72a92a5f215`](https://github.com/arcanite24/pinyon-shift/blob/a72a92a5f215/docs/REVERSE_ENGINEERING.md);
+[`fc1751fe2a38`](https://github.com/arcanite24/pinyon-shift/blob/fc1751fe2a38/docs/REVERSE_ENGINEERING.md);
 every row of it is now a record.

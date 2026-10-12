@@ -127,6 +127,48 @@ class BuildModArchivesTests(unittest.TestCase):
             self.assertFalse(MODULE.build(state, game)["patched"])
             self.assertFalse((state / "mods" / MODULE.GENERATED).exists())
 
+    def test_adds_members_after_the_existing_ones(self):
+        with tempfile.TemporaryDirectory() as directory:
+            game, state = self.make(Path(directory))
+            add = state / "mods" / "first" / "add" / "media" / "StringTables" / "EN.zip"
+            (add / "Custom").mkdir(parents=True)
+            (add / "Custom" / "MyTable.str").write_bytes(b"my table")
+            # The earliest mod wins a member two mods add.
+            later = state / "mods" / "second" / "add" / "media" / "StringTables" / "EN.zip"
+            (later / "Custom").mkdir(parents=True)
+            (later / "Custom" / "MyTable.str").write_bytes(b"second table")
+            result = MODULE.build(state, game)
+            self.assertEqual(result["archives"][0]["added"], {"Custom/MyTable.str": "first"})
+            archive = (state / "mods" / MODULE.GENERATED / "game" / "media" / "StringTables"
+                       / "EN.zip")
+            with zipfile.ZipFile(archive) as zipped:
+                names = zipped.namelist()
+                self.assertEqual(names[-1], "Custom/MyTable.str")
+                self.assertEqual(zipped.read("Custom/MyTable.str"), b"my table")
+                self.assertEqual(zipped.read("PauseMenu.str"), b"FIRST")
+                self.assertEqual(zipped.read("Activities.str"), b"activities" * 50)
+            data = archive.read_bytes()
+            records, _ = MODULE.read_central(data)
+            raw, info = records[-1]
+            fields = MODULE.CENTRAL.unpack_from(raw)
+            extra = raw[MODULE.CENTRAL.size + fields[10]:]
+            key, size, offset = struct.unpack("<HHI", extra)
+            self.assertEqual((key, size), (MODULE.DATA_OFFSET_EXTRA, 4))
+            self.assertEqual(data[offset:offset + 8], b"my table")
+            manifest = (state / "mods" / MODULE.GENERATED / "game" / "media"
+                        / "zipmanifest.xml").read_bytes().decode("utf-8-sig")
+            self.assertIn(f'direntries="{len(names)}"', manifest)
+            self.assertEqual(len(names), 4)
+
+    def test_refuses_to_add_a_member_the_archive_has(self):
+        with tempfile.TemporaryDirectory() as directory:
+            game, state = self.make(Path(directory))
+            add = state / "mods" / "first" / "add" / "media" / "StringTables" / "EN.zip"
+            add.mkdir(parents=True)
+            (add / "pausemenu.str").write_bytes(b"clash")
+            with self.assertRaises(MODULE.ArchiveError):
+                MODULE.build(state, game)
+
     def test_refuses_a_member_the_archive_lacks_and_a_mismatched_manifest(self):
         with tempfile.TemporaryDirectory() as directory:
             game, state = self.make(Path(directory))

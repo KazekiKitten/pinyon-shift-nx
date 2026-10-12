@@ -372,6 +372,14 @@ catch { [Console]::Error.Write($_.Exception.Message); exit 2 }
         self.assertIn("NativeErrorCode -eq 1223", provision)
         self.assertIn("administrator permission was declined", provision)
 
+    def test_failed_build_tools_install_keeps_the_installer_logs(self):
+        # Exit code 87 has no documented meaning; only the installer's
+        # dd_*.log files explain it (#549).
+        provision = (ROOT / "tools/provision-toolchain.ps1").read_text(encoding="utf-8")
+
+        self.assertIn("-Filter 'dd_*.log'", provision)
+        self.assertIn("'.local/logs/build-tools-installer'", provision)
+
     @unittest.skipUnless(shutil.which("powershell"), "Windows PowerShell is required")
     def test_command_path_removes_entry_quotes_without_losing_parentheses(self):
         command = (
@@ -600,8 +608,10 @@ catch { [Console]::Error.Write($_.Exception.Message); exit 2 }
         self.assertIn("for (const auto& key : pinyon_shift::config::kSchema28Keys)", app)
         self.assertIn('{"keybind_a", "LMB,Space"}', keys)
         self.assertIn('{"keybind_right_trigger", "W"}', keys)
-        # Schemas 1..24 migrate; the current schema is accepted unchanged.
+        # Older schemas migrate; the current and newer ones are accepted
+        # unchanged (#536).
         self.assertIn("schema < 1 || schema >= kConfigSchema", app)
+        self.assertIn("if (schema > kConfigSchema) {", app)
         self.assertNotIn('"fh1_renderer = \\"native\\"\\n"', app)
         self.assertNotIn('\\"xenos\\"', app)
         retired_block = app[app.index("for (const char* retired_setting : {"):]

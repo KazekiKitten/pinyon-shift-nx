@@ -2,7 +2,7 @@
 title: Cars, events and DLC
 section: Reverse engineering
 order: 13
-description: How Forza Horizon defines its content: the gamedb.slt database and its tables for cars, upgrades, liveries and events; free-roam activities; how downloadable content is mounted, merged and licensed; the Rally expansion; and what title update 4 adds.
+description: How Forza Horizon defines its content: the gamedb.slt database and its tables for cars, upgrades, liveries and events; free-roam activities and event restrictions; how downloadable content is mounted, merged and licensed; the Rally expansion; and what title update 4 adds.
 ---
 
 # Cars, events and DLC
@@ -49,6 +49,12 @@ order by c.Year;
 Career events are database rows; free-roam activities (speed cameras, average speed zones, stunts, shops and barn finds) are flow documents in `gamemodes.zip` ([Game flow](game-flow.md)), placed in the world by trigger zones. Their run-time objects are on [Game objects](game-objects.md#activities-and-collectibles).
 
 {{findings:content/Events and career}}
+
+## Event restrictions
+
+Which cars an event accepts comes from two places: its `EventRestrictions` row, a hex string decoded into per-bucket limits (make, model year and others), and its `Events.TargetClass`, applied on top. The developer options that sound like they lift restrictions are read nowhere ([Systems and leftovers](game-systems.md#launch-options)); the trainer's ANY CAR IN ANY EVENT hooks the row parser and the class step instead.
+
+{{findings:content/Event restrictions}}
 
 ## Downloadable content
 

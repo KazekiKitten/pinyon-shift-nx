@@ -105,14 +105,18 @@ struct BuildProvenance {
   std::string rexglue_commit = "unknown";
   std::string rexglue_dirty = "unknown";
   std::string executable_sha256 = "unknown";
+  std::string created_utc = "unknown";
 };
 
 std::string JsonStringField(const std::string& json, std::string_view key) {
-  const std::regex pattern("\"" + std::string(key) + "\"\\s*:\\s*\"([^\"]*)\"");
+  // A string, or a bare true/false (setup writes the dirty flags as booleans).
+  const std::regex pattern("\"" + std::string(key) +
+                           "\"\\s*:\\s*(?:\"([^\"]*)\"|(true|false))");
   std::smatch match;
-  return std::regex_search(json, match, pattern) && match.size() == 2
-             ? match[1].str()
-             : "unknown";
+  if (!std::regex_search(json, match, pattern)) {
+    return "unknown";
+  }
+  return match[1].matched ? match[1].str() : match[2].str();
 }
 
 BuildProvenance LoadBuildProvenance() {
@@ -144,8 +148,33 @@ BuildProvenance LoadBuildProvenance() {
   result.rexglue_commit = JsonStringField(json, "rexglue_commit");
   result.rexglue_dirty = JsonStringField(json, "rexglue_dirty");
   result.executable_sha256 = JsonStringField(json, "executable_sha256");
+  result.created_utc = JsonStringField(json, "created_utc");
   return result;
 }
+
+std::string ShortCommit(const std::string& commit, const std::string& dirty) {
+  if (commit.empty() || commit == "unknown") {
+    return {};
+  }
+  return commit.substr(0, 7) + (dirty == "true" ? "+dirty" : "");
+}
+
+#ifndef PINYON_SHIFT_VERSION
+#define PINYON_SHIFT_VERSION "unknown"
+#endif
+
+constexpr const char* kPlatformName =
+#if defined(__ANDROID__)
+    "Android";
+#elif defined(_WIN32)
+    "Windows";
+#elif defined(__APPLE__)
+    "macOS";
+#elif defined(__linux__)
+    "Linux";
+#else
+    "unknown";
+#endif
 
 #if defined(__x86_64__) || defined(_M_X64)
 bool CpuHasSse41() {
@@ -174,6 +203,29 @@ std::string CpuFeatureSummary() { return "non-x86"; }
 
 std::optional<std::filesystem::path> EnvironmentPath(const char* name) {
   return platform::EnvironmentPath(name);
+}
+
+std::string BuildLabel() {
+  static const std::string label = [] {
+    const BuildProvenance build = LoadBuildProvenance();
+    std::string text = std::string("Pinyon Shift ") + PINYON_SHIFT_VERSION;
+    if (const std::string game = ShortCommit(build.pinyon_shift_commit, build.pinyon_shift_dirty);
+        !game.empty()) {
+      text += " (" + game + ")";
+    }
+    if (const std::string sdk = ShortCommit(build.rexglue_commit, build.rexglue_dirty);
+        !sdk.empty()) {
+      text += " | ShiftGlue " + sdk;
+    }
+    text += std::string(" | ") + kPlatformName + " " + REXGLUE_BUILD_CONFIG;
+    // created_utc is written by every build: "2026-10-12T13:36:59Z".
+    if (build.created_utc.size() >= 16 && build.created_utc[10] == 'T') {
+      text += " | built " + build.created_utc.substr(0, 10) + " " +
+              build.created_utc.substr(11, 5) + " UTC";
+    }
+    return text;
+  }();
+  return label;
 }
 
 bool InitializeEarly() {
@@ -211,6 +263,7 @@ bool InitializeEarly() {
                {"rexglue_commit", build.rexglue_commit},
                {"rexglue_dirty", build.rexglue_dirty},
                {"executable_sha256", build.executable_sha256},
+               {"build_label", BuildLabel()},
                {"cpu_baseline", PINYON_SHIFT_CPU_BASELINE},
                {"cpu_features", features},
                {"state_root", rex::path_to_utf8(g_state_root)}});

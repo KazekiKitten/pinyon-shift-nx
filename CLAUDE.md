@@ -68,12 +68,19 @@ and check that new links and anchors resolve in `site/_build`.
 
 When an AppData-backed gameplay run is needed, launch the locally built preview
 through `tools/launch-preview.ps1` and pass the installed preview state directory
-as `-StateRoot`. The current save is under:
+as `-StateRoot`. This is the reference save on multivac: every discount sign
+found, all 21 DLC packages installed, the v4 title update installed and on
+(offline 1000 Club too). Launch it with the v4 build (`tools/build-v4.ps1
+-StateRoot $stateRoot` first when the code changed):
 
 ```powershell
 $stateRoot = Join-Path $env:LOCALAPPDATA 'PinyonShift\source\0.1.0\.local\preview'
-.\tools\launch-preview.ps1 -StateRoot $stateRoot
+.\tools\launch-preview.ps1 -StateRoot $stateRoot -TitleUpdateV4
 ```
+
+The first v4 launch makes the profile v4-only; launch-preview backs up the
+base profile to `$stateRoot\backups\pre-v4` before it. Older player saves
+from other folders are archived in `D:\pinyon-save-archive`.
 
 Before launching, verify that `$stateRoot\user` contains a
 `ForzaProfile\ForzaProfile` file and that no `pinyon_shift` process is already

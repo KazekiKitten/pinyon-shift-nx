@@ -169,9 +169,64 @@ Before each start, `tools/build-mod-archives.py` (run by
 copy: other members keep their compressed bytes, replaced ones are stored
 uncompressed, and a matching `zipmanifest.xml` goes with it, all as the
 generated mod `zz-archive-patches`. An earlier mod wins a member two mods
-replace. Only existing members can be replaced, and archives whose end
-record disagrees with the manifest (the largest track archive) must still be
-replaced whole. `zz-archive-patches/archives.json` lists what was rebuilt.
+replace. Archives whose end record disagrees with the manifest (the largest
+track archive) must still be replaced whole.
+`zz-archive-patches/archives.json` lists what was rebuilt.
+
+A new file goes under `add/` with the same layout, and is appended to the
+archive stored:
+
+```text
+<state>/mods/<name>/add/<archive path>/<member path>
+e.g. mods/my_mod/add/media/dynamicpost.zip/ColourGradingMaps/Sunset.dds
+```
+
+The build refuses a `members/` or `merge/` file the archive does not have
+(it belongs under `add/`) and an `add/` file it already has (it belongs under
+`members/`), so a typo cannot silently do nothing.
+
+### Strings
+
+New or changed text goes in `strings/<language>/<Table>.toml`, where
+`<language>` is the string archive's name (`EN`, `FR`, ...) or `ALL` for
+every language, and each line names a string by its `IDS_` name:
+
+```toml
+# mods/my_mod/strings/ALL/List_CarMake.toml
+IDS_Make_PinyonMotors = "Pinyon Motors"
+```
+
+A name the table has takes the new text; a new name is added to the table
+with its key. The database refers to a string as `_&N`, where N is
+`(table_hash << 16) | key`; `tools/fh1-strings.py` computes both
+(`string_reference("List_CarMake", "IDS_Make_PinyonMotors")`). A new name
+whose 16-bit key another name in the table already holds is refused. Seven
+tables keep no name order (no chunk 3) and take only changes to existing
+names. For a key two mods set, the earlier mod wins.
+
+### Colour grading
+
+The game grades the scene (not the HUD) with 16x16x16 colour maps in
+`media/dynamicpost.zip` (`ColourGradingMaps/*.dds`, `NormalGrading.dds` is
+the identity), chosen per area of the map by the loose
+`media/tracks/colorado/Ribbon_00/PostProcessingZones_Safe.xml`. A look mod
+either replaces maps under `members/`, or adds its own under `add/` and ships
+an edited copy of the zones file under `game/` that names them:
+
+```text
+mods/my_look/add/media/dynamicpost.zip/ColourGradingMaps/Warm.dds
+mods/my_look/game/media/tracks/colorado/Ribbon_00/PostProcessingZones_Safe.xml
+```
+
+A map is a DDS volume texture, A8R8G8B8, with red varying fastest, then
+green, then blue; start from a copy of `NormalGrading.dds` built on the
+player's machine.
+
+For a look over the whole scene without a mod, a player can drop a `.cube`
+3D LUT (2 to 256 points, `DOMAIN_MIN`/`DOMAIN_MAX` 0 to 1) into the state
+folder's `luts` folder and pick it in F6 > GRAPHICS > COLOUR LUT
+(`scene_lut_path`, `scene_lut_strength`). It applies after the game's
+grading, on the scene only.
 
 ### Settings merged by key
 
@@ -209,10 +264,12 @@ lists the mods merged into each member.
 
 ### Textures
 
-**Texture replacement works only on the D3D12 renderer today.** The dump,
-the replacement and the reload are implemented in the D3D12 texture cache;
-the Vulkan renderer, which every platform uses by default, ignores
-`textures/` folders ([#518](https://github.com/arcanite24/pinyon-shift/issues/518)).
+Texture replacement works on the Vulkan renderer every platform uses
+([#518](https://github.com/arcanite24/pinyon-shift/issues/518)). The dump,
+the lookup and the DDS files are shared with the legacy D3D12 cache
+(`pipeline/texture/replacement.cpp` in ShiftGlue). On a GPU without BC
+texture formats (most Android GPUs on their stock driver, #516) the game
+decodes DXT textures on load, so only 8_8_8_8 replacements apply there.
 
 A mod may replace textures without touching the archives that hold them:
 
@@ -320,6 +377,42 @@ does, the scripts apply to that mod's database instead of the disc's; the
 earliest enabled mod in the load order that ships one is the base, recorded as
 `base` in `patches.json`. Archive members and merges likewise start from a
 mod's replacement archive or `zipmanifest.xml` when one is enabled.
+
+### New cars from existing models
+
+`tools/clone-fh1-car.py` turns a short spec into a database script and the
+cars' names, so a mod adds cars that reuse a model the game has, with their
+own name, price, power, weight and class:
+
+```toml
+# cars.toml
+[[car]]
+id = 1700            # new id; 1700 and up are free of the game's and its DLC's
+source = 1496        # the Jaguar XKR-S's model, physics and upgrades
+name = "Pinyon XK"
+price = 85000
+torque_scale = 1.15
+pi = 579             # as the game shows it; sets the class (A here)
+```
+
+```powershell
+python tools/clone-fh1-car.py cars.toml <state>/mods/my_cars --game-db <game>/media/db/gamedb.slt
+```
+
+It writes `db/50-clone-cars.sql`, which copies the source car's rows inside
+the player's own database when the mod is built (so the mod carries no game
+data), and `strings/ALL/Data_Car.toml` with the names. The new car is sold
+in the Autoshow under the source's make and appears in an event's
+recommendations when its class fits the event. Without `pi` (or a raw
+`performance_index`) the index is estimated from the two scales; the
+estimate is loose, so set it when the class matters. Its thumbnail is the
+source's.
+
+Cars bought from a database mod live in the separate modded profile, not
+the player's own save. Removing the mod later leaves that profile
+loadable: the game switches to another owned car and leaves the clone out
+of car select. Whether the car returns when the mod is turned back on
+has not been tested.
 
 ## The Forza Horizon XE mod
 

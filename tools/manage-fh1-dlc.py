@@ -14,7 +14,7 @@ import sys
 import tempfile
 import uuid
 import zipfile
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePosixPath, PureWindowsPath
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTENT = Path("0000000000000000/4D5309C9")
@@ -66,7 +66,11 @@ def package_paths(state: Path, package_id: str) -> tuple[Path, Path, Path]:
 
 def payload_catalog(root: Path) -> tuple[list[dict], str]:
     files = []
-    for path in sorted(root.rglob("*")):
+    # The digest depends on the order. Sort as Windows paths compare
+    # (case-insensitive, "\" separators) on every platform, the order the
+    # catalog's payload_sha256 values were made with; POSIX Path sorting
+    # is case-sensitive, so Rally failed to verify on macOS and Linux.
+    for path in sorted(root.rglob("*"), key=lambda p: PureWindowsPath(p.relative_to(root))):
         if path.is_symlink():
             raise ValueError("content contains a symbolic link")
         if path.is_file():

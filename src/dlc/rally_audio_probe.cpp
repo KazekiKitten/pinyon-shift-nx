@@ -64,8 +64,9 @@ class ProbeSystem final : public rex::audio::sdl::SDLAudioSystem {
 }  // namespace
 
 void ConfigureAudioProbe(rex::RuntimeConfig& config) {
-  if (!fh1_render_test::Enabled() ||
-      platform::EnvironmentVariable("PINYON_SHIFT_RALLY_AUDIO_PROBE").value_or("").empty()) return;
+  if (!fh1_render_test::WantsAudioCapture() &&
+      (!fh1_render_test::Enabled() ||
+       platform::EnvironmentVariable("PINYON_SHIFT_RALLY_AUDIO_PROBE").value_or("").empty())) return;
   samples = std::make_unique<float[]>(kMaximumSamples);
   config.audio_factory = [](rex::runtime::FunctionDispatcher* dispatcher) {
     return std::make_unique<ProbeSystem>(dispatcher);

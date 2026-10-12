@@ -285,6 +285,17 @@ source = """docs/DLC_BACKLOG.md Original Rally hub asset inventory"""
 
 [[finding]]
 group = """HUD and map"""
+base = """0x833023C1, sub_826BEC10"""
+v4 = """0x833F0F91, 0x8276ADD8"""
+name = """HUD hidden byte"""
+what = """A HUD element's visibility update reads this byte: while it is set the update hides a shown element; once it is clear it shows a hidden one, unless `nohud` (options object +3213, v4 +3217) is set. Holding it at 1 removes the minimap, speedometer and event banner within a few frames and they return when it is cleared; the pause menu, photo menu and photo-mode camera overlay still draw. Writing `nohud` at run time instead changes nothing on screen, because it is read only before an element first shows. What else writes the byte was not found (no direct store with that displacement)."""
+how = """Reader in the generated code; free-roam and photo-mode routes from a pinned seed toggling the host's `hud_hidden`; v4 address from the v4 reader's load."""
+confidence = """confirmed"""
+issue = """#519"""
+source = """docs/REVERSE_ENGINEERING.md@fc1751fe2a38 Developer options and leftover systems"""
+
+[[finding]]
+group = """HUD and map"""
 v4 = """same"""
 name = """co-driver icon atlas"""
 what = """Rally's `CoDriverIconSet.xds` atlas holds the pace-note turn icons. Five turn shapes (easy, medium, hard, square, hairpin) cover the mapped calls, and left turns can be drawn by mirroring the right-facing tiles."""

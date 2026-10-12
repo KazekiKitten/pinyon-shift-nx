@@ -1,6 +1,7 @@
 #include "pinyon_shift_app.h"
 #include "pinyon_shift_init.h"
 #include "fh1_render_test.h"
+#include "audio_mix.h"
 #include "dlc/rally_audio_probe.h"
 #include "dlc/rally_pace_notes.h"
 
@@ -29,6 +30,7 @@
 #include <rex/input/sdl/joystick_mapping.h>
 #include <rex/ui/flags.h>
 #include <rex/ui/keybinds.h>
+#include <rex/ui/overlay/debug_overlay.h>
 #include <rex/ui/presenter.h>
 #if REX_HAS_VULKAN
 #include <rex/ui/vulkan/provider.h>
@@ -50,6 +52,7 @@
 #include "ui/host_style.h"
 #include "ui/hostui/host_ui.h"
 #include "cheats.h"
+#include "hud_toggle.h"
 #include "mod/mod_host.h"
 #include "mod/overlay_device.h"
 #include "save/car_cards.h"
@@ -221,6 +224,12 @@ bool EnsureSupportedConfig(const std::filesystem::path& path, bool& created,
   try {
     const uint32_t schema = std::stoul(match[1].str());
     if (schema == kConfigSchema) {
+      return true;
+    }
+    if (schema > kConfigSchema) {
+      // A newer launcher or game wrote it: an update whose build did not
+      // finish, or a downgrade (#536). Its settings are a superset of this
+      // build's, so keep the file unchanged; unknown settings are ignored.
       return true;
     }
     if (schema < 1 || schema >= kConfigSchema) {
@@ -699,6 +708,8 @@ void PinyonShiftApp::OnPostInitLogging() {
 
 void PinyonShiftApp::OnPreSetup(rex::RuntimeConfig& config) {
   rex::system::SetHostGpuLossHandler(&OnHostGpuLoss);
+  // The window title and the F3 overlay name this release and its commits.
+  rex::ui::SetBuildLabel(pinyon_shift::diagnostics::BuildLabel());
   config.gpu_plugin =
       pinyon_shift::platform::EnvironmentVariable("PINYON_SHIFT_FH1_DISC_SHADER_CORPUS_DIR")
           ? "fh1-producer"
@@ -908,6 +919,9 @@ void PinyonShiftApp::UpdateHorPlus() {
 
 void PinyonShiftApp::ApplyMapView(bool open) {
   map_view_open_ = open;
+  // The HUD scale (#520) is for the gameplay HUD; the map's and the menus'
+  // screens are drawn through the same HUD view and keep their size.
+  rex::cvar::SetFlagByName("fh1_hud_scale_suspended", open ? "true" : "false");
   if (!REXCVAR_GET(pinyon_shift_hor_plus)) return;
   // Wider View stretches the widened gameplay frame over the window; the
   // title's 16:9 screens (menus, Autoshow, map) are letterboxed (#363).
@@ -988,6 +1002,8 @@ void PinyonShiftApp::OnPostSetup() {
                                     ? runtime()->graphics_system()->presenter()
                                     : nullptr);
   });
+  rex::ui::RegisterBind("bind_hud", pinyon_shift::config::kHudKeys,
+                        "Hide or show the HUD (for screenshots)", [] { pinyon_shift::hud::Toggle(); });
   rex::ui::RegisterBind("bind_music_next", pinyon_shift::config::kMusicNextKeys,
                         "Your music: next track", [] { pinyon_shift::music::Next(); });
   rex::ui::RegisterBind("bind_music_previous", pinyon_shift::config::kMusicPreviousKeys,
@@ -1075,6 +1091,15 @@ void PinyonShiftApp::OnPostSetup() {
   auto overlays = pinyon_shift::mod::OverlayRoots();
   const bool builtin_rally = PinyonShiftUseBuiltinRallyAdapter();
   if (builtin_rally) overlays.push_back(PinyonShiftRallyAdapterRoot() / "game");
+  // The audio mixer's copy of the levels, made from the mods' or the disc's.
+  {
+    auto sources = overlays;
+    sources.push_back(game_data_root());
+    if (auto mix = pinyon_shift::audio_mix::Prepare(pinyon_shift::diagnostics::StateRoot(),
+                                                    sources)) {
+      overlays.insert(overlays.begin(), std::move(*mix));
+    }
+  }
   if (!overlays.empty()) {
     for (auto& root : overlays) root = LongHostPath(root);
     constexpr const char* kGameMount = "\\Device\\Harddisk0\\Partition1";
@@ -1280,6 +1305,7 @@ void PinyonShiftApp::OnShutdown() {
   rex::ui::UnregisterBind("bind_fullscreen");
   rex::ui::UnregisterBind("bind_quit");
   rex::ui::UnregisterBind("bind_photo");
+  rex::ui::UnregisterBind("bind_hud");
   rex::ui::UnregisterBind("bind_trainer");
   rex::ui::UnregisterBind("bind_music_next");
   rex::ui::UnregisterBind("bind_music_previous");

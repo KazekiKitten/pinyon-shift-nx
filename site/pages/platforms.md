@@ -25,6 +25,7 @@ The reference PC is a Ryzen 7 5800X (8 cores, 16 threads) with an RTX 4080. Agai
 
 | Preset | Settings | For |
 | --- | --- | --- |
+| Ultra Low 30 | Low-spec 60 without sun shadows, reflections at a quarter rate, the scene in one pass, 30 limit | integrated graphics on 2 physical cores |
 | Low-spec 60 | 1x, no MSAA, bilinear, the game's anisotropy, no FXAA, 60 limit | new installs |
 | Balanced 40 | the same at 40, even pacing on 120 Hz displays and the Deck's 40 Hz mode | under 4 physical cores |
 | Performance 120 | | discrete GPU with 6 GB or more, 6 or more threads, a 120 Hz display |

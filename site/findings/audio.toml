@@ -64,6 +64,27 @@ how = """Archive listing."""
 confidence = """probable"""
 source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Developer options and leftover systems"""
 
+
+[[finding]]
+group = """Audio engine"""
+base = """AudioMixerSnapshots.xml snapshot groups"""
+v4 = """same"""
+name = """mixer snapshots multiply"""
+what = """Each snapshot (FreeRoam, Race, Paused, InTunnel, MainTown and others) names a `group`, and its children set each category's `destvolume`. Snapshots of different groups (Gameplay, Location, Speed, Radio, VO and others) are active together and their levels multiply: halving the engine's level in every snapshot made it near silent, while halving it only in the 17 Gameplay snapshots measured 0.042 RMS against 0.057 (engine alone; 0.025 at a quarter). The host's F6 audio mixer scales the Gameplay group only."""
+how = """Generated file overlay; native PCM capture (`audiocapture`) in free roam with every other category at 0."""
+confidence = """probable"""
+source = """docs/REVERSE_ENGINEERING.md@fc1751fe2a38 Developer options and leftover systems"""
+
+[[finding]]
+group = """Audio engine"""
+base = """AudioEngineConfig.xml game* levels"""
+v4 = """same"""
+name = """AudioEngineConfig levels are not the free-roam mix"""
+what = """`gamePlayerEngine`, `gameOpponentEngine`, `gameTire`, `gameCarWind`, `gameAmbient`, `gameAmbientDynamic` and `gameMusic` all at 0 measured the same as the defaults (0.065 RMS), though the title read the overridden file. They may apply elsewhere (split screen, menus); that was not tested."""
+how = """Generated file overlay; native PCM capture."""
+confidence = """probable"""
+negative = true
+source = """docs/REVERSE_ENGINEERING.md@fc1751fe2a38 Developer options and leftover systems"""
 # --------------------------------------------------- Speech and ambience banks
 
 [[finding]]
