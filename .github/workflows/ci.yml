@@ -24,6 +24,11 @@ jobs:
         run: python -m unittest discover -s tools/tests -p "test_*.py"
       - name: Check tracked Markdown links
         run: python tools/check-markdown-links.py
+      - name: Build the docs site
+        # Catches broken reverse-engineering records, links and diagrams.
+        run: |
+          python -m pip install -r site/requirements.txt
+          python site/build.py --out "$env:RUNNER_TEMP/site"
       - name: Build launcher
         run: dotnet build launcher/PinyonShift.Launcher/PinyonShift.Launcher.csproj -c Release
       - name: Build Linux and macOS launcher
