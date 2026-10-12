@@ -69,7 +69,7 @@ In progress:
   savings measured on desktop, the Steam Deck and macOS (#427)
 - [ ] Hand-optimize the hottest recompiled guest functions (#431)
 - [ ] Document FH1's guest code in a symbol database
-  ([reverse-engineering records](REVERSE_ENGINEERING.md), #448)
+  ([reverse-engineering records](https://arcanite24.github.io/pinyon-shift/reverse-engineering/), #448)
 
 Next, in priority order:
 

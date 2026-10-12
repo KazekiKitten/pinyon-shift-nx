@@ -425,12 +425,17 @@ Guest memory is big-endian, as the title sees it; `read_guest` and
 `write_guest` copy bytes. Writing memory the GPU reads (textures, vertex
 buffers) is not supported: the renderer would not see the change.
 
-Mods never hard-code addresses. `find_symbol("frame.tick")` and
-`find_offset("vehicle.slot.position")` look names up in the symbol table for
-the supported executable: [`config/mod/fh1-symbols.toml`](../config/mod/fh1-symbols.toml),
-plus every hook site as `hook.<name>`. Unknown names return 0 or -1. The
-table is generated into the host by `tools/generate-fh1-symbols.py`, and a
-test fails when it and the hook declarations disagree.
+Mods look addresses up by name instead of hard-coding them.
+`find_symbol("frame.tick")` and `find_offset("vehicle.slot.position")` look
+names up in the symbol table for the supported executable:
+[`config/mod/fh1-symbols.toml`](../config/mod/fh1-symbols.toml), plus every
+hook site as `hook.<name>`. Unknown names return 0 or -1. The table is
+generated into the host by `tools/generate-fh1-symbols.py`, and a test fails
+when it and the hook declarations disagree. The table names functions, hook
+sites and offsets but not data globals yet; the two that object walks need,
+the game holder `0x832DF024` (v4 `0x833CAAE4`) and the activity manager's
+component index `0x832FEE8C` (v4 `0x833EDA1C`), are given on the site's Game
+objects page.
 
 Guest functions are called only from a guest task: `enqueue_guest_task`
 runs a callback on the title's main thread at the next frame tick, where

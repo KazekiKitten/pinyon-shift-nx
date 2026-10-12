@@ -238,7 +238,7 @@ measured (512 MB guest, `CLoadAndWaitForLOD0Cars`).
 
 | ID | Item | Effort | Status |
 | --- | --- | --- | --- |
-| FB-4.1 | **Find the keys.** Decompress `renderscenarios.zip` with `tools/patch-fh1-archive.py`'s reader, locate each key above in data or code, and record which are loaded from files and which are constants. Trace which scenario free roam selects. | S | Done 2026-10-11, no data knob found. Every key traced is recorded in [REVERSE_ENGINEERING.md](REVERSE_ENGINEERING.md) (World detail). Track grass, crowd and scene distances (`TrackSettings.xml`) and the car LOD keys (`CarLODTransDist`, its traffic table, `CarLODThresholds`) change nothing visible, even at extreme values; scenery is culled by precomputed PVS zones; `SLod.xml` is a car shader file and `CamFarClip` a code default. FB-4.2 now needs the code that picks a model LOD for scenery and cars, found by tracing which LOD a draw uses |
+| FB-4.1 | **Find the keys.** Decompress `renderscenarios.zip` with `tools/patch-fh1-archive.py`'s reader, locate each key above in data or code, and record which are loaded from files and which are constants. Trace which scenario free roam selects. | S | Done 2026-10-11, no data knob found. Every key traced is recorded on [World and tracks](https://arcanite24.github.io/pinyon-shift/game-world/). Track grass, crowd and scene distances (`TrackSettings.xml`) and the car LOD keys (`CarLODTransDist`, its traffic table, `CarLODThresholds`) change nothing visible, even at extreme values; scenery is culled by precomputed PVS zones; `SLod.xml` is a car shader file and `CamFarClip` a code default. FB-4.2 now needs the code that picks a model LOD for scenery and cars, found by tracing which LOD a draw uses |
 | FB-4.5 | **Photo mode detail in gameplay.** A setting that applies `PhotoMode.xml`'s detail keys (`CarMinWheelLOD 0`, `CollidableShadows 1`, `SoftParticles 1`, not its DOF change) to every scenario through XML merges. Trace what the code does on `IRenderThreadInPhotoModeInternal` and `IPresentationInPhotoMode`, and the `highrescubemap` option, for quality switches that are not in data. Photo capture's accumulation supersampling (`MultiSampleAndAccumulate`, `AccumulateWeightedFrame`) and BIG SHOT need a still scene and are not real-time features; the resolution scale is their real-time counterpart. Gate: a visible difference in an A/B capture, then cost measured on the race. | S-M | Tried 2026-10-11 for #421: merging the three keys into every gameplay scenario showed no visible difference in race A/B captures at 1x, so the gate fails and nothing ships. The code-path traces remain |
 | FB-4.2 | **World detail preset.** A WORLD DETAIL setting (ORIGINAL, HIGH, ULTRA) that raises car, crowd, grass and traffic LOD distances and far clip through XML merges or a host hook; measure CPU, GPU and guest memory per step. | M | Not started |
 | FB-4.3 | **Traffic and crowd density** as separate options, shared with LS's "optional reductions to game systems" so the same setting lowers them on weak machines. | M | Not started |
@@ -351,8 +351,7 @@ recompiled and decompiled ports popular (Unleashed Recompiled,
 Zelda64Recomp, Ship of Harkinian, 2 Ship 2 Harkinian, SpaghettiKart, Banjo:
 Recompiled) and what FH1 players complain about (GTPlanet, forza.net,
 reviews; Reddit and ModDB comments were not reachable). Guest findings are
-in [REVERSE_ENGINEERING.md](REVERSE_ENGINEERING.md) (Developer options and
-leftover systems); only the launch options have been checked at run time (FB-12.0).
+on [Systems and leftovers](https://arcanite24.github.io/pinyon-shift/game-systems/); only the launch options have been checked at run time (FB-12.0).
 
 **The main lever.** The retail executable still has about 300 developer
 launch options (`launch`, `trackname`, `numaicars`, `allowskipvoiceover`,
@@ -375,7 +374,7 @@ Effort as above; "route" names the cheapest path found.
 
 | Rank | ID | Enhancement | Route | Effort | Confidence |
 | --- | --- | --- | --- | --- | --- |
-| - | FB-12.0 | **Launch-option probe.** Find how to set the options in retail and check them | Probe mod on the free-roam route | S | Done 2026-10-11: the `cl` cvar and `cmdline.txt` do nothing (retail never parses them); writing the flag bytes at boot works (`nohud` hides the HUD; `showframerate` shows nothing). Addresses and offsets in [REVERSE_ENGINEERING.md](REVERSE_ENGINEERING.md) |
+| - | FB-12.0 | **Launch-option probe.** Find how to set the options in retail and check them | Probe mod on the free-roam route | S | Done 2026-10-11: the `cl` cvar and `cmdline.txt` do nothing (retail never parses them); writing the flag bytes at boot works (`nohud` hides the HUD; `showframerate` shows nothing). Addresses and offsets on [Systems and leftovers](https://arcanite24.github.io/pinyon-shift/game-systems/#launch-options) |
 | 1 | FB-12.1 | **Quality-of-life switches** ([#477](https://github.com/arcanite24/pinyon-shift/issues/477)) as F6 toggles: skip voice-over and tutorials, no splash or attract video, clean HUD, hide cockpit glass, zoomed-out minimap, no camera vibration, auto-reset off (`NoHandOfGodReset`) | Flag writes at boot (FB-12.0), or `GameTunableSettings.ini` merges | S each | Confirmed for the clean HUD; the others need one check each |
 | 2 | FB-12.2 | **Free Race.** ([#478](https://github.com/arcanite24/pinyon-shift/issues/478)) A host menu that builds any race FH1 never offered: route, laps, opponents and their cars, AI skill, time of day, traffic. 145 active tracks, 85 used by events | `launch`, `trackname`, `ribbon`, `numlaps`, `numaicars`, `aicar%d`, `aiskill`, `timeofdayindex`, `numtrafficcars` | S-M | Probable |
 | 3 | FB-12.3 | **Any car in any event** ([#479](https://github.com/arcanite24/pinyon-shift/issues/479)) (a new route to FB-10.1 and NP-8.7) | `chooseillegalcarforevent`, `eventrestrictions`; else `EventRestrictions` SQL | S | Probable |
@@ -432,7 +431,7 @@ liveries, events and activities would take, from read-only reads of
 `gamedb.slt`, the game's archives and executable strings, the DLC, XE and
 Rally data, and a seed's save. Nothing was run in game; each issue names the
 experiment that confirms it. Findings are in
-[REVERSE_ENGINEERING.md](REVERSE_ENGINEERING.md) (Custom content).
+[Cars, events and DLC](https://arcanite24.github.io/pinyon-shift/game-content/).
 
 Most of FH1's content is data: cars, makes, parts, colours, events,
 prizes, opponents and activities are database rows; routes, checkpoints,
