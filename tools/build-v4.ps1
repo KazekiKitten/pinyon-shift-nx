@@ -45,8 +45,10 @@ $environment = Enter-PinyonBuildEnvironment
 $logs = Resolve-PinyonLocalPath -RelativePath '.local/logs'
 [void](New-Item -ItemType Directory -Force -Path $logs)
 if ($Parallel -eq 0) { $Parallel = Get-PinyonBuildJobCount }
+# A release install keeps the SDK in .local/rexglue, not in the submodule
+# path the preset names (#459).
 Invoke-PinyonBuildCommand $environment.CMake @('--preset', 'win-amd64-v4',
-    "-DPYTHON_EXECUTABLE=$(Get-PinyonPython)") `
+    "-DREXSDK_DIR=$(Resolve-PinyonRexGlueRoot)", "-DPYTHON_EXECUTABLE=$(Get-PinyonPython)") `
     (Join-Path $logs 'v4-configure.log') 'v4 configuration failed.' -Step 'Configure the v4 build'
 Invoke-PinyonBuildCommand $environment.CMake @('--build', 'out/build/win-amd64-v4', '--parallel', "$Parallel",
     '--target', 'pinyon_shift', 'pinyon_shift_fh1_archive_extract') `
