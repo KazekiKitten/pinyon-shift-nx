@@ -81,6 +81,10 @@ Connect the controller before starting the game. XInput controllers work as they
 
 A wheel drives through the same controller path: steering on the left stick, throttle on the right trigger and brake on the left trigger. Wheels that SDL knows are detected; for another, open **F6 > CONTROLS > MAP CONTROLLER**, map it, and set **RACING WHEEL** to **YES** on its page. **F6 > CONTROLS > RACING WHEEL** then shapes its input, since the game expects a thumbstick: **STEERING SATURATION** (full lock at that share of the wheel's rotation, so 50% on a 900-degree wheel locks at 225 degrees each way), **STEERING DEADZONE** (skips the game's stick deadzone), **STEERING CURVE** and **PEDAL DEADZONE**. Gamepads are not affected. Force feedback isn't supported yet, and the shaping has been tested with simulated input, not yet on a physical wheel.
 
+## Gameplay switches
+
+**F6 > GAMEPLAY** turns on three switches the game kept from its development builds. All are off by default and apply at once. **SKIP VOICE-OVERS WITH A** lets A close a dialog before its voice-over ends. **AUTOMATIC CAR RESET** off stops the game from putting the car back on the road when it strays too far. **REPLAY INTRO WHEN IDLE** off keeps the title screen from replaying the intro movie after about a minute without input. The HUD is hidden with <kbd>F2</kbd>.
+
 ## Saves
 
 Saves are in the install's state folder, `%LOCALAPPDATA%\PinyonShift\source\<version>\.local\preview\user` (under `data` for a portable install).

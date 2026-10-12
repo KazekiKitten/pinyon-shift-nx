@@ -85,4 +85,7 @@ sha256 = "DB40DF605ADE49A6"  # prefix of the supported default.xex SHA-256
 "game.user" = 108                        # the user in the game object at [0x832DF024], as profile.from_user takes it
 "profile.values" = 32                    # the profile's value tree (Main/Credits and the other fields)
 "launch_options.nohud" = 3213            # u8 in launch_options.get's object: 1 keeps each HUD element from showing, read only when it first shows (setting it later changes nothing)
+"launch_options.allowskipvoiceover" = 4924  # u8: 1 lets A close a dialog while its voice-over plays (sub_8269BF60)
+"launch_options.noattractvideo" = 4222  # u8: 1 stops the intro replay after ~53 s idle on the title screen (sub_827A27E0)
+"launch_options.nohandofgodreset" = 4937  # u8: 1 skips the automatic off-track reset (sub_824BA660)
 "profile.loaded" = 40                    # u8, set once the values are loaded; the generic accessors skip a profile without it

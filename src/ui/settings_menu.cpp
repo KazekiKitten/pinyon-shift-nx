@@ -171,6 +171,7 @@ class SettingsPages : public std::enable_shared_from_this<SettingsPages> {
   std::unique_ptr<MenuScreen> Audio();
   std::unique_ptr<MenuScreen> Controls();
   std::unique_ptr<MenuScreen> Wheel();
+  std::unique_ptr<MenuScreen> Gameplay();
   std::unique_ptr<MenuScreen> Profile();
   std::unique_ptr<MenuScreen> Gamertag();
   std::unique_ptr<MenuScreen> Backups();
@@ -786,6 +787,20 @@ std::unique_ptr<MenuScreen> SettingsPages::Graphics() {
 #endif
   };
   return std::make_unique<MenuScreen>("GRAPHICS", std::move(rows), std::move(note));
+}
+
+// Switches from FH1's developer launch options (#477), which the retail game
+// keeps but never reads from a command line; the host sets the flags. All
+// off by default and applied at once.
+std::unique_ptr<MenuScreen> SettingsPages::Gameplay() {
+  std::vector<MenuRow> rows;
+  // Dialogs wait for their voice-over to end before A closes them.
+  rows.push_back(Toggle("SKIP VOICE-OVERS WITH A", "pinyon_shift_skip_voiceover"));
+  // The game puts the car back on the road when it strays too far.
+  rows.push_back(Toggle("AUTOMATIC CAR RESET", "pinyon_shift_no_auto_reset", true));
+  // After about 55 s idle on the title screen the game replays its intro.
+  rows.push_back(Toggle("REPLAY INTRO WHEN IDLE", "pinyon_shift_no_attract_video", true));
+  return std::make_unique<MenuScreen>("GAMEPLAY", std::move(rows));
 }
 
 std::unique_ptr<MenuScreen> SettingsPages::Audio() {
@@ -1808,6 +1823,8 @@ std::unique_ptr<MenuScreen> SettingsPages::Root() {
     rows.push_back(std::move(row));
   }
   if (PinyonShiftUseBuiltinRallyAdapter()) rows.push_back(Page("HORIZON RALLY", &SettingsPages::Rally));
+  // Last, so the rows above keep their places for scripted routes.
+  rows.push_back(Page("GAMEPLAY", &SettingsPages::Gameplay));
   return std::make_unique<MenuScreen>("SETTINGS", std::move(rows));
 }
 

@@ -3,6 +3,7 @@
 // verified FH1 v4 title-update counterparts.
     {0x82000D48u, 0x82000D48u},  // data: data
     {0x82000D68u, 0x82000D68u},  // data: data
+    {0x8200E724u, 0x82014B1Cu},  // data: data-ref
     {0x82026B38u, 0x820307A4u},  // data: data
     {0x8203363Cu, 0x82042C6Cu},  // data: data
     {0x820336A4u, 0x82042CD4u},  // data: data
@@ -76,6 +77,7 @@
     {0x832BE9ECu, 0x833AA4DCu},  // data: data
     {0x832DF00Cu, 0x833CAACCu},  // data: data
     {0x832DF024u, 0x833CAAE4u},  // data: data
+    {0x832E29A0u, 0x833D02E0u},  // data: data
     {0x832E4A80u, 0x833D23E0u},  // data: data
     {0x832E4A9Cu, 0x833D23F4u},  // data: data
     {0x832E5510u, 0x833D2FFCu},  // data: data

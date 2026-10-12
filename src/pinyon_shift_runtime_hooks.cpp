@@ -44,6 +44,7 @@
 #include "pinyon_shift_runtime_hooks.h"
 #include "cheats.h"
 #include "cheats_map.h"
+#include "dev_options.h"
 #include "dlc_token_unlocks.h"
 #include "hud_toggle.h"
 #include "dlc_treasure_map.h"
@@ -846,6 +847,9 @@ void PinyonShiftObserveGuestFileOpen(std::string_view guest_path) {
     }
   }
   pinyon_shift::fh1_render_test::ObserveFileOpened(path);
+  // Before the title's first frame: the options object is read during
+  // boot (#477).
+  pinyon_shift::dev_options::Update();
   if (REXCVAR_GET(pinyon_shift_record_file_opens)) {
     static std::mutex opened_mutex;
     static std::set<std::string> opened;
@@ -6245,6 +6249,7 @@ void PinyonShiftTraceFrameTelemetry(PPCRegister& r28, PPCRegister& r31) {
   UpdateMapView();
   pinyon_shift::dlc::UpdateTokenUnlocks();
   pinyon_shift::hud::Update();
+  pinyon_shift::dev_options::Update();
   // Your music waits for a world (#445).
   {
     static uint32_t music_frames = 0;
