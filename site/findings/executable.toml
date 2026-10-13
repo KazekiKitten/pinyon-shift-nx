@@ -242,6 +242,24 @@ source = """docs/PERFORMANCE_BACKLOG.md PB-3"""
 
 [[finding]]
 group = """Analysis notes"""
+base = """sub_830ED900, sub_830ED910"""
+name = """guest fiber switch"""
+what = """The only two callers of `KeSetCurrentStackPointers` (import thunk `0x831EE58C`). Each reloads a saved register context from the structure in r3 and tail-calls the import, which is where the runtime abandons the host call chain and later resumes execution at the saved return address: the reason 56,860 generated functions carry a resume switch with 342,683 cases. The SDK has host-fiber versions of the XAPI fiber functions that the title does not use yet; mapping them would make every generated function single-entry."""
+how = """Count of references to the import across the generated tree; reading the generated code of both functions."""
+confidence = """probable"""
+note = """Confirmed as the only callers of the stack switch; probable as the XAPI fiber switch itself."""
+source = """docs/NEXT_LEVEL_RESEARCH.md NL-1.2"""
+
+[[finding]]
+group = """Analysis notes"""
+name = """XER and CTR never cross a call"""
+what = """No overflow-enabled (`o`-form) integer instruction exists in the image, and its one `mtxer` sits in a context-restore sequence, so the summary-overflow bit is never set by computation and the copy of it into every compare's condition field (192,632 compares) is always zero. The count register is written at 53,337 sites and read by 4,666 `bdnz` loops. Both registers are volatile in the PowerPC ABI, so the generated code keeps them in zero-initialized locals that never touch the register file (`ctr_as_local`, `xer_as_local`)."""
+how = """Instruction counts over the generated tree."""
+confidence = """confirmed"""
+source = """docs/NEXT_LEVEL_RESEARCH.md NL-1.3; config/rexglue/analysis/main-xex.toml"""
+
+[[finding]]
+group = """Analysis notes"""
 name = """instruction census"""
 what = """The image has 70 `sync`/`eieio`, 230 `lwsync` and 20 `isync` sites, and Xenon fused multiply-adds at 11,725 sites. The title interleaves vector and scalar floating point code closely: the generated code needs 42,445 conditional switches of the denormal (flush) mode one way and 2,153 the other."""
 how = """Instruction counts over the analysed image and the generated code."""

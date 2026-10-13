@@ -14,6 +14,14 @@ longjmp_address = 0x82A81950
 # hooks, the setjmp copy, longjmp and exceptions keep a full sync.
 cr_as_local = true
 
+# CTR and XER are volatile across calls and dead at every return address, so a
+# function keeps them in zero-initialized locals that never touch ctx
+# (NEXT_LEVEL_RESEARCH.md NL-1.3). FH1 has no overflow-enabled integer
+# instruction and its one mtxer restores a saved context, so XER.SO is never
+# set: with the local, the SO copy in every compare folds to zero.
+ctr_as_local = true
+xer_as_local = true
+
 # Scripted, default-off companion experiment: match the complete original
 # decoded member at the borrowed-buffer stream constructor. This avoids ZIP
 # repacking and does not enable the older scene_insert pointer repairs.
