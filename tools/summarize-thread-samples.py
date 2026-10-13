@@ -18,6 +18,7 @@ import argparse
 import collections
 import csv
 import json
+import re
 import sys
 from pathlib import Path
 
