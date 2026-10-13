@@ -2037,7 +2037,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     performance = json.loads(perf.stdout)
     # The null GPU backend presents nothing and paces differently; its runs are
     # judged by the simulation-time ratio, as on Android (AP-0.5).
-    if performance_limits and not args.null_gpu:
+    if performance_limits and not args.null_gpu and not args.no_performance_gate:
         median_max, present_min, simulation_min, simulation_max = performance_limits
         median = performance["frames"]["frame_time_us"]["median"]
         cadence = performance["presentation"]["cadence_hz"]
@@ -2270,6 +2270,10 @@ def main() -> int:
     # Low-end hardware sensitivity runs (LOW_SPEC_BACKLOG LS-0.5). They keep
     # this machine's caches, memory and driver: label results as sensitivity
     # data, not another machine's numbers.
+    parser.add_argument(
+        "--no-performance-gate", action="store_true",
+        help="do not fail the run on the frame-time or simulation-time limits "
+             "(instrumented builds, such as the probe build, run slower by design)")
     parser.add_argument(
         "--host-cpus", metavar="LIST",
         help="run the game on these logical processors only (host_cpu_simulation), "

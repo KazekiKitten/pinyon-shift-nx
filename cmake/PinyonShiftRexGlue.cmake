@@ -197,6 +197,11 @@ option(PINYON_SHIFT_TITLE_UPDATE_V4
 # generated into .local/generated-abipoison from its own manifest.
 option(PINYON_SHIFT_RECOMP_ABI_POISON
     "Checking build: PowerPC ABI preservation checks and register poisoning around guest calls" OFF)
+# Probe build (NEXT_LEVEL_RESEARCH.md NL-2.3): the generated code counts every
+# function entry and records every indirect call's target, and the runtime
+# writes probe.json at exit. Its own tree, .local/generated-probe.
+option(PINYON_SHIFT_RECOMP_PROBE
+    "Probe build: per-function call counts and indirect call targets (probe.json)" OFF)
 if(PINYON_SHIFT_TITLE_UPDATE_V4 AND PINYON_SHIFT_RECOMP_ABI_POISON)
     message(FATAL_ERROR "PINYON_SHIFT_RECOMP_ABI_POISON has no v4 manifest; build it from the base game")
 endif()
@@ -213,6 +218,12 @@ elseif(PINYON_SHIFT_RECOMP_ABI_POISON)
     add_compile_definitions(PINYON_SHIFT_RECOMP_ABI_POISON=1)
     list(APPEND PINYON_SHIFT_CODEGEN_EXTRA_ARGS --abi-poison)
     set(_pinyon_codegen_log_suffix "-abipoison")
+elseif(PINYON_SHIFT_RECOMP_PROBE)
+    set(_pinyon_default_manifest "config/rexglue/pinyon_shift_probe_manifest.toml")
+    set(_pinyon_default_generated ".local/generated-probe")
+    add_compile_definitions(PINYON_SHIFT_RECOMP_PROBE=1)
+    list(APPEND PINYON_SHIFT_CODEGEN_EXTRA_ARGS --probes)
+    set(_pinyon_codegen_log_suffix "-probe")
 else()
     set(_pinyon_codegen_log_suffix "")
     set(_pinyon_default_manifest "config/rexglue/pinyon_shift_manifest.toml")
