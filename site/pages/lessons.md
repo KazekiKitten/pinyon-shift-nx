@@ -86,9 +86,10 @@ Negative results, so they aren't retried without a new reason:
 | --- | --- |
 | CR fields in C++ locals, synced at every call | binaries 13–26 % larger for no gain; syncing by the calling convention instead paid (see above) |
 | Canary's scalar-ALU swizzle fix (`b` from Z under a three-operand vector op) | no FH1 shader is affected: of 478,372 ALU instructions in the 12,846 disc shaders, none co-issues a scalar operation with `mad`, `cnd*` or `dp2add` (the XNA compiler never shares source 3) |
+| Trusting a byte-match for a small function's title-update address | the five XAPI fiber thunks "mapped" to their base addresses in v4 (they sit 0xC1E80 higher); the v4 build then hooked five unrelated functions and failed to load. Check a small function's mapping by its cross-references |
 | Guest stack accesses without `volatile` | 1.5 % fewer host instructions statically, but the race route ran 7-9 % slower on the desktop (108-110 against 117-119 fps median, worse p99); kept as an off build option |
 | A free-running `V_COUNTER` (Edge) | FH1 never reads it: a race reads only `CP_PROG_COUNTER` and the vblank status through the register path (one-time read log, `gpu_log_register_reads`) |
-| ThinLTO on the generated code | neutral on guest-thread instructions |
+| ThinLTO on the generated code | neutral on guest-thread instructions while the weak thunks blocked inlining; with direct calls on the strong bodies it inlines (code +8 %, instructions +12 %) but the desktop route sits at its frame-rate cap either way, so the Odin decides |
 | More CRT functions as native code | the remaining candidates are 0.02 % each in a race |
 | A native guest heap allocator | 0.05 % of a race, inclusive |
 | Write-watches at 64 KiB | 7 write-watch faults a frame; the fault path is under 0.5 % |
