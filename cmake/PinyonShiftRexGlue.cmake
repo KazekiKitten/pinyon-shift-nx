@@ -86,10 +86,29 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
                 message(FATAL_ERROR
                     "The fma baseline must compile with -msse4.1 -mfma -ffp-contract=off")
             endif()
+            if(${_flags} MATCHES "(^| )-march=")
+                message(FATAL_ERROR "-march needs PINYON_SHIFT_CPU_BASELINE=v3")
+            endif()
         endforeach()
         add_compile_definitions(PINYON_SHIFT_CPU_BASELINE_FMA=1)
+    elseif(PINYON_SHIFT_CPU_BASELINE STREQUAL "v3")
+        # NEXT_LEVEL_RESEARCH.md NL-1.8: x86-64-v3 (Haswell and Zen and later)
+        # adds AVX2, BMI1/2, LZCNT, F16C and MOVBE to the FMA3 variant. MOVBE
+        # fuses the byte swap of a guest load or store into the access; the
+        # results stay bit-identical, since contraction is still off and
+        # std::fma lowers to the same FMA3 instruction.
+        foreach(_flags IN ITEMS CMAKE_C_FLAGS CMAKE_CXX_FLAGS)
+            if(NOT ${_flags} MATCHES "(^| )-mfma($| )" OR
+               NOT ${_flags} MATCHES "(^| )-ffp-contract=off($| )" OR
+               NOT ${_flags} MATCHES "(^| )-march=x86-64-v3($| )")
+                message(FATAL_ERROR
+                    "The v3 baseline must compile with -msse4.1 -mfma -ffp-contract=off "
+                    "-march=x86-64-v3")
+            endif()
+        endforeach()
+        add_compile_definitions(PINYON_SHIFT_CPU_BASELINE_FMA=1 PINYON_SHIFT_CPU_BASELINE_V3=1)
     elseif(CMAKE_C_FLAGS MATCHES "(^| )-mfma($| )" OR CMAKE_CXX_FLAGS MATCHES "(^| )-mfma($| )")
-        message(FATAL_ERROR "-mfma needs PINYON_SHIFT_CPU_BASELINE=fma")
+        message(FATAL_ERROR "-mfma needs PINYON_SHIFT_CPU_BASELINE=fma or v3")
     endif()
     if(WIN32 AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         # LLD otherwise writes the wall clock into each PE/COFF image. Combined
@@ -210,18 +229,38 @@ foreach(_module IN ITEMS speech xmedia)
 endforeach()
 unset(GENERATED_SOURCES)
 
-# Match the 0.10 generated integration contract. Generated guest code uses
-# Windows SEH scopes and therefore must compile with asynchronous exceptions;
-# the option must also be present while each target's PCH is built.
+# Compile options of the generated units (NEXT_LEVEL_RESEARCH.md NL-0.5).
+# The SDK compiles its own sources with -ffp-model=strict and
+# -fno-strict-aliasing; the generated units never got them. Measured on three
+# hot partitions (2026-10-12): -fno-strict-aliasing changes nothing in the
+# output, so it is on; -ffp-model=strict adds 1-2 % host instructions for a
+# risk never observed (FP operations moved across MXCSR writes), so it stays
+# an option. Asynchronous exceptions (/EHa, -fasync-exceptions) were part of
+# the 0.10 integration contract for generated SEH scopes, but
+# generate_exception_handlers is off, so no generated unit has one and the
+# flag only moved code size by under 1 % either way; it is on only with
+# PINYON_SHIFT_RECOMP_SEH.
 set(REXGLUE_RECOMP_DEBUG_INFO "line-tables-only" CACHE STRING
     "Debug info level for generated code: line-tables-only, full, or none")
+option(PINYON_SHIFT_RECOMP_FP_STRICT
+    "Compile the generated units with -ffp-model=strict (no FP motion across MXCSR writes)" OFF)
+option(PINYON_SHIFT_RECOMP_NO_STRICT_ALIASING
+    "Compile the generated units with -fno-strict-aliasing" ON)
+option(PINYON_SHIFT_RECOMP_SEH
+    "Compile the generated units for asynchronous (SEH) exceptions" OFF)
 set(REXGLUE_RECOMP_OPTIONS "")
-if(WIN32)
+if(WIN32 AND PINYON_SHIFT_RECOMP_SEH)
     if(MSVC)
         list(APPEND REXGLUE_RECOMP_OPTIONS /EHa)
     elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
         list(APPEND REXGLUE_RECOMP_OPTIONS -fasync-exceptions)
     endif()
+endif()
+if(PINYON_SHIFT_RECOMP_FP_STRICT AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    list(APPEND REXGLUE_RECOMP_OPTIONS -ffp-model=strict)
+endif()
+if(PINYON_SHIFT_RECOMP_NO_STRICT_ALIASING AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+    list(APPEND REXGLUE_RECOMP_OPTIONS -fno-strict-aliasing)
 endif()
 if(REXGLUE_RECOMP_DEBUG_INFO STREQUAL "none")
     list(APPEND REXGLUE_RECOMP_OPTIONS
