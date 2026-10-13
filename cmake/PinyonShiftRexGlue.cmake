@@ -276,7 +276,12 @@ option(PINYON_SHIFT_RECOMP_NO_STRICT_ALIASING
     "Compile the generated units with -fno-strict-aliasing" ON)
 option(PINYON_SHIFT_RECOMP_SEH
     "Compile the generated units for asynchronous (SEH) exceptions" OFF)
+option(PINYON_SHIFT_RECOMP_PLAIN_STACK
+    "Compile guest stack accesses as plain (non-volatile) loads and stores (NEXT_LEVEL_RESEARCH.md NL-1.6)" OFF)
 set(REXGLUE_RECOMP_OPTIONS "")
+if(PINYON_SHIFT_RECOMP_PLAIN_STACK)
+    list(APPEND REXGLUE_RECOMP_OPTIONS -DREX_PLAIN_STACK)
+endif()
 if(WIN32 AND PINYON_SHIFT_RECOMP_SEH)
     if(MSVC)
         list(APPEND REXGLUE_RECOMP_OPTIONS /EHa)
