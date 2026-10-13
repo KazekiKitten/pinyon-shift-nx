@@ -1661,9 +1661,9 @@ std::unique_ptr<MenuScreen> SettingsPages::Wheel() {
 // title's brake and throttle wherever pad_remap puts them.
 std::unique_ptr<MenuScreen> SettingsPages::DualSense() {
   std::vector<MenuRow> rows;
-  rows.push_back(Setting("ADAPTIVE TRIGGERS", {{"OFF", {{"pad_ds_triggers", "off"}}},
-                                               {"BRAKE", {{"pad_ds_triggers", "brake"}}},
-                                               {"FULL", {{"pad_ds_triggers", "full"}}}}));
+  rows.push_back(Setting("ADAPTIVE TRIGGERS", {{"OFF", {{"pad_ds_triggers", "\"off\""}}},
+                                               {"BRAKE", {{"pad_ds_triggers", "\"brake\""}}},
+                                               {"FULL", {{"pad_ds_triggers", "\"full\""}}}}));
   std::vector<Choice> strengths;
   for (int value : {25, 50, 75, 100}) {
     strengths.push_back(
@@ -1671,9 +1671,9 @@ std::unique_ptr<MenuScreen> SettingsPages::DualSense() {
   }
   rows.push_back(Setting("TRIGGER STRENGTH", std::move(strengths)));
   rows.push_back(Toggle("GEAR CLICK", "pad_ds_gear_click"));
-  rows.push_back(Setting("LIGHTBAR", {{"PLAYER", {{"pad_ds_lightbar", "player"}}},
-                                      {"RPM", {{"pad_ds_lightbar", "rpm"}}},
-                                      {"OFF", {{"pad_ds_lightbar", "off"}}}}));
+  rows.push_back(Setting("LIGHTBAR", {{"PLAYER", {{"pad_ds_lightbar", "\"player\""}}},
+                                      {"RPM", {{"pad_ds_lightbar", "\"rpm\""}}},
+                                      {"OFF", {{"pad_ds_lightbar", "\"off\""}}}}));
   rows.push_back(Toggle("PLAYER LIGHTS", "pad_ds_player_leds"));
   rows.push_back(Toggle("TILT STEERING", "pad_gyro_steering"));
   std::vector<Choice> sensitivities;

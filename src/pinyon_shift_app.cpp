@@ -193,7 +193,28 @@ bool EnsureSupportedConfig(const std::filesystem::path& path, bool& created,
   if (!config_contents) {
     return false;
   }
-  const std::string& config_text = *config_contents;
+  std::string config_text = *config_contents;
+  // The DualSense page on dev for a few hours of 2026-10-13 wrote its two
+  // string settings unquoted, which makes the whole file invalid TOML and
+  // drops every setting at startup; quote them.
+  {
+    const std::regex bare_dualsense(
+        R"((^|\n)(\s*pad_ds_(?:triggers|lightbar)\s*=\s*)([A-Za-z]+)(?=\s*(?:#[^\n]*)?(?:\r?\n|$)))");
+    if (std::regex_search(config_text, bare_dualsense)) {
+      std::filesystem::path backup = path;
+      backup += ".dualsense.bak";
+      std::error_code backup_error;
+      std::filesystem::copy_file(path, backup, std::filesystem::copy_options::overwrite_existing,
+                                 backup_error);
+      const std::string repaired =
+          std::regex_replace(config_text, bare_dualsense, "$1$2\"$3\"");
+      if (backup_error || !pinyon_shift::config::WriteAtomically(path, repaired)) {
+        return false;
+      }
+      config_text = repaired;
+      migrated = true;
+    }
+  }
   const std::regex schema_pattern(
       R"((?:^|\n)\s*pinyon_shift_config_schema\s*=\s*([0-9]+)\s*(?:#.*)?(?:\r?\n|$))");
   std::smatch match;
