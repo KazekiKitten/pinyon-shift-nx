@@ -28,7 +28,7 @@ pinyon = "60 or 120 fps at the correct game speed"
 feature = "Graphics"
 link = "playing.md#graphics-presets"
 xbox = "Fixed"
-pinyon = "Presets, MSAA up to 4x, FXAA on the world only, anisotropic filtering, a colour LUT, optional bloom, motion blur and depth of field; HUD scale and safe zone"
+pinyon = "Presets, MSAA up to 4x, FXAA on the world only, anisotropic filtering, a texture size cap for small graphics memory, a colour LUT, optional bloom, motion blur and depth of field; HUD scale and safe zone"
 
 [[original]]
 feature = "HDR"
@@ -157,7 +157,7 @@ cells = [
 [[platform]]
 feature = "Graphics presets"
 link = "playing.md#graphics-presets"
-cells = ["yes", "yes", "yes", "partly: two presets of their own"]
+cells = ["yes", "yes", "yes", "partly: three presets of their own"]
 
 [[platform]]
 feature = "HDR"

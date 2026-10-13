@@ -74,6 +74,8 @@ The texture cache reuses the Xenia-derived core over the executor's mirror. A te
 
 **Invalidation.** CPU writes are found with page write-watches; GPU writes are marked by resolves. Ranges are told apart by a write generation per allocation, not by address. One setting mattered: clearing every touched page's state each frame re-uploaded memory that hadn't changed, and keeping it cut vertex uploads over a route from 41.6 GB to 0.42 GB.
 
+**Size cap.** TEXTURE SIZE (`vulkan_texture_max_size`) gives a mipmapped texture larger than the cap a host image that starts at the first level that fits, so the larger levels are never untiled, uploaded or stored. Shaders address textures in normalized coordinates and the translator divides unnormalized fetches by the guest size, so a smaller image samples correctly, as texture replacements of another size already do. Resolve targets have no mips and keep their size. On a free-roam drive (RTX 4080, 1x) a cap of 256 took the texture cache from 110 to 85 MB and the device memory the renderer allocates from 882 to 756 MB, with no change in frame time.
+
 **Gamma.** The console converts gamma textures with a piecewise-linear curve. The default reproduces it in the shader. TEXTURE GAMMA FAST samples through sRGB views instead, which is cheaper and slightly darker in the midtones.
 
 ## Shaders

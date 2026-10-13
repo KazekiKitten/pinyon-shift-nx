@@ -574,7 +574,7 @@ std::unique_ptr<MenuScreen> SettingsPages::Graphics() {
   // frame and forced 4x anisotropy 0.4 ms, measured by alternating each in
   // one run.
   // ULTRA LOW 30 (#515), for entry-level phones: QUALITY 30's rate without
-  // MSAA or shadows.
+  // MSAA or shadows, and textures at most 256 texels across (TEXTURE SIZE).
   rows.push_back(Setting("GRAPHICS PRESET",
                          {{"ULTRA LOW 30",
                            {{"gpu_backend", "\"vulkan\""},
@@ -588,6 +588,7 @@ std::unique_ptr<MenuScreen> SettingsPages::Graphics() {
                             {"fh1_untile_predicated_tiling", "true"},
                             {"pinyon_shift_fh1_env_map_rate", "0.25"},
                             {"pinyon_shift_fh1_shadows", "false"},
+                            {"vulkan_texture_max_size", "256"},
                             {"host_present_fps_limit", "0"},
                             {"pinyon_shift_fh1_render_fps_limit", "30"}}},
                           {"QUALITY 30",
@@ -602,6 +603,7 @@ std::unique_ptr<MenuScreen> SettingsPages::Graphics() {
                             {"fh1_untile_predicated_tiling", "true"},
                             {"pinyon_shift_fh1_env_map_rate", "0.25"},
                             {"pinyon_shift_fh1_shadows", "true"},
+                            {"vulkan_texture_max_size", "0"},
                             {"host_present_fps_limit", "0"},
                             {"pinyon_shift_fh1_render_fps_limit", "30"}}},
                           {"SMOOTH 60",
@@ -616,6 +618,7 @@ std::unique_ptr<MenuScreen> SettingsPages::Graphics() {
                             {"fh1_untile_predicated_tiling", "true"},
                             {"pinyon_shift_fh1_env_map_rate", "0.25"},
                             {"pinyon_shift_fh1_shadows", "false"},
+                            {"vulkan_texture_max_size", "0"},
                             {"host_present_fps_limit", "0"},
                             {"pinyon_shift_fh1_render_fps_limit", "60"}}}}));
   // The game's 4x MSAA is most of a handheld GPU's frame: off, edges are
@@ -686,10 +689,11 @@ std::unique_ptr<MenuScreen> SettingsPages::Graphics() {
   // renders are the frames shown.
   // ULTRA LOW 30 (#515) is for machines below that: also no shadows (about
   // 6 ms a frame on the Odin 2 Portal), the reflection cubemap at a quarter
-  // rate, the scene's three tiles in one pass (about 3 ms on the Odin), and
-  // 30 fps, the console's own rate and half the CPU work of 60. The other
-  // presets set those three back to the desktop defaults, so leaving ULTRA
-  // LOW does not keep them.
+  // rate, the scene's three tiles in one pass (about 3 ms on the Odin),
+  // textures at most 256 texels across (TEXTURE SIZE, for small video
+  // memory), and 30 fps, the console's own rate and half the CPU work of 60.
+  // The other presets set those four back to the desktop defaults, so
+  // leaving ULTRA LOW does not keep them.
   const auto preset = [](const char* scale, const char* effect, const char* msaa_off,
                          const char* fps,
                          std::vector<std::pair<std::string, std::string>> extra = {}) {
@@ -705,7 +709,8 @@ std::unique_ptr<MenuScreen> SettingsPages::Graphics() {
         {"pinyon_shift_fh1_render_fps_limit", fps},
         {"pinyon_shift_fh1_shadows", "true"},
         {"pinyon_shift_fh1_env_map_rate", "1"},
-        {"fh1_untile_predicated_tiling", "false"}};
+        {"fh1_untile_predicated_tiling", "false"},
+        {"vulkan_texture_max_size", "0"}};
     for (auto& [name, value] : extra) {
       const auto it = std::find_if(values.begin(), values.end(),
                                    [&](const auto& setting) { return setting.first == name; });
@@ -722,7 +727,8 @@ std::unique_ptr<MenuScreen> SettingsPages::Graphics() {
   auto ultra_low = cheapest;
   ultra_low.insert(ultra_low.end(), {{"pinyon_shift_fh1_shadows", "false"},
                                      {"pinyon_shift_fh1_env_map_rate", "0.25"},
-                                     {"fh1_untile_predicated_tiling", "true"}});
+                                     {"fh1_untile_predicated_tiling", "true"},
+                                     {"vulkan_texture_max_size", "256"}});
   rows.push_back(Setting(
       "GRAPHICS PRESET",
       {{"ULTRA LOW 30", preset("1", "\"bilinear\"", "true", "30", ultra_low)},
@@ -796,6 +802,14 @@ std::unique_ptr<MenuScreen> SettingsPages::Graphics() {
                           {"DEFAULT", {{"texture_mip_lod_bias", "0.0"}}},
                           {"SHARP", {{"texture_mip_lod_bias", "-0.5"}}},
                           {"SHARPEST", {{"texture_mip_lod_bias", "-1.0"}}}}));
+  // Mipmapped textures larger than this start at the first level that
+  // fits, so the larger levels take no video memory and are not uploaded:
+  // softer up close. 256 took the game's dedicated GPU memory from 877 to
+  // 751 MB on a free-roam drive (RTX 4080). Applies at the next start.
+  rows.push_back(Setting("TEXTURE SIZE", {{"FULL", {{"vulkan_texture_max_size", "0"}}},
+                                         {"1024", {{"vulkan_texture_max_size", "1024"}}},
+                                         {"512", {{"vulkan_texture_max_size", "512"}}},
+                                         {"256", {{"vulkan_texture_max_size", "256"}}}}));
   // FXAA over the finished frame; the game's MSAA is its own row.
   rows.push_back(Setting("POST-PROCESS AA",
                          {{"OFF", {{"swap_post_effect", "\"none\""}}},

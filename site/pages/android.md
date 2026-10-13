@@ -40,14 +40,15 @@ python tools/pinyon.py android push-data
 
 ## Presets and drivers
 
-**SETTINGS > GRAPHICS > GRAPHICS PRESET** has two choices:
+**SETTINGS > GRAPHICS > GRAPHICS PRESET** has three choices:
 
 | Preset | MSAA | Sun shadows | Rate |
 | --- | --- | --- | ---: |
+| ULTRA LOW 30 | Off | Off | 30 |
 | SMOOTH 60 | 2x | Off | 60 |
 | QUALITY 30 | 4x | On | 30 |
 
-Both draw the game's three predicated tiles in one pass and redraw the reflection map at a quarter of the game's rate.
+ULTRA LOW 30 is for entry-level phones and also keeps textures at most 256 texels across (**TEXTURE SIZE**), which saves memory a phone shares with the CPU. All three draw the game's three predicated tiles in one pass and redraw the reflection map at a quarter of the game's rate.
 
 On Adreno 7xx and 8xx the bundled Mesa Turnip driver (Gen8 V37) is chosen automatically. It is much faster than the stock driver on the Adreno 740 and takes about a fifth less GPU time on the Adreno 830. Other GPUs use the system driver. **SETTINGS > GRAPHICS > GPU DRIVER** picks the driver for the next start. **IMPORT DRIVER (.ZIP)** adds an adrenotools package, including Qualcomm driver packages; the log's `Vulkan device` line shows which driver version runs.
 
