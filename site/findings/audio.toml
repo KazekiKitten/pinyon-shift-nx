@@ -217,3 +217,15 @@ how = """Reading the string tables."""
 confidence = """confirmed"""
 note = """Confirmed in the tables; their use on the option screen is probable (not seen on screen)."""
 source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Radio"""
+
+[[finding]]
+group = """Audio engine"""
+base = """AudioMixerSnapshots.xml Reverb group, GlobalDSPConfig.xml"""
+v4 = """same"""
+name = """no reverb switch in the audio XML"""
+what = """The two `Reverb`-group snapshots (`InTunnel`, `NotInTunnel`) only set category levels inside and outside tunnels, and `GlobalDSPConfig.xml` holds bypass, gain and filter settings for the cockpit, rewind and countdown effects. The world reverb is defined in the FMOD Designer projects (`.fev`), so no XML change turns it off; only the backfire's reverb send has an override (`backfireReverbWetSendOverride`)."""
+how = """Reading the game's audio XML element and attribute names."""
+confidence = """probable"""
+negative = true
+source = """docs/LOW_SPEC_BACKLOG.md LS-1.8"""
+
