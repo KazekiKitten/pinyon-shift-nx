@@ -381,6 +381,108 @@ how = """Reading the tunables."""
 confidence = """probable"""
 source = """docs/NATIVE_PORT_BACKLOG.md NP-8.5"""
 
+
+# ---------------------------------------------------------------- AI opponents
+
+[[finding]]
+group = """AI opponents"""
+base = """sub_826098B8, 0x82609910"""
+v4 = """sub_826B0170, 0x826B01C8"""
+name = """event AI assignment"""
+what = """Reads `Events.AISkill%s`, `AITemperament%s` and `AIRubberband%s` (`0x8202C624`, `0x8202C614`, `0x8202C6F0`) for the opponent difficulty (suffix from `sub_8249BCB8`: 0 `Easy`, 1 `Med`, 2 `Hard`, 3 `Pro`; the difficulty is byte `+662` of the race-setup object), adds each driver's `AIPlayers` modifiers (all `RubberBandModifier` are 0) and stores skill, temperament, difficulty and rubber-band id at driver-settings `+608`, `+612`, `+603` and `+640`. Skill is clamped to 1-80, temperament to 1-10; the modifier is added to a rubber-band id only when it is 1-10, so 0 and ids above 10 pass through. HARD raises the difficulty argument of the suffix call at `0x82609910` (v4 `0x826B01C8`) by one, up to 3."""
+how = """Generated code; `ai.opponents` events."""
+confidence = """confirmed"""
+source = """docs/FEATURE_BACKLOG.md FB-12.6; src/pinyon_shift_runtime_hooks.cpp PinyonShiftAiSpawnConfig"""
+
+[[finding]]
+group = """AI opponents"""
+base = """sub_829ADAC0, sub_824B3AE8, 0x824B3E6C, sub_829AD0D8, sub_829ACD50, sub_829ACA50"""
+v4 = """sub_82A61F08, sub_82520EA0, 0x82521224"""
+name = """AI config"""
+what = """At car spawn (`sub_824B3AE8`, v4 `0x82520EA0`; its only caller, the call at `0x824B3E6C`, v4 `0x82521224`, with the config at `r1+464`, skill `r5`, temperament `r6`, difficulty `r8`) a 496-byte config is filled: the `AISkills` row at `+280` (braking min/max `+320`/`+324`, cornering min/max `+328`/`+332`, `DistBehindForMaxPerformance` `+336`, torque boost `+344`/`+348`, `NominalTorqueScale` `+352`) and the `AIRubberbands` row at `+368` (id, -1 without a row; mode-choice count `+376`; the nine distance and factor columns at `+416`-`+448` in table order). An event rubber-band id below 1 falls back to the skill's `Rubberbands_id` (clamped to 1-10), so the 81 events with 0 use rows 1-10, the strongest on Easy. NO RUBBER-BANDING and HARD rewrite the filled config after the call: rubber-band, torque-cut and catch-up distances out of reach (100 km), their factors neutral, `DistBehindForMaxPerformance` and the torque boost off, cheat level 0. HARD at difficulty 3 passes skill 1 and temperament 1."""
+how = """Generated code; column-name xrefs; `ai.trace`."""
+confidence = """confirmed"""
+source = """docs/FEATURE_BACKLOG.md FB-12.6; src/pinyon_shift_runtime_hooks.cpp PinyonShiftAiSpawnConfig"""
+
+[[finding]]
+group = """AI opponents"""
+id = """ai-missing-rubber-band"""
+base = """AIRubberbands"""
+v4 = """same"""
+name = """missing id"""
+what = """An id with no row (event 92's `AIRubberbandPro` is 14) gets built-in values: rubber band from 100 m ahead, no torque cut, no catch-up, and three default mistake modes. Not "off"."""
+how = """`sub_829ACA50` and `sub_829AC770` defaults."""
+confidence = """confirmed"""
+source = """docs/FEATURE_BACKLOG.md FB-12.6; src/pinyon_shift_runtime_hooks.cpp PinyonShiftAiSpawnConfig"""
+
+[[finding]]
+group = """AI opponents"""
+base = """sub_82B93A18, 0x833387BC"""
+name = """rubber-band state"""
+what = """Per AI update: stores the gap at controller `+164`. A mode starts only while the AI is level with or ahead of the player in position, at least `StartRubberbandingDistance` ahead, with mode choices for its row. Past `StartTorqueCutDistance` the mode is torque cut (8): torque × (1 − ramp × `TorqueCutFactor`), the ramp linear from the start to `MaxTorqueCutDistance`; otherwise a random mistake mode (0 none, 1/2 under-braking/cornering, 3/4 over, 5-7 lags). `TorqueCutFactor` 0 is neutral. `MaxRubberbandingEffectDistance` has no reader. Skipped when byte `0x833387BC` is set (no writer found)."""
+how = """Generated code; mode names from the string table order and the mode switch (`sub_82B89F10`)."""
+confidence = """confirmed"""
+note = """That `MaxRubberbandingEffectDistance` is unused is probable."""
+source = """docs/FEATURE_BACKLOG.md FB-12.6; src/pinyon_shift_runtime_hooks.cpp PinyonShiftAiSpawnConfig"""
+
+[[finding]]
+group = """AI opponents"""
+base = """sub_82B84610"""
+name = """catch-up"""
+what = """While no mode is on and the player leads: on above `StartCatchUpDistance` + `CatchUpGapPerPosition` × places behind, off below `StopCatchUpDistance` + the same. While on, `CatchUpFactor` (skill object `+140`) pulls braking toward 1.0 and cornering toward 1.25 (`sub_82B82F18`, `sub_82B82FB0`); it adds no torque. 0 is neutral."""
+how = """Generated code."""
+confidence = """confirmed"""
+source = """docs/FEATURE_BACKLOG.md FB-12.6; src/pinyon_shift_runtime_hooks.cpp PinyonShiftAiSpawnConfig"""
+
+[[finding]]
+group = """AI opponents"""
+base = """sub_82B90EE8"""
+name = """skill re-roll"""
+what = """At spawn and at threshold crossings braking and cornering are drawn between the skill's minimum and maximum; an AI more than `DistBehindForMaxPerformance` (10-25 m in the stock rows) behind the player gets the maximum, a step rather than a ramp. The far-behind torque boost needs `DistBehindForTorqueBoost` > 0, which no stock skill 1-80 has."""
+how = """Generated code."""
+confidence = """confirmed"""
+source = """docs/FEATURE_BACKLOG.md FB-12.6; src/pinyon_shift_runtime_hooks.cpp PinyonShiftAiSpawnConfig"""
+
+[[finding]]
+group = """AI opponents"""
+base = """TrackSpecificAI, sub_829AD870"""
+name = """per-track override"""
+what = """Applied last over four rubber-band distances and the torque-boost distance, but its `Tracks_id` 8, 9 and 31 are not in `Tracks`, so it does nothing in FH1."""
+how = """Generated code; `gamedb` query."""
+confidence = """probable"""
+source = """docs/FEATURE_BACKLOG.md FB-12.6; src/pinyon_shift_runtime_hooks.cpp PinyonShiftAiSpawnConfig"""
+
+[[finding]]
+group = """AI opponents"""
+base = """sub_82B6AC10, 0x83338044-0x83338700"""
+name = """code-only boosts"""
+what = """A race-start torque boost by grid place (0.4 first to 0.1 last, held 300 m, decaying over 700 m) and a nemesis-rival boost (+0.3 torque, 1.5× skill), with a player catch-up variant 50-100 m behind that ends 500 m from the finish. Values at object `+8`; AI OPPONENTS leaves them."""
+how = """Generated code; tunable initializers."""
+confidence = """probable"""
+note = """Which counts gate the nemesis branch is a guess."""
+source = """docs/FEATURE_BACKLOG.md FB-12.6; src/pinyon_shift_runtime_hooks.cpp PinyonShiftAiSpawnConfig"""
+
+[[finding]]
+group = """AI opponents"""
+id = """ai-gap-measurement"""
+name = """rubber-banding measured on fh1-ai-gap"""
+what = """On `appdata-2026-09-27` (v4: `i443-camera-v4`, the same save). The seed's PROGRESS event assigned skills through the event path (`ai.assign path=event`, difficulty 1, no dynamic update during the run); its AI drove skills 49-55 with rubber-band rows 6-7 (the event's 0 falling back to the skill). With the player idle on the grid for 100 s, every stock AI that got ahead spent 50-55 of its 65-127 samples in a rubber-band mode, mostly torque cut (mode 8), with torque down to 0.600 (row 6: factor 0.4 from 140 to 500 m ahead). With NO RUBBER-BANDING no AI entered a mode or catch-up and torque stayed 1.000; with HARD too, at skills 33-39 (difficulty 2). Base, v4 and the Odin 2 Portal (Android, base build, a private state) gave the same counts. Gap over time alone does not separate the runs (stock and fair AI both reach about 1 km in 23-26 s, and some stall near 450-550 m in both)."""
+how = """`pinyon_shift_ai_trace`, `tools/summarize-ai-trace.py`, one run per setting on each build, 2026-10-12; the earlier database-row version measured the same."""
+confidence = """confirmed"""
+note = """For this event."""
+source = """docs/FEATURE_BACKLOG.md FB-12.6; src/pinyon_shift_runtime_hooks.cpp PinyonShiftAiSpawnConfig"""
+
+[[finding]]
+group = """AI opponents"""
+base = """sub_8261C3B8, 0x8261C5A0, sub_82613458, sub_8261FB48"""
+v4 = """sub_826C3800, 0x826C39E8"""
+name = """dynamic difficulty"""
+what = """After a race the profile's `Main/AISkill` moves by `AISkillAdjustments.SkillAdjustment` for the clamped time ratio (90-110) divided by up to `MaxNumRaces`, within 1 to `EasyDifficultyUpperBound`; `sub_82613458` maps it back to a skill id (1-20), a temperament (skill / 4) and a difficulty (the `UpperBound` keys). `sub_8261FB48` assigns it to drivers without touching the rubber-band id. At `0x8261C5A0` (v4 `0x826C39E8`) `f1` holds the looked-up adjustment; any choice but STOCK sets it to 0."""
+how = """Generated code; ini keys parsed by `sub_82521200` into the settings object `+1668`-`+1676`."""
+confidence = """confirmed"""
+note = """The meaning of the time ratio is probable."""
+source = """docs/FEATURE_BACKLOG.md FB-12.6; src/pinyon_shift_runtime_hooks.cpp PinyonShiftAiSpawnConfig"""
+
 # --------------------------------------------------------- Data and tuning files
 
 [[finding]]

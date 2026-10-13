@@ -21,6 +21,14 @@ PINYON_SYMBOL("graphics.frame", 0x82AACE28)
 PINYON_SYMBOL("hook.PinyonShiftAcceptModdedBlock", 0x82CC4C00)
 PINYON_SYMBOL("hook.PinyonShiftAcceptModdedFileSize", 0x82CC359C)
 PINYON_SYMBOL("hook.PinyonShiftAcceptModdedLastBlock", 0x82CC4C3C)
+PINYON_SYMBOL("hook.PinyonShiftAiEventDifficulty", 0x826B01C8)
+PINYON_SYMBOL("hook.PinyonShiftAiSkillAdjustment", 0x826C39E8)
+PINYON_SYMBOL("hook.PinyonShiftAiSpawnConfig", 0x82521228)
+PINYON_SYMBOL("hook.PinyonShiftAiSpawnSkill", 0x82521224)
+PINYON_SYMBOL("hook.PinyonShiftAiTraceDrive", 0x82C40080)
+PINYON_SYMBOL("hook.PinyonShiftAiTraceDynamicSkills", 0x826C7598)
+PINYON_SYMBOL("hook.PinyonShiftAiTraceDynamicUpdate", 0x826C3800)
+PINYON_SYMBOL("hook.PinyonShiftAiTraceEventSkills", 0x826B0170)
 PINYON_SYMBOL("hook.PinyonShiftAnyCarEventClass", 0x8269B3C4)
 PINYON_SYMBOL("hook.PinyonShiftAnyCarEventRestriction", 0x826AF10C)
 PINYON_SYMBOL("hook.PinyonShiftArrayReleaseWalk", 0x82D19DE8)
@@ -190,6 +198,9 @@ PINYON_OFFSET("flyer.smashed", 140)  // verified on v4
 PINYON_OFFSET("flyer.state", 148)  // verified on v4
 PINYON_OFFSET("game.components", 76)  // verified on v4
 PINYON_OFFSET("game.user", 108)  // verified on v4
+PINYON_OFFSET("launch_options.allowskipvoiceover", 4952)  // verified on v4; base 4924
+PINYON_OFFSET("launch_options.noattractvideo", 4238)  // verified on v4; base 4222
+PINYON_OFFSET("launch_options.nohandofgodreset", 4965)  // verified on v4; base 4937
 PINYON_OFFSET("launch_options.nohud", 3217)  // verified on v4; base 3213
 PINYON_OFFSET("main_loop.delta", 448)  // verified on v4
 PINYON_OFFSET("map_entity.on_map", 52)  // verified on v4

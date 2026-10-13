@@ -899,9 +899,9 @@ address = 0x828FF264
 name = "PinyonShiftCameraFieldOfView"
 registers = ["f1"]
 
-# #443: sub_82857B00 (v4 sub_82907F88) updates one camera physics layer
-# (r31) each frame: it stores the layer's input through its curve and noise
-# at [r1+96], then multiplies the layer's Param by it. The immersive camera
+# #443: sub_82857B00 updates one camera physics layer (r31) each
+# frame: it stores the layer's input through its curve and noise at
+# [r1+96], then multiplies the layer's Param by it. The immersive camera
 # setting scales that factor for the built-in mod's tagged layers, so a
 # sprung layer eases to its new strength and 0 switches the effect off.
 [[midasm_hook]]
@@ -1344,6 +1344,84 @@ memset = 0x82B3C1F0
 address = 0x82E43458
 name = "PinyonShiftRenderSettingLoaded"
 registers = ["r26", "r30"]
+
+# Skip the empty element walk of the title's array release (sub_8282EA80)
+# and go straight to its free (src/pinyon_shift_runtime_hooks.cpp).
+[[midasm_hook]]
+address = 0x82D19DE8
+name = "PinyonShiftArrayReleaseWalk"
+context = true
+jump_address_on_true = 0x82D19DF8
+
+# The trainer's any car in any event (FB-12.3): in sub_826087A0, which reads
+# an event's EventRestrictions rows (r25 the event id), skip the decode of a
+# row's Value (sub_825FE8B0) into the record at r1+176, which sub_825F3138
+# has just set up with no limits; the record is still added
+# (src/pinyon_shift_runtime_hooks.cpp).
+[[midasm_hook]]
+address = 0x826AF10C
+name = "PinyonShiftAnyCarEventRestriction"
+registers = ["r25"]
+jump_address_on_true = 0x826AF118
+
+# The same cheat for the event's class: sub_825F6ED8 stamps a limit derived
+# from Events.TargetClass (r4) into every bucket-0 restriction record; skip
+# from after its frame is set up to its epilogue
+# (src/pinyon_shift_runtime_hooks.cpp).
+[[midasm_hook]]
+address = 0x8269B3C4
+name = "PinyonShiftAnyCarEventClass"
+registers = ["r4"]
+jump_address_on_true = 0x8269B488
+
+# #482 AI OPPONENTS (pinyon_shift_ai_opponents, src/pinyon_shift_runtime_hooks.cpp):
+# the event's opponent difficulty before sub_8249BCB8 picks the database
+# column suffix (r3); the car spawn's call to the AI config fill
+# (sub_829ADAC0: skill r5, temperament r6, difficulty r8) and the filled
+# config at r1+464 right after it; and the post-race SkillAdjustment (f1)
+# that sub_8261C3B8 adds to the profile's Main/AISkill.
+[[midasm_hook]]
+address = 0x826B01C8
+name = "PinyonShiftAiEventDifficulty"
+registers = ["r3"]
+
+[[midasm_hook]]
+address = 0x82521224
+name = "PinyonShiftAiSpawnSkill"
+registers = ["r5", "r6", "r8"]
+
+[[midasm_hook]]
+address = 0x82521228
+name = "PinyonShiftAiSpawnConfig"
+registers = ["r1"]
+
+[[midasm_hook]]
+address = 0x826C39E8
+name = "PinyonShiftAiSkillAdjustment"
+registers = ["f1"]
+
+# Its default-off trace (pinyon_shift_ai_trace): entry of the per-AI torque
+# application, r3 the AI controller, and the entries of the two AI skill
+# assignment paths and the post-race dynamic difficulty update. Read-only.
+[[midasm_hook]]
+address = 0x82C40080
+name = "PinyonShiftAiTraceDrive"
+registers = ["r3"]
+
+[[midasm_hook]]
+address = 0x826B0170
+name = "PinyonShiftAiTraceEventSkills"
+registers = ["r3"]
+
+[[midasm_hook]]
+address = 0x826C7598
+name = "PinyonShiftAiTraceDynamicSkills"
+registers = ["r3"]
+
+[[midasm_hook]]
+address = 0x826C3800
+name = "PinyonShiftAiTraceDynamicUpdate"
+registers = ["r3"]
 
 # Virtual-call thunks discovered in the v4 image (vcall_thunks in
 # tools/map-fh1-v4-addresses.py). Entries marked THUNK above are covered here.
@@ -2106,32 +2184,3 @@ size = 0x10
 
 [functions."82FEF0E8"]
 size = 0x14
-
-# Skip the empty element walk of the title's array release (sub_8282EA80)
-# and go straight to its free (src/pinyon_shift_runtime_hooks.cpp).
-[[midasm_hook]]
-address = 0x82D19DE8
-name = "PinyonShiftArrayReleaseWalk"
-context = true
-jump_address_on_true = 0x82D19DF8
-
-# The trainer's any car in any event (FB-12.3): in sub_826087A0, which reads
-# an event's EventRestrictions rows (r25 the event id), skip the decode of a
-# row's Value (sub_825FE8B0) into the record at r1+176, which sub_825F3138
-# has just set up with no limits; the record is still added
-# (src/pinyon_shift_runtime_hooks.cpp).
-[[midasm_hook]]
-address = 0x826AF10C
-name = "PinyonShiftAnyCarEventRestriction"
-registers = ["r25"]
-jump_address_on_true = 0x826AF118
-
-# The same cheat for the event's class: sub_825F6ED8 stamps a limit derived
-# from Events.TargetClass (r4) into every bucket-0 restriction record; skip
-# from after its frame is set up to its epilogue
-# (src/pinyon_shift_runtime_hooks.cpp).
-[[midasm_hook]]
-address = 0x8269B3C4
-name = "PinyonShiftAnyCarEventClass"
-registers = ["r4"]
-jump_address_on_true = 0x8269B488

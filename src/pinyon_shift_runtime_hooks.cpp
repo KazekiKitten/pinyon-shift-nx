@@ -79,6 +79,16 @@ REXCVAR_DEFINE_STRING(pinyon_shift_server_probe_callers, "", "Pinyon Shift",
                       "server-available query the 1000 Club probe answers, or \"all\"; empty "
                       "answers only the 1000 Club callers")
     .lifecycle(rex::cvar::Lifecycle::kRequiresRestart);
+REXCVAR_DEFINE_STRING(pinyon_shift_ai_opponents, "stock", "Pinyon Shift",
+                      "AI opponents (#482): stock; fair, without the rubber band, catch-up "
+                      "and post-race skill adjustment; or hard, fair and one difficulty level "
+                      "up (the hardest uses the strongest skill). Applies from the next event")
+    .lifecycle(rex::cvar::Lifecycle::kHotReload);
+REXCVAR_DEFINE_BOOL(pinyon_shift_ai_trace, false, "Pinyon Shift",
+                    "Record each AI racer's gap to the player, rubber-band mode, catch-up and "
+                    "torque scale twice a second as ai.trace session events, and which path "
+                    "assigned the AI skills (#482)")
+    .lifecycle(rex::cvar::Lifecycle::kHotReload);
 REXCVAR_DEFINE_BOOL(pinyon_shift_record_file_opens, false, "Pinyon Shift",
                     "Record each distinct game file the title opens as a guest.file.opened "
                     "session event (which files a route needs, for a partial device copy)");
@@ -6435,6 +6445,141 @@ bool PinyonShiftAnyCarEventClass(PPCRegister& r4) {
                           {"class_limit", fmt::format("{}", r4.u32 & 0xFFu)}});
   }
   return true;
+}
+
+// AI OPPONENTS (#482; docs/REVERSE_ENGINEERING.md, "AI rubber-banding").
+// FH1 fills each AI racer's config from gamedb.slt when it spawns the car;
+// these hooks change what it reads instead of the database, so the option
+// needs no restart, no database mod and no separate profile, and works on
+// every build. NO RUBBER-BANDING ("fair") moves the rubber-band, torque-cut
+// and catch-up distances out of reach with neutral factors and turns off
+// the AI's maximum performance when it trails the player; HARD also races
+// every opponent difficulty one level up, the hardest on AISkills row 1.
+namespace {
+enum class AiOpponents { kStock, kFair, kHard };
+
+AiOpponents AiOpponentsSetting() {
+  const std::string value = REXCVAR_GET(pinyon_shift_ai_opponents);
+  if (value == "fair") return AiOpponents::kFair;
+  if (value == "hard") return AiOpponents::kHard;
+  return AiOpponents::kStock;
+}
+}  // namespace
+
+// sub_826098B8 (v4 sub_826B0170) reads the event's AISkill%s,
+// AITemperament%s and AIRubberband%s columns for the opponent difficulty in
+// r3 (0 Easy to 3 Pro), passed to sub_8249BCB8 for the column suffix; the
+// difficulty the drivers keep (r26) is unchanged. HARD reads the next level.
+void PinyonShiftAiEventDifficulty(PPCRegister& r3) {
+  const AiOpponents setting = AiOpponentsSetting();
+  pinyon_shift::diagnostics::RecordEvent(
+      "ai.opponents", {{"setting", REXCVAR_GET(pinyon_shift_ai_opponents)},
+                       {"difficulty", fmt::format("{}", r3.u32)}});
+  if (setting == AiOpponents::kHard && r3.u32 < 3) r3.u64 = r3.u32 + 1;
+}
+
+// sub_824B3AE8 (v4 sub_82520EA0) calls sub_829ADAC0 (v4 sub_82A61F08) with
+// the config at r1+464 (r3), skill r5, temperament r6 and difficulty r8.
+// HARD gives the hardest difficulty the strongest skill and temperament.
+void PinyonShiftAiSpawnSkill(PPCRegister& r5, PPCRegister& r6, PPCRegister& r8) {
+  if (AiOpponentsSetting() == AiOpponents::kHard && (r8.u32 & 0xFFu) == 3) {
+    r5.u64 = 1;
+    r6.u64 = 1;
+  }
+}
+
+// Just after that call: the filled config, before the AI controller copies
+// it. Offsets from sub_829ACD50 (AISkills) and sub_829ACA50 (AIRubberbands);
+// TrackSpecificAI has already been applied.
+void PinyonShiftAiSpawnConfig(PPCRegister& r1) {
+  if (AiOpponentsSetting() == AiOpponents::kStock) return;
+  const uint32_t config = r1.u32 + 464;
+  if (!PinyonShiftGuestRangeReadable(config, 452)) return;
+  constexpr float kOutOfReach = 100000.0f;
+  StoreGuestF32(config + 336, 0.0f);         // DistBehindForMaxPerformance: off
+  StoreGuestF32(config + 344, 0.0f);         // DistBehindForTorqueBoost: off
+  StoreGuestF32(config + 348, 1.0f);         // FarBehindTorqueBoost: none
+  StoreGuestU32(config + 360, 0);            // TorqueBoostCheatLevel
+  StoreGuestF32(config + 416, kOutOfReach);  // StartRubberbandingDistance
+  StoreGuestF32(config + 420, kOutOfReach);  // MaxRubberbandingEffectDistance
+  StoreGuestF32(config + 424, kOutOfReach);  // StartTorqueCutDistance
+  StoreGuestF32(config + 428, kOutOfReach + 1.0f);  // MaxTorqueCutDistance
+  StoreGuestF32(config + 432, 0.0f);         // TorqueCutFactor
+  StoreGuestF32(config + 436, kOutOfReach);  // StartCatchUpDistance
+  StoreGuestF32(config + 440, kOutOfReach);  // StopCatchUpDistance
+  StoreGuestF32(config + 444, 0.0f);         // CatchUpFactor
+}
+
+// sub_8261C3B8 (v4 sub_826C3800), after a race: f1 is the
+// AISkillAdjustments.SkillAdjustment for the player's time ratio, which it
+// divides and adds to the profile's Main/AISkill. 0 keeps the skill.
+void PinyonShiftAiSkillAdjustment(PPCRegister& f1) {
+  if (AiOpponentsSetting() != AiOpponents::kStock) f1.f64 = 0.0;
+}
+
+// AI racing trace for the fair AI option (#482; docs/REVERSE_ENGINEERING.md,
+// "AI rubber-banding"). sub_82B81A30 applies an AI controller's torque scale
+// once per drive update; at its entry r3 is the controller, whose fields the
+// rubber-band (sub_82B93A18) and catch-up (sub_82B84610) updates have just
+// written. Read-only, sampled every 500 ms per controller.
+void PinyonShiftAiTraceDrive(PPCRegister& r3) {
+  if (!REXCVAR_GET(pinyon_shift_ai_trace)) return;
+  const uint32_t controller = r3.u32;
+  if (!PinyonShiftGuestRangeReadable(controller, 232)) return;
+  static std::mutex mutex;
+  static std::unordered_map<uint32_t, std::chrono::steady_clock::time_point> last;
+  const auto now = std::chrono::steady_clock::now();
+  {
+    std::lock_guard lock(mutex);
+    auto& at = last[controller];
+    if (now - at < std::chrono::milliseconds(500)) return;
+    at = now;
+  }
+  const uint32_t car = LoadGuestU32(controller + 28);
+  const uint32_t skill = LoadGuestU32(controller + 64);
+  const uint32_t config = LoadGuestU32(controller + 76);
+  if (!PinyonShiftGuestRangeReadable(car, 1332) || !PinyonShiftGuestRangeReadable(skill, 144) ||
+      !PinyonShiftGuestRangeReadable(config, 452)) {
+    return;
+  }
+  pinyon_shift::diagnostics::RecordEvent(
+      "ai.trace",
+      {{"controller", Hex32(controller)},
+       {"position", fmt::format("{}", LoadGuestU32(car + 1328))},
+       {"progress", fmt::format("{:.3f}", LoadGuestF32(car + 1008))},
+       {"gap", fmt::format("{:.1f}", LoadGuestF32(controller + 164))},
+       {"rubber_band", fmt::format("{}", LoadGuestU8(controller + 152))},
+       {"mode", fmt::format("{}", LoadGuestU32(controller + 156))},
+       {"amount", fmt::format("{:.3f}", LoadGuestF32(controller + 160))},
+       {"catch_up", fmt::format("{}", LoadGuestU8(controller + 168))},
+       {"catch_up_factor", fmt::format("{:.3f}", LoadGuestF32(skill + 140))},
+       {"braking", fmt::format("{:.3f}", LoadGuestF32(skill + 128))},
+       {"cornering", fmt::format("{:.3f}", LoadGuestF32(skill + 132))},
+       {"torque", fmt::format("{:.3f}", LoadGuestF32(controller + 216))},
+       {"skill_id", fmt::format("{}", static_cast<int32_t>(LoadGuestU32(config + 280)))},
+       {"rubber_band_id", fmt::format("{}", static_cast<int32_t>(LoadGuestU32(config + 368)))}});
+}
+
+// Which path gave the AI their skills: the event's AISkill<difficulty>
+// columns (sub_826098B8) or the profile's dynamic Main/AISkill
+// (sub_8261FB48); and the post-race dynamic difficulty update
+// (sub_8261C3B8). Entry hooks, for the same trace.
+void PinyonShiftAiTraceEventSkills(PPCRegister&) {
+  if (REXCVAR_GET(pinyon_shift_ai_trace)) {
+    pinyon_shift::diagnostics::RecordEvent("ai.assign", {{"path", "event"}});
+  }
+}
+
+void PinyonShiftAiTraceDynamicSkills(PPCRegister&) {
+  if (REXCVAR_GET(pinyon_shift_ai_trace)) {
+    pinyon_shift::diagnostics::RecordEvent("ai.assign", {{"path", "dynamic"}});
+  }
+}
+
+void PinyonShiftAiTraceDynamicUpdate(PPCRegister&) {
+  if (REXCVAR_GET(pinyon_shift_ai_trace)) {
+    pinyon_shift::diagnostics::RecordEvent("ai.dynamic_update", {});
+  }
 }
 
 // The trainer's live credits (NP-8.3), through the title's own accessors as

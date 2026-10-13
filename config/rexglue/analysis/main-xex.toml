@@ -1370,3 +1370,52 @@ address = 0x825F6EE4
 name = "PinyonShiftAnyCarEventClass"
 registers = ["r4"]
 jump_address_on_true = 0x825F6FA8
+
+# #482 AI OPPONENTS (pinyon_shift_ai_opponents, src/pinyon_shift_runtime_hooks.cpp):
+# the event's opponent difficulty before sub_8249BCB8 picks the database
+# column suffix (r3); the car spawn's call to the AI config fill
+# (sub_829ADAC0: skill r5, temperament r6, difficulty r8) and the filled
+# config at r1+464 right after it; and the post-race SkillAdjustment (f1)
+# that sub_8261C3B8 adds to the profile's Main/AISkill.
+[[midasm_hook]]
+address = 0x82609910
+name = "PinyonShiftAiEventDifficulty"
+registers = ["r3"]
+
+[[midasm_hook]]
+address = 0x824B3E6C
+name = "PinyonShiftAiSpawnSkill"
+registers = ["r5", "r6", "r8"]
+
+[[midasm_hook]]
+address = 0x824B3E70
+name = "PinyonShiftAiSpawnConfig"
+registers = ["r1"]
+
+[[midasm_hook]]
+address = 0x8261C5A0
+name = "PinyonShiftAiSkillAdjustment"
+registers = ["f1"]
+
+# Its default-off trace (pinyon_shift_ai_trace): entry of the per-AI torque
+# application, r3 the AI controller, and the entries of the two AI skill
+# assignment paths and the post-race dynamic difficulty update. Read-only.
+[[midasm_hook]]
+address = 0x82B81A30
+name = "PinyonShiftAiTraceDrive"
+registers = ["r3"]
+
+[[midasm_hook]]
+address = 0x826098B8
+name = "PinyonShiftAiTraceEventSkills"
+registers = ["r3"]
+
+[[midasm_hook]]
+address = 0x8261FB48
+name = "PinyonShiftAiTraceDynamicSkills"
+registers = ["r3"]
+
+[[midasm_hook]]
+address = 0x8261C3B8
+name = "PinyonShiftAiTraceDynamicUpdate"
+registers = ["r3"]

@@ -96,6 +96,16 @@ A wheel drives through the same controller path: steering on the left stick, thr
 
 **F6 > GAMEPLAY** turns on three switches the game kept from its development builds. All are off by default and apply at once. **SKIP VOICE-OVERS WITH A** lets A close a dialog before its voice-over ends. **AUTOMATIC CAR RESET** off stops the game from putting the car back on the road when it strays too far. **REPLAY INTRO WHEN IDLE** off keeps the title screen from replaying the intro movie after about a minute without input. The HUD is hidden with <kbd>F2</kbd>.
 
+### AI opponents
+
+**F6 > GAMEPLAY > AI OPPONENTS** chooses how the other drivers race. It applies from the next event.
+
+- **STOCK**: the game as shipped.
+- **NO RUBBER-BANDING**: an AI driver that gets ahead of you no longer slows down to wait, and one that falls behind no longer drives better to catch up. It also stops the game from adjusting the AI's skill after each race according to your times.
+- **HARD**: no rubber-banding, and every opponent difficulty races one level up. At the hardest difficulty every opponent gets the game's strongest skill and most aggressive passing.
+
+The setting changes how the AI drives, not the game's files, so it plays your own profile. Two smaller boosts are kept by every choice: by our reading of the code, cars at the back of the grid get extra power for the first few hundred metres, and your rival can get extra power and skill. Neither has been measured yet.
+
 ## Saves
 
 Saves are in the install's state folder, `%LOCALAPPDATA%\PinyonShift\source\<version>\.local\preview\user` (under `data` for a portable install).

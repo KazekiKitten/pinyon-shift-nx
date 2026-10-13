@@ -891,7 +891,16 @@ std::unique_ptr<MenuScreen> SettingsPages::Gameplay() {
   rows.push_back(Toggle("AUTOMATIC CAR RESET", "pinyon_shift_no_auto_reset", true));
   // After about 55 s idle on the title screen the game replays its intro.
   rows.push_back(Toggle("REPLAY INTRO WHEN IDLE", "pinyon_shift_no_attract_video", true));
-  return std::make_unique<MenuScreen>("GAMEPLAY", std::move(rows));
+  // How the AI race (#482): without the rubber band and catch-up, or also
+  // one difficulty level up. The game reads it when it sets up the next
+  // event's opponents.
+  rows.push_back(Setting("AI OPPONENTS",
+                         {{"STOCK", {{"pinyon_shift_ai_opponents", "\"stock\""}}},
+                          {"NO RUBBER-BANDING", {{"pinyon_shift_ai_opponents", "\"fair\""}}},
+                          {"HARD", {{"pinyon_shift_ai_opponents", "\"hard\""}}}}));
+  return std::make_unique<MenuScreen>("GAMEPLAY", std::move(rows), [] {
+    return std::string("AI OPPONENTS APPLIES FROM THE NEXT EVENT");
+  });
 }
 
 std::unique_ptr<MenuScreen> SettingsPages::Audio() {
