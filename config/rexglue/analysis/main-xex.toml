@@ -28,6 +28,12 @@ xer_as_local = true
 # (NEXT_LEVEL_RESEARCH.md NL-1.2).
 interior_resume = false
 
+# Direct calls name the strong `__imp__sub_` definitions so Clang can inline
+# guest functions; the three functions src/guest_native replaces with a strong
+# `sub_` of its own keep going through the weak thunk (NL-1.5).
+direct_calls_bypass_thunk = true
+host_overridden_functions = [0x82438EA8, 0x830F2210, 0x82A6D7D8]
+
 # Scripted, default-off companion experiment: match the complete original
 # decoded member at the borrowed-buffer stream constructor. This avoids ZIP
 # repacking and does not enable the older scene_insert pointer repairs.
