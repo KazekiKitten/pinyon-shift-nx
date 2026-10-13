@@ -77,6 +77,8 @@ print("labelled %d addresses" % len(records))
 
 For the v4 executable, use each record's `v4` field where it is set.
 
+The same names label profiles of the running game: `python tools/re/kb.py symbols --out names.json`, then `tools/summarize-thread-samples.py --symbols names.json` prints `sub_82438EA8 CRT pow` instead of the bare generated name.
+
 ## What these pages contain
 
 Only our own analysis: names, addresses, offsets, sizes and counts, and descriptions of behaviour in our own words. No disassembly listings, decompiled code, game data or extracted assets, as for the rest of the project ([Legal](legal.md)). The records come from the project's work since 2026; the engineering detail behind each one is in the repository's [docs/](https://github.com/arcanite24/pinyon-shift/tree/dev/docs), linked from the record.

@@ -194,7 +194,7 @@ issue = "#448"
 source = "docs/NATIVE_PORT_BACKLOG.md NP-8.1"  # where the full reasoning is
 ```
 
-`site/build.py` rejects a record with an unknown key, a missing name, an unknown confidence or a duplicate id, and the address index picks up every address in `base` automatically. Build and check the site:
+`site/build.py` rejects a record with an unknown key, a missing name, an unknown confidence or a duplicate id, and the address index picks up every address in `base` automatically. `tools/re/kb.py` reads the same records as one address table: `lint` refuses text that reads like a disassembly listing or a hex dump ([Legal](legal.md)), `check` verifies that every `sub_XXXXXXXX` a record names is the start of a generated function (in the v4 tree too, when it exists), and `symbols` writes a JSON table whose `names` map labels `sub_` functions in profiles (`tools/summarize-thread-samples.py --symbols`). `tools/tests/test_re_kb.py` runs the lint and the check. Build and check the site:
 
 ```sh
 .local/site-venv/Scripts/python site/build.py
