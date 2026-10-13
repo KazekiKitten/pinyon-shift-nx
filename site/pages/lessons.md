@@ -93,6 +93,8 @@ Negative results, so they aren't retried without a new reason:
 | `VK_KHR_present_wait` | worse spacing |
 | Store-op tuning, render-area trimming on tilers | too few cases, or the driver already did it |
 | Bloom, motion blur and depth of field off | no measurable saving |
+| No free-roam traffic, shorter grass, no crowd, no shadows from other cars (`AIOpenWorld.xml`, `TrackSettings.xml` by mod) | no change in frame or GPU time beyond run-to-run spread on the reference desktop, and nothing visible; untested on a weak machine |
+| Muting the track reverb in its XML | the reverb is still computed; no change in audio-thread CPU |
 | `-ffp-model=strict` on the generated code | 1–2 % more host instructions in the hot partitions, for a reordering across MXCSR writes never observed; kept as an option |
 | `-fasync-exceptions` on the generated code | no generated unit has an SEH scope; the flag moved code size under 1 % either way, now off |
 | x86-64-v3 (MOVBE, AVX2, BMI) for the generated code | MOVBE replaced a fifth of the byte swaps in the audio routines, under 1 % of their instructions; an opt-in variant until a cycle measurement says more |

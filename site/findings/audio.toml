@@ -220,11 +220,11 @@ source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Radio"""
 
 [[finding]]
 group = """Audio engine"""
-base = """AudioMixerSnapshots.xml Reverb group, GlobalDSPConfig.xml"""
+base = """AudioMixerSnapshots.xml Reverb group, GlobalDSPConfig.xml, media/tracks/colorado/colorado_reverb.xml"""
 v4 = """same"""
-name = """no reverb switch in the audio XML"""
-what = """The two `Reverb`-group snapshots (`InTunnel`, `NotInTunnel`) only set category levels inside and outside tunnels, and `GlobalDSPConfig.xml` holds bypass, gain and filter settings for the cockpit, rewind and countdown effects. The world reverb is defined in the FMOD Designer projects (`.fev`), so no XML change turns it off; only the backfire's reverb send has an override (`backfireReverbWetSendOverride`)."""
-how = """Reading the game's audio XML element and attribute names."""
+name = """no reverb switch in the audio XML; muting the track reverb saves nothing measurable"""
+what = """The two `Reverb`-group snapshots (`InTunnel`, `NotInTunnel`) only set category levels inside and outside tunnels, and `GlobalDSPConfig.xml` holds bypass, gain and filter settings for the cockpit, rewind and countdown effects; only the backfire's reverb send has an override (`backfireReverbWetSendOverride`). The world reverb's parameters are per track, in the loose `colorado_reverb.xml`: 24 templates (open road, overpass, tunnels, canyons, car park, warehouse) with decay, reflection and reverb levels and near and far wet and dry mixes, chosen by the `NotInTunnel`/`InTunnel` snapshot. A mod setting every template's reverb, reflection and room levels to -10000 mB and its wet mixes to 0 did not lower the audio threads' CPU: 934 and 1,108 Mcycles a second over a free-roam drive against 875 and 1,255 stock, inside the spread of identical runs. The reverb is computed whatever its levels, so turning it off needs a hook in the guest audio code, for at most its 12 % of the audio thread."""
+how = """Reading the game's audio XML element and attribute names; two A/B pairs of a free-roam drive route from a pinned seed with a loose-file mod, sampling every guest thread's cycles (`pinyon_shift_thread_sampler`). Whether the mix is audibly drier was not checked."""
 confidence = """probable"""
 negative = true
 source = """docs/LOW_SPEC_BACKLOG.md LS-1.8"""
