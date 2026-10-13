@@ -56,6 +56,7 @@ At 1x on the desktop the frame was bound by CPU work on the recorder thread, not
 | Draw registers fused into the draw record, shader loads as typed entries, cheaper batch handoff (record entries 92,100 to 56,800 a heavy frame) | recorder CPU −7 to −14 % |
 | A constants descriptor set key included 4 bytes of uninitialized padding, so 43 % of draws wrote a new set | about 1.1 ms of recorder time |
 | The decoder compares a register run with its register file four registers at a time when the run holds no register whose write always matters (the per-register loop was 11 % of the decoder thread) | heavy race frames: decoder work 7.2 to 6.6 ms; frame time unchanged, because the recorder bounds those frames too |
+| Stages kept when their inputs are unchanged since the last draw, each by an O(1) test (`gpu_draw_unchanged_inputs`): the samplers (same shaders, submission and filtering, no sampled fetch constant written: 44 % of draws), the texture request (bindings in sync, textures already used and sampled in this submission: 56 %), the texture descriptor sets or push (41 %); target preparation remembered per register state hash in 16 slots (hits 53 to 73 %). A verify mode found no difference over 12.5 million draws | 1,066 to 981 ns a draw; heavy frames 8.66 to 8.51 ms (four alternating runs each) |
 
 Together with the binding memo table and ThinLTO for the GPU code, the 1x race went from 20.79 ms (48 fps) on 2026-09-30 to an 8.3 ms median, the 120 fps limit.
 
@@ -64,7 +65,7 @@ On 2026-10-13 (RTX 4080, `fh1-race-sync`, last 600 frames, three runs) the frame
 **Tried and dropped.**
 
 - **Bindless textures** were within ±1.5 % on desktop, because NVIDIA's push descriptors were already cheap. On Android they cut the recorder from about 9.2 to 7.7 ms and are the default there; the frame didn't change because the GPU is the limit.
-- **Replaying recorded draws** instead of deriving them again: an upper-bound probe that skipped every matching buffer took the recorder from 10.4 to 3.7 ms. Real replay of per-draw templates, buffers and whole segments was slower or −0.3 % against a −15 % goal. Proving a recorded draw is still valid cost as much as deriving it.
+- **Replaying recorded draws** instead of deriving them again: an upper-bound probe that skipped every matching buffer took the recorder from 10.4 to 3.7 ms. Real replay of per-draw templates, buffers and whole segments was slower or −0.3 % against a −15 % goal. Proving a recorded draw is still valid cost as much as deriving it. The O(1) tests in the table above now make that proof cheap, and they show what is left: after them a draw still costs about 980 ns, spread over about 20 steps of which none is above 135 ns (constant uploads), so skipping derivation per draw cannot reach the replay probe's numbers.
 - **PGO** of the GPU code, an AVX2 build, Windows MMCSS scheduling and thread placement: no consistent gain.
 
 ## Renderings and clears
