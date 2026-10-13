@@ -95,6 +95,7 @@ Negative results, so they aren't retried without a new reason:
 | A free-running `V_COUNTER` (Edge) | FH1 never reads it: a race reads only `CP_PROG_COUNTER` and the vblank status through the register path (one-time read log, `gpu_log_register_reads`) |
 | ThinLTO on the generated code | neutral on guest-thread instructions while the weak thunks blocked inlining; with direct calls on the strong bodies it inlines (code +8 %, instructions +12 %) but the desktop route sits at its frame-rate cap either way, so the Odin decides |
 | More CRT functions as native code | the remaining candidates are 0.02 % each in a race |
+| Float constants read by register number from a heap of 16-register pages, a draw copying only the pages written since (NL-3.3) | Forza Horizon writes new constant values nearly every draw: 1.9 page runs a draw were dirty and 0.03 came back unchanged, so pages copied 650 bytes a draw against 490 for packing just the constants a shader uses. The constants descriptor set got cheaper, but the heavy race recorder went from 7.5-7.7 to 7.9-8.5 ms (RTX 4080, 1x race, 3 rounds). Count how often a title's constants repeat before building constants by address |
 | A native guest heap allocator | 0.05 % of a race, inclusive |
 | Write-watches at 64 KiB | 7 write-watch faults a frame; the fault path is under 0.5 % |
 | Reading the physical offset once per function | 3.6 MB smaller library, no runtime change |
