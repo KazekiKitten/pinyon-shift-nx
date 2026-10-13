@@ -74,7 +74,7 @@ Each function is defined as a weak alias, so host code can replace a guest funct
 
 ## Memory access
 
-Guest memory stays big-endian. Every load and store is a `volatile` access through `__builtin_bswap16/32/64` at `base + address`. Until October 2026 an address at or above `0xE0000000` also added `0x1000`, because Windows mapped that view 4 KB short of its place in the physical heap ([why](runtime.md#guest-memory)); the select behind that add was a compare, a conditional set and a shift on 70 % of all guest accesses. Skipping it for accesses through `r1`, the stack pointer, had already made the binaries 5.4–5.7 % smaller and cut the Odin's guest instructions per second by 17–18 % on the simulation and render threads. Mapping the view exactly removed the remaining 625,000 selects: with the count register and XER kept in locals (below), the generated x86-64 code went from 17.7 M to 13.7 M host instructions (−22.6 %) and from 75.0 to 59.7 MB of code (−20.4 %). Only Apple silicon, with 16 KB pages, still adds the offset. Addresses in `0x7F000000`–`0x7FFFFFFF` go to the MMIO handler.
+Guest memory stays big-endian. Every load and store is a `volatile` access through `__builtin_bswap16/32/64` at `base + address`. Until October 2026 an address at or above `0xE0000000` also added `0x1000`, because Windows mapped that view 4 KB short of its place in the physical heap ([why](runtime.md#guest-memory)); the select behind that add was a compare, a conditional set and a shift on 70 % of all guest accesses. Skipping it for accesses through `r1`, the stack pointer, had already made the binaries 5.4–5.7 % smaller and cut the Odin's guest instructions per second by 17–18 % on the simulation and render threads. Mapping the view exactly removed the remaining 625,000 selects: with the count register and XER kept in locals (below), the generated x86-64 code went from 17.7 M to 13.7 M host instructions (−22.6 %) and from 75.0 to 59.7 MB of code (−20.4 %). Only Apple silicon, with 16 KB pages, still adds the offset. On the Odin 2 Portal (Android, 4 KB pages) the same change, with the count register and XER in locals and the NEON audio conversion, cut instructions per second in a race at the 60 fps limit by 22 % on the render thread, 24 % on the simulation thread and 35 % on the audio thread (`simpleperf stat --per-thread`, one run each way). Addresses in `0x7F000000`–`0x7FFFFFFF` go to the MMIO handler.
 
 **Count register and XER in locals.** Both are volatile in the PowerPC ABI and dead at every return address, so a function keeps them in zero-initialized locals that never touch `ctx` (`ctr_as_local`, `xer_as_local`). FH1 has no overflow-enabled integer instruction and its one `mtxer` is a context restore, so XER's summary-overflow bit is never set and the copy of it into every compare's condition field folds to zero.
 
@@ -88,11 +88,18 @@ Generated code runs FPU instructions with denormals and VMX instructions with fl
 | `vmsum3fp128`, `vmsum4fp128` | products summed in double in the console's order; a finite dot product that overflows single precision returns the canonical QNaN, as the hardware does, where SSE's `dp_ps` gives infinity. The game's collision code compares those results. |
 | Saturating packs and adds | `vpkuhus`, `vpkd3d128` (16-bit normalized packs clamp to ±32767), `vaddsws` (overflow detection), `vctuxs` (NaN to 0) |
 | `fctid`, `fctidz`, `fctiwz` | NaN inputs give the console's results |
+| `vmaxfp`, `vminfp` | a NaN operand is the result, the maximum of `-0` and `+0` is `+0` and the minimum `-0`, where SSE's min/max return the second operand |
+| `vcmpbfp` | a NaN operand sets both bound bits |
+| `vsl`, `vsr` | the whole 128-bit shift, with the count from the last byte of the count register as the hardware reads it |
+| `vexptefp` | `+inf` from 128 up and `0` below −126, where the exponent arithmetic would wrap |
+| `frsqrte`, `vrsqrtefp` | computed exactly rather than as the hardware's 12-bit estimate; negative inputs give the positive QNaN; `frsqrte` of a denormal does not overflow |
 | Floating-point compares | set the `un` bit for NaN |
 | `stvlx`, `stvrx` partial stores | tested at offsets 0, 1, 4, 8, 12 and 15, aliasing cases and 512 seeded random cases |
 | VMX128 decoding | decoded ahead of the ppc405 opcodes it overlaps |
 
-Vector code is lowered through SIMDe, which maps the SSE intrinsics to NEON on ARM. 1,480 PPC instruction tests with 6,549 assertions pass.
+Vector code is lowered through SIMDe, which maps the SSE intrinsics to NEON on ARM. `vmaddfp` and `vnmsubfp` fuse the multiply and the add as the hardware does (one FMA instruction on x86 FMA3 and ARM64; hosts without FMA round the product first).
+
+**Instruction tests.** The SDK's PPC suite (`tests/ppc`) grew from 1,480 to 2,541 cases in October 2026 by taking xenia-canary's tests (BSD-3); each file becomes its own translation unit, and a skip list names 108 cases with the reason for each: 94 whose expected value contradicts the test's own inputs, 10 for the reciprocal estimates (the hardware returns 12-bit estimates, the generated code the exact value), and 4 for a store-conditional without a reservation, `mfmsr`, the FPSCR exception-enable bits and three instructions FH1 does not use (`mcrfs`, `mfvscr`, `mtvscr`). The import found no wrong result in an instruction FH1 uses; it did find fourteen instructions the generator had never met (none in FH1), now implemented, and xenia-canary's hardware-recorded corpus then found the NaN, signed-zero and range cases in the table above. xenia-canary's 167,636 hardware-recorded `_gen_` cases are not in the repository; the suite accepts an extra directory of them.
 
 ## Building the output
 

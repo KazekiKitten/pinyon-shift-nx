@@ -96,6 +96,16 @@ source = """config/supported-dumps.json; config/rexglue/pinyon_shift_manifest.to
 
 [[finding]]
 group = """Imports and modules"""
+base = """default.xex"""
+v4 = """default.xex"""
+name = """static libraries"""
+what = """The XEX2 static-library header names the XDK libraries linked into `default.xex`, all from XDK 2.0.21119 unless noted: D3D9, D3DX9, XGRAPHC, XNET, XONLINE, XBOXKRNL, XMP, XMCORE, XAPILIB, XHV2 (voice), XPARTY, NUI and NUIHNDL (Kinect), ST, MFPLAT (2.0.20693, flagged unapproved), XAPOBA, XAUDIO2, XFFB (force feedback), XINP2 (XInput), and the CRT LIBCMT 2.0.11886; the toolchain stamps are LINK 10.0.11886 with the compilers C1/C2 16.0.11886 and 16.0.10224 (Visual Studio 2010; some libraries were built with the older compiler). `SpeechFacade_default.xex` adds NUISP and NUIAUD (Kinect speech and audio) and `XMediaFacade_default.xex` only XAPILIB, XBOXKRNL and LIBCMT, all from the same XDK. This is the identity list for native replacements of whole library families: a CRT routine is LIBCMT 11886's, the audio graph is XAUDIO2/XAPOBA 21119's, and the force-feedback contract (FEATURE_BACKLOG FB-2.1) is XFFB's."""
+how = """`tools/re/xex-libraries.py` over the three XEX files (optional header 0x000200FF, the SDK's `xex2_opt_static_libraries` layout); the patch does not change the base header."""
+confidence = """confirmed"""
+source = """docs/NEXT_LEVEL_RESEARCH.md NL-2.4"""
+
+[[finding]]
+group = """Imports and modules"""
 base = """0x831EDA6C"""
 v4 = """0x832B881C"""
 name = """XGetAVPack import thunk"""
