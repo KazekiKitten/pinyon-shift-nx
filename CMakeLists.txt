@@ -57,6 +57,7 @@ set(PINYON_SHIFT_HOST_SOURCES
     src/ui/hostui/glyph_atlas.cpp
     src/ui/hostui/host_ui.cpp
     src/ui/hostui/menu.cpp
+    src/ui/hostui/pad_glyphs.cpp
     src/ui/hostui/vector_font.cpp
     src/ui/hostui/xds_texture.cpp
     src/ui/settings_menu.cpp
@@ -126,6 +127,7 @@ add_executable(pinyon_shift_hostui_tests EXCLUDE_FROM_ALL
     src/ui/hostui/fh1_archive.cpp
     src/ui/hostui/glyph_atlas.cpp
     src/ui/hostui/menu.cpp
+    src/ui/hostui/pad_glyphs.cpp
     src/ui/hostui/vector_font.cpp
     src/ui/hostui/xds_texture.cpp
 )

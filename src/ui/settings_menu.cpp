@@ -17,7 +17,9 @@
 #include <fstream>
 
 #include <rex/audio/downmix.h>
+#include <rex/input/dualsense.h>
 #include <rex/input/pad_remap.h>
+#include <rex/input/sdl/sdl_input_driver.h>
 #include <rex/input/sdl/joystick_mapping.h>
 #include <rex/input/sdl/wheel.h>
 #if defined(__ANDROID__)
@@ -171,6 +173,7 @@ class SettingsPages : public std::enable_shared_from_this<SettingsPages> {
   std::unique_ptr<MenuScreen> Audio();
   std::unique_ptr<MenuScreen> Controls();
   std::unique_ptr<MenuScreen> Wheel();
+  std::unique_ptr<MenuScreen> DualSense();
   std::unique_ptr<MenuScreen> Hud();
   std::unique_ptr<MenuScreen> Gameplay();
   std::unique_ptr<MenuScreen> Profile();
@@ -1049,20 +1052,22 @@ std::unique_ptr<MenuScreen> SettingsPages::MapControllerSteps(
   struct Step {
     const char* prompt;
     const char* output;
+    // The same control's name on a PlayStation pad (FB-3.5), or null.
+    const char* playstation = nullptr;
   };
   // SDL's names for the Xbox 360 controls; a leading sign is a half axis.
   static constexpr Step kSteps[] = {
-      {"A", "a"},
-      {"B", "b"},
-      {"X", "x"},
-      {"Y", "y"},
-      {"LEFT BUMPER (LB)", "leftshoulder"},
-      {"RIGHT BUMPER (RB)", "rightshoulder"},
-      {"LEFT TRIGGER (LT)", "lefttrigger"},
-      {"RIGHT TRIGGER (RT)", "righttrigger"},
-      {"BACK", "back"},
-      {"START", "start"},
-      {"GUIDE (XBOX BUTTON)", "guide"},
+      {"A", "a", "CROSS"},
+      {"B", "b", "CIRCLE"},
+      {"X", "x", "SQUARE"},
+      {"Y", "y", "TRIANGLE"},
+      {"LEFT BUMPER (LB)", "leftshoulder", "L1"},
+      {"RIGHT BUMPER (RB)", "rightshoulder", "R1"},
+      {"LEFT TRIGGER (LT)", "lefttrigger", "L2"},
+      {"RIGHT TRIGGER (RT)", "righttrigger", "R2"},
+      {"BACK", "back", "CREATE (SHARE)"},
+      {"START", "start", "OPTIONS"},
+      {"GUIDE (XBOX BUTTON)", "guide", "PS BUTTON"},
       {"D-PAD UP", "dpup"},
       {"D-PAD DOWN", "dpdown"},
       {"D-PAD LEFT", "dpleft"},
@@ -1071,12 +1076,12 @@ std::unique_ptr<MenuScreen> SettingsPages::MapControllerSteps(
       {"LEFT STICK RIGHT", "+leftx"},
       {"LEFT STICK UP", "-lefty"},
       {"LEFT STICK DOWN", "+lefty"},
-      {"LEFT STICK PRESS", "leftstick"},
+      {"LEFT STICK PRESS", "leftstick", "L3 (LEFT STICK PRESS)"},
       {"RIGHT STICK LEFT", "-rightx"},
       {"RIGHT STICK RIGHT", "+rightx"},
       {"RIGHT STICK UP", "-righty"},
       {"RIGHT STICK DOWN", "+righty"},
-      {"RIGHT STICK PRESS", "rightstick"},
+      {"RIGHT STICK PRESS", "rightstick", "R3 (RIGHT STICK PRESS)"},
   };
   static constexpr size_t kStepCount = std::size(kSteps);
   static constexpr auto kStepTime = std::chrono::seconds(8);
@@ -1101,9 +1106,14 @@ std::unique_ptr<MenuScreen> SettingsPages::MapControllerSteps(
   const bool opened = session->capture.Begin(session->joystick.instance_id);
   session->step_started = std::chrono::steady_clock::now();
 
-  const auto control_name = [](const std::string& output) {
+  // Prompts in the labels printed on the pad being mapped.
+  const bool playstation = session->joystick.playstation;
+  const auto prompt = [playstation](const Step& step) {
+    return std::string(playstation && step.playstation ? step.playstation : step.prompt);
+  };
+  const auto control_name = [prompt](const std::string& output) {
     for (const Step& step : kSteps) {
-      if (output == step.output) return std::string(step.prompt);
+      if (output == step.output) return prompt(step);
     }
     return Upper(output);
   };
@@ -1180,7 +1190,7 @@ std::unique_ptr<MenuScreen> SettingsPages::MapControllerSteps(
 
   auto screen = std::make_unique<MenuScreen>(Upper(session->joystick.name), std::vector<MenuRow>{});
   MenuScreen* raw = screen.get();
-  const auto show = [session, raw, control_name] {
+  const auto show = [session, raw, control_name, prompt] {
     const auto now = std::chrono::steady_clock::now();
     const std::string note = session->note.empty() ? std::string() : session->note + "\n";
     std::string body;
@@ -1188,7 +1198,7 @@ std::unique_ptr<MenuScreen> SettingsPages::MapControllerSteps(
       case Phase::kCapture: {
         const auto left = std::chrono::duration_cast<std::chrono::seconds>(
             kStepTime - (now - session->step_started));
-        body = "Press " + std::string(kSteps[session->step].prompt) + " on the controller.\n" +
+        body = "Press " + prompt(kSteps[session->step]) + " on the controller.\n" +
                std::to_string(session->step + 1) + " of " + std::to_string(kStepCount) +
                ". Skipped in " + std::to_string(std::max<int64_t>(0, left.count() + 1)) +
                " s if the controller has none.\n" + note +
@@ -1218,7 +1228,7 @@ std::unique_ptr<MenuScreen> SettingsPages::MapControllerSteps(
     raw->set_body("The controller could not be opened. Press any key to go back.");
   } else {
     show();
-    screen->set_tick([self = shared_from_this(), session, raw, show, advance, restart, save] {
+    screen->set_tick([self = shared_from_this(), session, raw, show, advance, restart, save, prompt] {
       const auto now = std::chrono::steady_clock::now();
       switch (session->phase) {
         case Phase::kCapture:
@@ -1229,7 +1239,7 @@ std::unique_ptr<MenuScreen> SettingsPages::MapControllerSteps(
               advance();
             } else {
               session->note = "That is already " +
-                              std::string(kSteps[used - session->inputs.begin()].prompt) +
+                              prompt(kSteps[used - session->inputs.begin()]) +
                               ". Press another control.";
             }
           } else if (now - session->step_started >= kStepTime) {
@@ -1646,6 +1656,61 @@ std::unique_ptr<MenuScreen> SettingsPages::Wheel() {
   return screen;
 }
 
+// DualSense (#561): adaptive triggers, lightbar and tilt steering through
+// SDL's PS5 driver. All of it applies at once; the triggers follow the
+// title's brake and throttle wherever pad_remap puts them.
+std::unique_ptr<MenuScreen> SettingsPages::DualSense() {
+  std::vector<MenuRow> rows;
+  rows.push_back(Setting("ADAPTIVE TRIGGERS", {{"OFF", {{"pad_ds_triggers", "off"}}},
+                                               {"BRAKE", {{"pad_ds_triggers", "brake"}}},
+                                               {"FULL", {{"pad_ds_triggers", "full"}}}}));
+  std::vector<Choice> strengths;
+  for (int value : {25, 50, 75, 100}) {
+    strengths.push_back(
+        {std::to_string(value) + "%", {{"pad_ds_trigger_strength", std::to_string(value)}}});
+  }
+  rows.push_back(Setting("TRIGGER STRENGTH", std::move(strengths)));
+  rows.push_back(Toggle("GEAR CLICK", "pad_ds_gear_click"));
+  rows.push_back(Setting("LIGHTBAR", {{"PLAYER", {{"pad_ds_lightbar", "player"}}},
+                                      {"RPM", {{"pad_ds_lightbar", "rpm"}}},
+                                      {"OFF", {{"pad_ds_lightbar", "off"}}}}));
+  rows.push_back(Toggle("PLAYER LIGHTS", "pad_ds_player_leds"));
+  rows.push_back(Toggle("TILT STEERING", "pad_gyro_steering"));
+  std::vector<Choice> sensitivities;
+  for (int value : {50, 75, 100, 150, 200, 300}) {
+    sensitivities.push_back(
+        {std::to_string(value) + "%", {{"pad_gyro_sensitivity", std::to_string(value)}}});
+  }
+  rows.push_back(Setting("TILT SENSITIVITY", std::move(sensitivities)));
+  auto screen = std::make_unique<MenuScreen>("DUALSENSE", std::move(rows), [] {
+    bool dualsense = false;
+    bool wireless = false;
+    bool steam = false;
+    for (const auto& joystick : rex::input::sdl::ListJoysticks()) {
+      if (joystick.dualsense) {
+        dualsense = true;
+        wireless |= joystick.wireless;
+      }
+      steam |= joystick.steam_virtual;
+    }
+    if (dualsense) {
+      return std::string(wireless ? "DUALSENSE CONNECTED (BLUETOOTH)"
+                                  : "DUALSENSE CONNECTED (USB)");
+    }
+    if (steam || rex::input::sdl::SteamInputHidesDualSense()) {
+      return std::string("STEAM INPUT HAS THE CONTROLLER");
+    }
+    return std::string("NO DUALSENSE CONNECTED");
+  });
+  screen->set_body(
+      "The brake trigger stiffens and pulses when the wheels lock; FULL adds a buzz on the "
+      "throttle when the wheels spin. RPM colours the lightbar toward the redline. Tilt "
+      "steering adds the pad's tilt to the left stick; press the touchpad to re-centre. If Steam "
+      "Input has the controller, turn it off for this game (Steam: Properties, Controller, "
+      "Disable Steam Input) and restart.");
+  return screen;
+}
+
 std::unique_ptr<MenuScreen> SettingsPages::Controls() {
   std::vector<MenuRow> rows;
   MenuRow controller;
@@ -1657,6 +1722,19 @@ std::unique_ptr<MenuScreen> SettingsPages::Controls() {
   map.activate = [this] { host_ui_.Push(MapController()); };
   rows.push_back(std::move(map));
   rows.push_back(Page("RACING WHEEL", &SettingsPages::Wheel));
+  // Only when a DualSense (or Steam's stand-in for one) is here, or its
+  // settings were changed, so other players never see it.
+  {
+    bool show = rex::input::sdl::SteamInputHidesDualSense() ||
+                REXCVAR_GET(pad_ds_triggers) != "off" || REXCVAR_GET(pad_ds_lightbar) != "player" ||
+                REXCVAR_GET(pad_gyro_steering);
+    for (const auto& joystick : rex::input::sdl::ListJoysticks()) {
+      show |= joystick.playstation || joystick.steam_virtual;
+    }
+    if (show) {
+      rows.push_back(Page("DUALSENSE", &SettingsPages::DualSense));
+    }
+  }
   rows.push_back(Setting("RUMBLE",
                          {{"OFF", {{"pad_rumble_strength", "0"}}},
                           {"25%", {{"pad_rumble_strength", "25"}}},

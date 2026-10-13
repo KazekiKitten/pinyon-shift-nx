@@ -947,6 +947,13 @@ void PinyonShiftApp::OnPostSetup() {
                                       }
                                     });
   UpdateHorPlus();
+  // Until the player has a car, DualSense trigger effects stay slack.
+  if (auto* input = runtime() ? dynamic_cast<rex::input::InputSystem*>(runtime()->input_system())
+                              : nullptr) {
+    input->SetFeedbackDriving(false);
+  }
+  // The title-frame hook then sets it each frame from the player's car and
+  // this same gameplay-view switch.
   PinyonShiftSetMapViewCallback([this](bool open) {
     if (window()) {
       window()->app_context().CallInUIThreadDeferred([this, open] { ApplyMapView(open); });

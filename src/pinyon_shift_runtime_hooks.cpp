@@ -27,6 +27,9 @@
 #include <rex/cvar.h>
 #include <rex/filesystem.h>
 #include <rex/kernel/xam/module.h>
+#include <rex/input/dualsense.h>
+#include <rex/input/input_system.h>
+#include <rex/logging.h>
 #include <rex/memory.h>
 #include <rex/ppc/context.h>
 #include <rex/perf/counter.h>
@@ -67,6 +70,9 @@ REXCVAR_DEFINE_BOOL(pinyon_shift_skip_empty_array_walk, true, "Pinyon Shift",
     .lifecycle(rex::cvar::Lifecycle::kHotReload);
 REXCVAR_DEFINE_BOOL(pinyon_shift_skip_opening_movies, false, "Pinyon Shift",
                     "Complete the opening splash movies immediately");
+REXCVAR_DEFINE_BOOL(pad_ds_log_telemetry, false, "Input",
+                    "Log the player car's engine, gear, ABS and wheel slip twice a second "
+                    "as read for DualSense trigger effects");
 REXCVAR_DEFINE_BOOL(fh1_render_test_rally_ai_driver, false, "Pinyon Shift",
                     "Use native AI for Rally results/persistence tests; ignored outside render tests")
     .lifecycle(rex::cvar::Lifecycle::kRequiresRestart);
@@ -150,6 +156,9 @@ REXCVAR_DEFINE_BOOL(disable_depth_of_field, true, "Pinyon Shift",
 
 namespace {
 
+// The pause map and other non-gameplay views (UpdateMapView), for DualSense
+// feedback, which reads it before the map view state below is declared.
+std::atomic<bool> g_narrow_view_for_feedback{true};
 std::atomic<uint32_t> g_cleanup_pointer_field{};
 std::atomic<uint32_t> g_geometry_zero_index_buffer{};
 std::atomic<uint64_t> g_last_frame_telemetry_ms{};
@@ -5808,6 +5817,102 @@ static void QueueTitleUpdateRaceTask() {
   });
 }
 
+// DS-3.1: the player car's engine, gear, ABS and wheel slip for DualSense
+// trigger effects and the RPM lightbar, and whether the player is driving at
+// all. Read only while one of those settings is on. Offsets are documented
+// in site/findings/objects.toml (car dynamics); they are the same in v4.
+namespace car_dynamics {
+constexpr uint32_t kInterface = 0x2D90;      // CCar -> ICarDynamics
+constexpr uint32_t kEngineSpeed = 324;       // f32 rad/s
+constexpr uint32_t kRedline = 452;           // f32 rad/s
+constexpr uint32_t kGear = 2240;             // u8: 0 reverse, 1-8, 9 neutral
+constexpr uint32_t kAbsActive = 3020;        // s32, rewritten every step
+constexpr uint32_t kAbsAssist = 3436;        // the ABS assist setting
+constexpr uint32_t kSpeed = 3128;            // f32 m/s
+constexpr uint32_t kWheels = 3936;           // four 1024-byte wheel blocks
+constexpr uint32_t kWheelStride = 1024;
+constexpr uint32_t kWheelSlip = 496;         // f32 smoothed slip, 1.0 = peak grip
+constexpr uint32_t kWheelContact = 796;      // u8
+constexpr float kRadPerSecToRpm = 9.5492966f;
+// The car's driver type, 0 for the player's car (same offset in v4).
+constexpr uint32_t kDriverType = 11728;
+}  // namespace car_dynamics
+
+static void QueueCarTelemetry() {
+  namespace ds = rex::input::dualsense;
+  auto* input = rex::input::InputSystem::Live();
+  if (!input) return;
+  const bool wanted = ds::CurrentTriggerSettings().mode != ds::TriggerMode::kOff ||
+                      ds::CurrentLightbarMode() == ds::LightbarMode::kRpm;
+  if (!wanted) return;
+  pinyon_shift::mod::EnqueueHostGuestTask([input] {
+    namespace cd = car_dynamics;
+    auto pointer = [](uint32_t field, uint32_t size) -> uint32_t {
+      if (!PinyonShiftGuestRangeReadable(field, 4)) return 0;
+      const uint32_t value = LoadGuestU32(field);
+      return value && PinyonShiftGuestRangeReadable(value, size) ? value : 0;
+    };
+    const uint32_t holder = pointer(FH1_ADDR(0x832DF024u), 8);
+    const uint32_t manager = holder ? pointer(holder + 4, 56) : 0;
+    const uint32_t world = manager ? pointer(manager + 4, 136) : 0;
+    const uint32_t slot = world ? pinyon_shift::mod::CallGuest(FH1_ADDR(0x8248BAE8u), {world}) : 0;
+    const uint32_t car = slot && PinyonShiftGuestRangeReadable(slot, 4)
+                             ? pointer(slot, cd::kDriverType + 4) : 0;
+    const uint32_t dyn = car ? pointer(car + cd::kInterface,
+                                       cd::kWheels + 4 * cd::kWheelStride) : 0;
+    const bool player = dyn && LoadGuestU32(car + cd::kDriverType) == 0;
+    const bool narrow = g_narrow_view_for_feedback.load(std::memory_order_relaxed);
+    input->SetFeedbackDriving(player && !narrow);
+    static uint32_t log_frames = 0;
+    const bool log = REXCVAR_GET(pad_ds_log_telemetry) && ++log_frames >= 30;
+    if (log) log_frames = 0;
+    if (!player) {
+      if (log) {
+        REXLOG_INFO("Car telemetry: no player car (world {:08X} slot {:08X} car {:08X} "
+                    "dynamics {:08X} driver {})",
+                    world, slot, car, dyn,
+                    car ? int32_t(LoadGuestU32(car + cd::kDriverType)) : -1);
+      }
+      return;
+    }
+
+    ds::CarTelemetry t;
+    t.valid = true;
+    t.rpm = LoadGuestF32(dyn + cd::kEngineSpeed) * cd::kRadPerSecToRpm;
+    t.redline_rpm = LoadGuestF32(dyn + cd::kRedline) * cd::kRadPerSecToRpm;
+    const uint8_t gear = LoadGuestU8(dyn + cd::kGear);
+    t.gear = gear == 0 ? -1 : gear >= 9 ? 0 : int(gear);
+    t.speed_mps = LoadGuestF32(dyn + cd::kSpeed);
+    t.abs_active = LoadGuestU32(dyn + cd::kAbsActive) != 0;
+    float slip[4] = {};
+    for (uint32_t w = 0; w < 4; ++w) {
+      const uint32_t wheel = dyn + cd::kWheels + w * cd::kWheelStride;
+      const float value = LoadGuestF32(wheel + cd::kWheelSlip);
+      slip[w] = std::isfinite(value) && LoadGuestU8(wheel + cd::kWheelContact) ? value : 0.0f;
+    }
+    auto axle = [](float a, float b) { return std::fabs(a) >= std::fabs(b) ? a : b; };
+    // The title's slip follows the car's forward axis; reversing under power
+    // reads negative, so flip it to the direction of travel.
+    const float direction = t.gear < 0 ? -1.0f : 1.0f;
+    t.front_slip = direction * axle(slip[0], slip[1]);
+    t.rear_slip = direction * axle(slip[2], slip[3]);
+    // The drivetrain layout is not traced yet: an axle counts as driven
+    // while it is the one spinning, so wheelspin reaches the throttle on
+    // any layout.
+    t.driven_front = t.front_slip > t.rear_slip;
+    t.driven_rear = !t.driven_front;
+    if (!std::isfinite(t.rpm) || !std::isfinite(t.redline_rpm)) return;
+    input->SetCarTelemetry(t);
+
+    if (log) {
+      REXLOG_INFO("Car telemetry: rpm {:.0f} redline {:.0f} gear {} speed {:.1f} abs {} slip "
+                  "{:+.2f} {:+.2f} {:+.2f} {:+.2f} abs_assist {} narrow {}",
+                  t.rpm, t.redline_rpm, t.gear, t.speed_mps, t.abs_active ? 1 : 0, slip[0],
+                  slip[1], slip[2], slip[3], LoadGuestU32(dyn + cd::kAbsAssist), narrow ? 1 : 0);
+    }
+  });
+}
+
 static void QueueRallyRaceTrace() {
   if constexpr (pinyon_shift::fh1::kTitleUpdateV4) {
     PumpCarChallengeCommits();
@@ -6269,6 +6374,7 @@ void PinyonShiftTraceFrameTelemetry(PPCRegister& r28, PPCRegister& r31) {
     }
   }
   QueueRallyRaceTrace();
+  QueueCarTelemetry();
   // frame.tick for mods: their guest tasks, then the hook.
   pinyon_shift::mod::RunGuestTasks();
   if (pinyon_shift::mod::HasSubscribers(PINYON_HOOK_FRAME_TICK)) {
@@ -7084,6 +7190,7 @@ static void UpdateMapView() {
   if (now_narrow == narrow) return;
   narrow = now_narrow;
   g_narrow_view.store(narrow, std::memory_order_relaxed);
+  g_narrow_view_for_feedback.store(narrow, std::memory_order_relaxed);
   const bool open = narrow;
   std::function<void(bool)> callback;
   {

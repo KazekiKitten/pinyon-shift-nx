@@ -106,6 +106,19 @@ The two globals are written as base-game addresses because the symbol table name
 
 {{findings:objects/Vehicles, camera and crowd}}
 
+## Car dynamics
+
+The player's car keeps its physics behind an `ICarDynamics` interface. The game's own dashboard and rumble read the engine, gear, speed, ABS and per-wheel slip from it, and so do the DualSense trigger effects (see [Playing](playing.md#dualsense)). A reader goes from the world to the player's car slot, then to the car, then to the interface:
+
+```text
+world    = [[[0x832DF024] + 4] + 4]
+car      = [sub_8248BAE8(world)]          player car slot -> car
+dynamics = [car + 11664]                  ICarDynamics
+wheel w  = dynamics + 3936 + 1024 * w     0, 1 front; 2, 3 rear
+```
+
+{{findings:objects/Car dynamics}}
+
 ## Activities and collectibles
 
 Free roam's collectibles and points of interest are **activities**: discount signs (`CActivityFlyers`), barn finds, speed cameras, average speed zones, gas stations and the rest. Discount signs and barn finds also keep a saved record in the profile, which is how the game remembers what was found and revealed.

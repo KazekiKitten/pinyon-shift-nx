@@ -27,6 +27,7 @@
 #include <rex/input/input.h>
 #include <rex/input/input_driver.h>
 #include <rex/input/input_system.h>
+#include <rex/input/sdl/sdl_input_driver.h>
 #include <rex/kernel/xam/ui_provider.h>
 #include <rex/system/achievement_manager.h>
 #include <rex/system/kernel_state.h>
@@ -43,6 +44,10 @@
 
 REXCVAR_DEFINE_BOOL(fh1_render_test_log_file_opens, false, "Pinyon Shift",
                     "Record every guest file open as a render-test event")
+    .lifecycle(rex::cvar::Lifecycle::kRequiresRestart);
+REXCVAR_DEFINE_BOOL(fh1_render_test_physical_pads, false, "Pinyon Shift",
+                    "Render tests: real controllers join the scripted pad on user 0 (hardware "
+                    "checks such as DualSense trigger effects)")
     .lifecycle(rex::cvar::Lifecycle::kRequiresRestart);
 
 #ifdef PINYON_SHIFT_PGO_GENERATE
@@ -598,6 +603,15 @@ class ScriptedInputDriver final : public rex::input::InputDriver {
 std::unique_ptr<rex::system::IInputSystem> CreateInputSystem(bool) {
   auto input = std::make_unique<rex::input::InputSystem>(nullptr);
   input->AddDriver(std::make_unique<ScriptedInputDriver>());
+  if (REXCVAR_GET(fh1_render_test_physical_pads)) {
+    // Real controllers join user 0 beside the script, so a route can drive
+    // what the pad in hand feels (DualSense trigger checks); their input
+    // merges with the script's.
+    auto sdl = std::make_unique<rex::input::sdl::SDLInputDriver>(nullptr, 0);
+    if (sdl->Setup() == X_STATUS_SUCCESS) {
+      input->AddDriver(std::move(sdl));
+    }
+  }
   input->SetDeviceAssignment(std::make_unique<rex::input::SlotAssignment>());
   return input;
 }

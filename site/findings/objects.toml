@@ -74,7 +74,7 @@ group = """Vehicles, camera and crowd"""
 base = """sub_8248BAE8, sub_8249E570, sub_828FEAF8"""
 v4 = """sub_824BB8F8, sub_8250B050"""
 name = """player car and AI control"""
-what = """`sub_8248BAE8(world)` returns the player's car slot (a pointer to the car) from the world's car vector at `+128`/`+132` (one entry in a solo world). `sub_8249E570(car, mode)` sets the car's control mode, 0 for the player and 1 for AI, as `CDisableAIPlayerCarControls` (`sub_828FEAF8`) uses it: it hands the car to AI driving with normal physics and route tracking, and returns it to the player. Car fields: `+0x3B70` and the control mode word `+0x3B78` (read by the setter), race serial `+14564`, an ended flag `+14603`, driver type `+11728` (0 for the player) and a control object `+15216`. Car fields after about `0x3B00` move by 16 bytes in v4 (`+0x3B80`/`+0x3B88`). The AI does not finish every route: on Rally route 10 it stops against a barrier at 41 %, and in v4's scripted first-run Rally stage it fights the intro's own control (stopped at 19 %) or, engaged later, ends in the trees at 22 % as with no input."""
+what = """`sub_8248BAE8(world)` returns the player's car slot (a pointer to the car) from the world's car vector at `+128`/`+132` (one entry in a solo world). `sub_8249E570(car, mode)` sets the car's control mode, 0 for the player and 1 for AI, as `CDisableAIPlayerCarControls` (`sub_828FEAF8`) uses it: it hands the car to AI driving with normal physics and route tracking, and returns it to the player. Car fields: `+0x3B70` and the control mode word `+0x3B78` (read by the setter), race serial `+14564`, an ended flag `+14603`, driver type `+11728` (0 for the player) and a control object `+15216`. In the base game's render-test drive the word at `+0x3B78` reads 1 while the player drives, so it does not tell the player's car from an AI one there; the driver type does. Car fields after about `0x3B00` move by 16 bytes in v4 (`+0x3B80`/`+0x3B88`). The AI does not finish every route: on Rally route 10 it stops against a barrier at 41 %, and in v4's scripted first-run Rally stage it fights the intro's own control (stopped at 19 %) or, engaged later, ends in the trees at 22 % as with no input."""
 how = """Calling the setter handed the player car to the title's AI for whole stages; fields read in race traces; v4 render-test runs with and without it, with the v4 mapping verified (identical code apart from the moved field)."""
 confidence = """confirmed"""
 note = """Why the AI stalls on those routes is unknown."""
@@ -119,6 +119,70 @@ how = """Probe hooks at function entry on three routes."""
 confidence = """confirmed"""
 negative = true
 source = """docs/DESKTOP_RENDERER_BACKLOG.md DR-1.5 crowd disposition, DR-1.5 high-frame-rate steppers"""
+
+# ----------------------------------------------------------- Car dynamics
+
+[[finding]]
+group = """Car dynamics"""
+base = """sub_8249E4B8, 0x8223759C"""
+v4 = """sub_8250AF98"""
+name = """car dynamics interface"""
+what = """`[car + 11664]` (`0x2D90`) is the car's `ICarDynamics`, the interface to its physics (vtable `0x8223759C`, 339 slots). It is a subobject of `CCarDynamics` at `+0xAD0`, so a `CCarDynamics` offset is the interface offset plus `0xAD0`. The car's own code reaches it through `sub_8249E4B8` (returns `car + 11664`) about 220 times. The engine, gear, speed, ABS and wheel fields in this group are offsets from it; the `CCarDynamics` layout is the same in v4."""
+how = """Getter and vtable calls in the car code; every getter below matched in v4 with the same offsets; read each frame at run time for DualSense trigger effects."""
+confidence = """confirmed"""
+source = """docs/DUALSENSE_BACKLOG.md DS-3; src/pinyon_shift_runtime_hooks.cpp QueueCarTelemetry"""
+
+[[finding]]
+group = """Car dynamics"""
+base = """sub_82D1D078"""
+name = """engine speed, redline and limiter"""
+what = """Engine speeds are floats in rad/s; the getters multiply by 9.5493 (60/2π) for RPM. `+324` is the engine speed, `+452` the redline (the dashboard shift light comes on at 0.9 × it), `+456` the limiter the engine speed is clamped to, `+1228` idle and `+2244` the transmission. The guest's rumble uses (RPM − idle) / (limiter − idle) as its engine channel. In the render-test car: 700 to 800 RPM at idle, a 7300 RPM redline and about 7900 RPM on the limiter."""
+how = """The tachometer and telemetry getters; read at run time on a launch, through the gears and in reverse."""
+confidence = """confirmed"""
+source = """docs/DUALSENSE_BACKLOG.md DS-3"""
+
+[[finding]]
+group = """Car dynamics"""
+base = """sub_82D1D868"""
+v4 = """sub_82DDF7C8"""
+name = """gear and shift state"""
+what = """`+2240` is the gear as a byte: 0 reverse, 1 to 8 forward, 9 neutral (the dashboard prints the reverse and neutral strings for 0 and 9). `+3932` reads 4 while a shift is in progress, which drives the rumble's shift pulse."""
+how = """Dashboard getter and its strings; at run time the byte went 1, 2, 3 through the gears and 0 in reverse. The shift-state value is from the rumble builder only."""
+confidence = """confirmed"""
+note = """The shift-state value 4 is probable: not checked at run time."""
+source = """docs/DUALSENSE_BACKLOG.md DS-3"""
+
+[[finding]]
+group = """Car dynamics"""
+base = """sub_82D1CE38"""
+v4 = """sub_82DDED78"""
+name = """vehicle speed"""
+what = """`+3128` is the car's speed as a float in m/s: the speedometer converts it through the unit table, and the rumble scales it by 1/22.352 (22.352 m/s is 50 mph). At run time it read 22 m/s at 6200 RPM in second gear."""
+how = """Speedometer and rumble getters; run-time reads on a launch."""
+confidence = """probable"""
+source = """docs/DUALSENSE_BACKLOG.md DS-3"""
+
+[[finding]]
+group = """Car dynamics"""
+base = """sub_82D1D880, sub_82D365B0"""
+v4 = """sub_82DDF7E0"""
+name = """ABS, traction and stability flags"""
+what = """The cockpit ABS light is `[+3020] != 0 && [+3436] != 0`. `+3020` is the ABS-active flag: the brake model `sub_82D365B0` clears it on every physics step and sets it on the steps where it releases a wheel whose slip ratio is past its threshold, so it flickers during an ABS stop rather than staying on. `+3436` is the ABS assist setting. The TCS light is `[+3004] > 0.1` (a float intervention amount) and the STM light `[+3016] != 0`."""
+how = """The cockpit-light update in `CDigitalGauge`; at run time `+3436` read 1 with the seed save's assists, and `+3020` set on scattered steps of each hard stop (seen as the DualSense ABS effect switching on and off)."""
+confidence = """confirmed"""
+note = """TCS and STM are from the light update only, not checked at run time."""
+source = """docs/DUALSENSE_BACKLOG.md DS-3"""
+
+[[finding]]
+group = """Car dynamics"""
+base = """sub_82D2F348, sub_82D36DF8"""
+v4 = """sub_82DDFD20"""
+name = """wheel blocks and slip ratio"""
+what = """Four 1024-byte wheel blocks start at `+3936`: wheels 0 and 1 are the front axle, 2 and 3 the rear (left and right order is a guess). In a block, `+496` is the smoothed slip ratio divided by the tyre's peak slip ratio, so 1 is peak grip and beyond it the wheel spins or locks; `+492` is the raw value the tyre model `sub_82D2F348` writes each step. The sign follows the car's forward axis: positive when the wheel turns faster than the ground (wheelspin going forward), negative when slower (locking going forward, and also wheelspin in reverse). `+12` is the wheel speed in rad/s, `+337` the surface index (a byte into the physics surface table), `+796` nonzero while the wheel touches the ground."""
+how = """The tyre model and the ABS model that releases a wheel past the threshold; at run time on a rear-drive launch the rear wheels read +4 to +12 spinning in first, about +0.4 accelerating cleanly in second, −2.75 at the front locking under braking, and −6 to −14 spinning in reverse."""
+confidence = """confirmed"""
+note = """The surface index was not enumerated at run time."""
+source = """docs/DUALSENSE_BACKLOG.md DS-3"""
 
 # ------------------------------------------------ Activities and collectibles
 

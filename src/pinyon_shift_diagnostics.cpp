@@ -1,5 +1,6 @@
 #include "pinyon_shift_diagnostics.h"
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -14,6 +15,7 @@
 #include <sstream>
 #include <string>
 #include <system_error>
+#include <thread>
 
 #include <rex/logging.h>
 #include <rex/filesystem.h>
@@ -284,6 +286,16 @@ bool InitializeEarly() {
     RecordEvent("diagnostics.execute_crash_test.begin");
     crash::ExecuteNull();
     return false;
+  }
+  // A crash in mid-game rather than at start, for checks of what a crash
+  // leaves behind (a DualSense's trigger effects).
+  if (const auto seconds = platform::EnvironmentVariable("PINYON_SHIFT_DEFERRED_CRASH_SELF_TEST")) {
+    const int delay = std::max(1, std::atoi(seconds->c_str()));
+    std::thread([delay] {
+      std::this_thread::sleep_for(std::chrono::seconds(delay));
+      RecordEvent("diagnostics.deferred_crash_test.begin");
+      crash::RaiseAccessViolation();
+    }).detach();
   }
   return true;
 }

@@ -178,6 +178,7 @@ PINYON_SYMBOL("ui.pause_button_constructed", 0x826F9300)
 PINYON_SYMBOL("ui.pause_menu_action", 0x827EBEE0)
 PINYON_SYMBOL("vehicle.pose_written", 0x82C84424)
 PINYON_SYMBOL("world.game_mode", 0x824B75E8)
+PINYON_SYMBOL("world.player_car_slot", 0x824BB8F8)
 PINYON_OFFSET("activity.name", 16)  // verified on v4
 PINYON_OFFSET("activity.revealed", 8)  // verified on v4
 PINYON_OFFSET("activity_manager.begin", 4)  // verified on v4
@@ -189,8 +190,19 @@ PINYON_OFFSET("barn_find.marker", 320)  // verified on v4
 PINYON_OFFSET("barn_find.position", 112)  // verified on v4
 PINYON_OFFSET("barn_find.state", 424)  // verified on v4
 PINYON_OFFSET("barn_find_state.status", 56)  // verified on v4
+PINYON_OFFSET("car.dynamics", 11664)  // verified on v4
 PINYON_OFFSET("collectible_state.found", 44)  // verified on v4
 PINYON_OFFSET("collectible_state.revealed", 40)  // verified on v4
+PINYON_OFFSET("dynamics.abs_active", 3020)  // verified on v4
+PINYON_OFFSET("dynamics.abs_assist", 3436)  // verified on v4
+PINYON_OFFSET("dynamics.engine_angvel", 324)  // verified on v4
+PINYON_OFFSET("dynamics.gear", 2240)  // verified on v4
+PINYON_OFFSET("dynamics.idle_angvel", 1228)  // verified on v4
+PINYON_OFFSET("dynamics.max_angvel", 456)  // verified on v4
+PINYON_OFFSET("dynamics.redline_angvel", 452)  // verified on v4
+PINYON_OFFSET("dynamics.speed", 3128)  // verified on v4
+PINYON_OFFSET("dynamics.wheel_stride", 1024)  // verified on v4
+PINYON_OFFSET("dynamics.wheels", 3936)  // verified on v4
 PINYON_OFFSET("flyer.collected_marker", 96)  // verified on v4
 PINYON_OFFSET("flyer.marker", 56)  // verified on v4
 PINYON_OFFSET("flyer.object", 136)  // verified on v4
@@ -214,5 +226,8 @@ PINYON_OFFSET("vehicle.active_slot", 1500)  // verified on v4
 PINYON_OFFSET("vehicle.slot.forward", 15184)  // verified on v4
 PINYON_OFFSET("vehicle.slot.position", 15120)  // verified on v4
 PINYON_OFFSET("vehicle.slot_stride", 1056)  // verified on v4
+PINYON_OFFSET("wheel.contact", 796)  // verified on v4
+PINYON_OFFSET("wheel.norm_slip_ratio", 496)  // verified on v4
+PINYON_OFFSET("wheel.surface_index", 337)  // verified on v4
 PINYON_OFFSET("world.session", 124)  // verified on v4
 PINYON_OFFSET("world.time_of_day", 232)  // verified on v4
