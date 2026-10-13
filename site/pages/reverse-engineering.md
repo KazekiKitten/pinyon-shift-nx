@@ -56,6 +56,8 @@ Each subsystem page ends in a table of records with a filter above it:
 
 Every record has a link: click its name to get an address like `game-world/#world-pvs-zones` to cite in an issue or commit.
 
+The generator also writes `classes.json` beside the generated code (`.local/generated/default`): every vtable with its class, its offset in the complete object, its base classes in order and its slots, read from the executable's RTTI. In the base image that is 7,636 vtables for 6,389 classes, 7,236 with base classes. It is derived from the game, so it stays local, like the generated code; the findings cite it.
+
 ## Using the records in a disassembler
 
 The build writes [`symbols.json`](https://arcanite24.github.io/pinyon-shift/symbols.json) next to these pages: every address on the site with its name, kind, v4 address and the page that explains it, plus the mod structure offsets. It can name functions in a disassembler. This Ghidra script (Jython, run from the Script Manager with the base `default.xex` loaded) labels each one:
