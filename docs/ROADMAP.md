@@ -1,6 +1,6 @@
 # Roadmap
 
-Public priorities, updated 2026-10-10 from community feedback and the current
+Public priorities, updated 2026-10-13 from community feedback and the current
 development work. Gameplay-blocking bugs and save safety take priority within
 each phase. These are priorities, not release dates; ports need validation on
 their target hardware before they are ready for players.
@@ -60,6 +60,11 @@ Done since 0.1:
 
 In progress:
 
+- [ ] Main focus: bring the CPU and memory cost close to a native build of
+  FH1, measured on the Odin 2 Portal and the Steam Deck, by replacing
+  emulated layers (the GPU command front end, the audio path, kernel
+  objects) and translation overhead
+  ([near-native research](NEAR_NATIVE_RESEARCH.md))
 - [ ] Fix remaining crashes, loading failures, rendering regressions and
   recurring stutter: hills seen through (#424), hitching (#381), frame drops
   in free roam (#416), resuming after quitting before the first festival
