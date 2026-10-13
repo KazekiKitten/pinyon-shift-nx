@@ -103,10 +103,31 @@ group = """Cars"""
 base = """Data_Car clones, CarClasses"""
 v4 = """same"""
 name = """a clone car in game"""
-what = """A car copied to id 1700 from the XKR-S (its rows in 28 tables renumbered as the Rally DLC's clones are: car id, `ModelId`, car x 1000 + n for body, colours, physics and upgrades; engines, drivetrains and aero shared) is listed, named from a new `Data_Car.str` key, bought and saved. The game shows `PerformanceIndex` linearly within its class, from the previous class's `MaxPerformanceIndex`/`MaxDisplayPerformanceIndex` to this one's (0.72 shows as A 579), and `ClassID` is the first class whose maximum is at or above it for all 153 base cars. Event recommendations query `EventRecommendedCars` with `IsDrivable`, `IsSelectable`, `IsUnicorn=0`, `IsCarVisible`, `IsInstalled`, `IsPurchased` and the event's class filter, sorted by index: a clone moved to class S left the class-A list. Neither the index nor the ratings are recomputed from the scales."""
+what = """A car copied to id 1700 from the XKR-S (its rows in 28 tables renumbered as the Rally DLC's clones are: car id, `ModelId`, car x 1000 + n for body, colours, physics and upgrades; engines, drivetrains and aero shared) is listed, named from a new `Data_Car.str` key, bought and saved. The game shows `PerformanceIndex` linearly within its class, from the previous class's `MaxPerformanceIndex`/`MaxDisplayPerformanceIndex` to this one's (0.72 shows as A 579), and `ClassID` is the first class whose maximum is at or above it for all 153 base cars. Event recommendations query `EventRecommendedCars` with `IsDrivable`, `IsSelectable`, `IsUnicorn=0`, `IsCarVisible`, `IsInstalled`, `IsPurchased` and the event's class filter, sorted by index: a clone moved to class S left the class-A list. The Autoshow lists `Data_Car.PerformanceIndex` and `ClassID` as written, rounded up when shown (an exact 197 shows as 198); the owned car does not (see the next record)."""
 how = """`tools/clone-fh1-car.py`; buy-car route from a pinned seed with the clone recommended; query strings in the executable."""
 confidence = """confirmed"""
 source = """tools/clone-fh1-car.py; docs/REVERSE_ENGINEERING.md@fc1751fe2a38 Custom content"""
+
+[[finding]]
+group = """Cars"""
+base = """owned car performance index"""
+v4 = """same"""
+name = """a bought car's index"""
+what = """Once a car is bought the game shows an index it computes from the car's physics, not `Data_Car.PerformanceIndex`: five clones listed at D 216, C 342, B 451, S 620 and A 521 were delivered at E 197, C 342, B 423, A 570 and A 532, their sources' own values moved by the torque change. `GameTorqueScale` raises it by about 0.20 raw index per unit of ln(scale) (an Exige at 1.2: A 528 to A 570; a 370Z at 1.1: A 510 to A 532); the speed-limited XKR-S gained 0.15 per unit (A 574 to A 598 at 1.15). For stock cars the two agree (M3 A 521 listed and owned). Upgrades recompute it too: Auto Upgrade took the five to D 241, C 400, B 497, A 595 and A 600, kept after a reload. Setting the listed index to the owned value makes the Autoshow and the garage agree."""
+how = """Five clones bought from the Autoshow in a chosen colour, driven, Auto Upgraded at Dak's Garage and reloaded, each from a pinned seed; Autoshow listing and garage captures."""
+confidence = """confirmed"""
+source = """tools/clone-fh1-car.py; docs/MODDING.md New cars from existing models"""
+
+[[finding]]
+group = """Cars"""
+base = """Data_Car.CurbWeight"""
+v4 = """same"""
+name = """not the car's weight in game"""
+what = """A clone with `CurbWeight` scaled by 0.9 weighed the same as its source in the upgrade screen (a Corolla 1,045 kg, an Exige 930 kg) and rated within a point of it (E 196 to E 197). The game takes the weight from other data, not identified (body or upgrade tables are the candidates)."""
+how = """The same five-clone runs; the garage's Install Upgrades screen."""
+confidence = """confirmed"""
+negative = true
+source = """tools/clone-fh1-car.py"""
 
 [[finding]]
 group = """Cars"""

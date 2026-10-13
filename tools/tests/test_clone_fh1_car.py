@@ -93,17 +93,24 @@ class CloneFh1CarTests(unittest.TestCase):
         self.assertEqual(row[5:], (0.6, 4, 1, 0, 0))
         self.assertEqual(names, {"IDS_PinyonCar_30": "Pinyon GT", "IDS_PinyonCarShort_30": "GT"})
 
-    def test_estimates_the_index_from_the_scales(self):
-        db, _ = self.apply([{"id": 30, "source": 12, "name": "Light", "weight_scale": 0.8}])
-        index, class_id = db.execute("select PerformanceIndex, ClassID from Data_Car where Id = 30").fetchone()
-        self.assertAlmostEqual(index, 0.5 + MODULE.estimated_index_shift(1.0, 0.8), places=5)
-        self.assertEqual(class_id, 3)
+    def test_estimates_the_index_from_the_torque(self):
+        db, _ = self.apply([{"id": 30, "source": 12, "name": "Strong", "torque_scale": 1.5}])
+        index, class_id, weight = db.execute(
+            "select PerformanceIndex, ClassID, CurbWeight from Data_Car where Id = 30").fetchone()
+        self.assertAlmostEqual(index, 0.5 + 0.20 * 0.405465, places=5)
+        self.assertEqual((class_id, weight), (3, 10.0))
+
+    def test_refuses_a_weight_scale(self):
+        # The game weighs a car from its body and upgrade data, not CurbWeight.
+        with self.assertRaisesRegex(MODULE.CloneError, "weight_scale has no effect"):
+            MODULE.build({"car": [{"id": 30, "source": 12, "name": "Light",
+                                    "weight_scale": 0.8}]}, self.db)
 
     def test_converts_the_shown_index(self):
         # The game shows 0.72 as A 579 (class 5, 500 at 0.6505, 600 at 0.739).
         db, _ = self.apply([{"id": 30, "source": 12, "name": "Shown", "pi": 579}])
         index, class_id = db.execute("select PerformanceIndex, ClassID from Data_Car where Id = 30").fetchone()
-        self.assertAlmostEqual(index, 0.6505 + 79 * 0.0885 / 100, places=6)
+        self.assertAlmostEqual(index, 0.6505 + 78.75 * 0.0885 / 100, places=6)
         self.assertEqual(class_id, 5)
 
     def test_refuses_a_taken_id_or_a_missing_source(self):

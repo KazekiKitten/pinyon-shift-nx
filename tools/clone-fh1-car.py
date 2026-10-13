@@ -11,9 +11,9 @@ A spec lists the new cars:
   year = 2013               # optional
   price = 85000             # optional, BaseCost in credits
   torque_scale = 1.15       # optional, multiplies the source's GameTorqueScale
-  weight_scale = 0.95       # optional, multiplies the source's CurbWeight
-  pi = 579                  # optional, the index as the game shows it (100-999)
-  performance_index = 0.62  # optional, the raw index; without either, estimated
+  pi = 598                  # optional, the Autoshow's index as shown (101-999)
+  performance_index = 0.73  # optional, the same as the raw index; without
+                            # either, estimated from torque_scale
 
 and the tool writes, into a mod directory:
 
@@ -29,15 +29,23 @@ renumbered as the game's DLC clones are: the car id itself, and car x 1000 + n
 for its body, colours, physics and upgrade rows. Engines, drivetrains, torque
 curves, aero and wheels stay shared by id.
 
-The class follows the performance index as the game's data does: the first
-CarClasses row whose MaxPerformanceIndex is at or above it (true for every
-base car). The game shows the index linearly within its class, from the
-previous class's MaxPerformanceIndex and MaxDisplayPerformanceIndex to this
-class's (0.72 shows as A 579), and pi converts back the same way. Without an
-explicit index, the source's is moved by 0.27 per unit
-of ln(torque_scale / weight_scale), the slope of the index over
-ln(power / weight) across the base cars; that fit is loose (49 display points
-RMS), so give performance_index when the class matters.
+The index and class written here are what the Autoshow lists. Once the car
+is bought the game computes its index from the car's physics and shows that
+instead, so a written index the physics do not produce lists the car in one
+class and delivers it in another. Without an explicit index the source's is
+moved by 0.20 per unit of ln(torque_scale), the slope measured on bought
+clones (an Exige at 1.2 and a 370Z at 1.1, within 3 shown points); a car
+held back by a speed limiter gains less (an XKR-S at 1.15 gained 0.15 per
+unit). To list a car exactly, buy it once, read the index the game shows
+and give it as pi. The game shows the index linearly within its class,
+from the previous class's MaxPerformanceIndex and MaxDisplayPerformanceIndex
+to this class's, rounded up (0.72 shows as A 579), and the class is the first
+CarClasses row whose MaxPerformanceIndex is at or above it, as for every
+base car.
+
+Data_Car.CurbWeight is not the car's weight in the game: a clone with it
+scaled weighed and rated the same as its source, so the spec has no
+weight_scale.
 
   clone-fh1-car.py cars.toml <state>/mods/<mod> [--game-db gamedb.slt]
 """
@@ -54,8 +62,9 @@ from pathlib import Path
 DEFAULT_DB = Path(".local/game/base/media/db/gamedb.slt")
 SQL_NAME = "50-clone-cars.sql"
 STRINGS_TABLE = "Data_Car"
-# Slope of PerformanceIndex over ln(peak power / curb weight), base cars.
-PI_PER_LOG_POWER_TO_WEIGHT = 0.2715
+# Slope of a bought clone's PerformanceIndex over ln(torque_scale), as the
+# game computes it (#505).
+PI_PER_LOG_TORQUE = 0.20
 
 # Tables holding a car's own rows, with the column that names the car (or
 # its body, id x 1000).
@@ -130,19 +139,20 @@ def renumber(column: str, source: int, target: int) -> str:
 
 def raw_index_sql(shown: int) -> str:
     """SQL for the raw index the game shows as `shown`: linear within the
-    class whose display range holds it."""
+    class whose display range holds it. The game rounds the shown index up
+    (an exact 197 is listed as 198), so aim a quarter point below."""
     upper = (f"(select Id from CarClasses where MaxDisplayPerformanceIndex >= {shown} "
              "order by Id limit 1)")
     low = (f"(select {{0}} from CarClasses where Id < {upper} order by Id desc limit 1)")
     high = f"(select {{0}} from CarClasses where Id = {upper})"
     low_raw, low_shown = low.format("MaxPerformanceIndex"), low.format("MaxDisplayPerformanceIndex")
     high_raw, high_shown = high.format("MaxPerformanceIndex"), high.format("MaxDisplayPerformanceIndex")
-    return (f"{low_raw} + ({shown} - {low_shown}) * ({high_raw} - {low_raw}) "
+    return (f"{low_raw} + ({shown} - 0.25 - {low_shown}) * ({high_raw} - {low_raw}) "
             f"/ ({high_shown} - {low_shown})")
 
 
-def estimated_index_shift(torque_scale: float, weight_scale: float) -> float:
-    return PI_PER_LOG_POWER_TO_WEIGHT * math.log(torque_scale / weight_scale)
+def estimated_index_shift(torque_scale: float) -> float:
+    return PI_PER_LOG_TORQUE * math.log(torque_scale)
 
 
 def car_sql(db: sqlite3.Connection, car: dict, strings) -> str:
@@ -158,9 +168,11 @@ def car_sql(db: sqlite3.Connection, car: dict, strings) -> str:
     if db.execute("select 1 from Data_Car where Id = ?", (target,)).fetchone():
         raise CloneError(f"car {target}: the id is taken")
     torque = float(car.get("torque_scale", 1.0))
-    weight = float(car.get("weight_scale", 1.0))
-    if torque <= 0 or weight <= 0:
-        raise CloneError(f"car {target}: scales must be positive")
+    if torque <= 0:
+        raise CloneError(f"car {target}: torque_scale must be positive")
+    if "weight_scale" in car:
+        raise CloneError(f"car {target}: weight_scale has no effect in the game, "
+                         "which does not weigh a car by Data_Car.CurbWeight")
 
     lines = [f"-- {name}: car {target}, a copy of car {source}"]
     for table, key in CAR_TABLES.items():
@@ -190,8 +202,6 @@ def car_sql(db: sqlite3.Connection, car: dict, strings) -> str:
         sets.append(f"BaseCost = {int(car['price'])}")
     if torque != 1.0:
         sets.append(f"GameTorqueScale = GameTorqueScale * {torque!r}")
-    if weight != 1.0:
-        sets.append(f"CurbWeight = CurbWeight * {weight!r}")
     if "pi" in car:
         shown = int(car["pi"])
         if not 100 < shown <= 999:
@@ -202,8 +212,8 @@ def car_sql(db: sqlite3.Connection, car: dict, strings) -> str:
         if not 0 < index <= 1:
             raise CloneError(f"car {target}: performance_index is between 0 and 1")
         sets.append(f"PerformanceIndex = {index!r}")
-    elif torque != 1.0 or weight != 1.0:
-        shift = estimated_index_shift(torque, weight)
+    elif torque != 1.0:
+        shift = estimated_index_shift(torque)
         sets.append(f"PerformanceIndex = min(1.0, max(0.005, PerformanceIndex + {shift:.6f}))")
     # Sold in the Autoshow as base content.
     sets += ["IsSelectable = 1", "IsUnicorn = 0", "ContentId = 0"]

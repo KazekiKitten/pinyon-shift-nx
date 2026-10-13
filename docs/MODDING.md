@@ -382,7 +382,7 @@ mod's replacement archive or `zipmanifest.xml` when one is enabled.
 
 `tools/clone-fh1-car.py` turns a short spec into a database script and the
 cars' names, so a mod adds cars that reuse a model the game has, with their
-own name, price, power, weight and class:
+own name, price, power and listed class:
 
 ```toml
 # cars.toml
@@ -392,7 +392,7 @@ source = 1496        # the Jaguar XKR-S's model, physics and upgrades
 name = "Pinyon XK"
 price = 85000
 torque_scale = 1.15
-pi = 579             # as the game shows it; sets the class (A here)
+pi = 598             # the Autoshow's index and class (A here)
 ```
 
 ```powershell
@@ -403,16 +403,26 @@ It writes `db/50-clone-cars.sql`, which copies the source car's rows inside
 the player's own database when the mod is built (so the mod carries no game
 data), and `strings/ALL/Data_Car.toml` with the names. The new car is sold
 in the Autoshow under the source's make and appears in an event's
-recommendations when its class fits the event. Without `pi` (or a raw
-`performance_index`) the index is estimated from the two scales; the
-estimate is loose, so set it when the class matters. Its thumbnail is the
+recommendations when its class fits the event. Its thumbnail is the
 source's.
+
+The index and class in the spec are only what the Autoshow lists. Once
+bought, the game rates the car from its physics, as it does after an
+upgrade, so a listed index the physics do not produce changes when the
+car is delivered (an Exige clone listed at S 620 arrived at A 570).
+Without `pi` (or a raw `performance_index`) the tool estimates the index
+from `torque_scale`, usually within a few points; to list a car exactly,
+buy it once, read its index in the garage and set that as `pi`. The
+database's curb weight is not the weight the game uses, so the spec has no
+weight scale.
 
 Cars bought from a database mod live in the separate modded profile, not
 the player's own save. Removing the mod later leaves that profile
 loadable: the game switches to another owned car and leaves the clone out
 of car select. Whether the car returns when the mod is turned back on
-has not been tested.
+has not been tested. Clones are upgraded, painted (the Autoshow's colour
+choice) and changed like any car: five were bought, driven, Auto
+Upgraded at Dak's Garage and kept after a reload.
 
 ## The Forza Horizon XE mod
 
