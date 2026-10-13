@@ -233,7 +233,7 @@ cells = ["yes", "yes: Steam Input on the Deck", "yes", "yes: and touch controls"
 feature = "DualSense triggers, lightbar and tilt steering"
 link = "playing.md#dualsense"
 cells = [
-  "yes: tested over USB; Bluetooth and tilt not checked yet",
+  "yes: tested over USB; Bluetooth not tested yet",
   "partly: built, not tried on a pad yet",
   "partly: built, not tried on a pad yet",
   "partly: built, not tried on a pad yet; USB-C only, Android passes rumble only over Bluetooth",

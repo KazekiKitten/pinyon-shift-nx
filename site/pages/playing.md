@@ -96,7 +96,7 @@ A wheel drives through the same controller path: steering on the left stick, thr
 
 A Sony DualSense or DualSense Edge is driven directly through SDL's PlayStation 5 driver, so it can do things the Xbox 360 game never asked for. **F6 > CONTROLS > DUALSENSE** appears once a PlayStation controller is connected. Everything there is off until you turn it on, and applies at once:
 
-- **ADAPTIVE TRIGGERS**: **BRAKE** gives the brake trigger a resistance that rises through its travel, a pulsing band while the car's ABS releases a wheel, and a buzz when a wheel locks. **FULL** also gives the throttle a light spring that buzzes while the driven wheels spin. **GEAR CLICK** adds a short click on the throttle at each gear change. The effects come from the car's own physics (engine, gear, ABS and wheel slip, read from the game each frame). The triggers go slack in menus, on the pause map, in the F6 menu, when the game window loses focus, and when the game quits or crashes. **TRIGGER STRENGTH** scales all of it.
+- **ADAPTIVE TRIGGERS**: **BRAKE** gives the brake trigger a resistance that rises through its travel, a pulsing band while the car's ABS releases a wheel, and a buzz when a wheel locks. **FULL** also gives the throttle a light spring with a faint, steady buzz while the driven wheels spin. **GEAR CLICK** adds a short click on the throttle at each gear change. The effects come from the car's own physics (engine, gear, ABS and wheel slip, read from the game each frame). The triggers go slack in menus, on the pause map, in the F6 menu, when the game window loses focus, and when the game quits or crashes. **TRIGGER STRENGTH** scales all of it.
 - **LIGHTBAR**: **PLAYER** keeps the colour of the controller's number, **RPM** runs from green through yellow to red as the engine nears its redline and flashes at the limiter, **OFF** turns it off. **PLAYER LIGHTS** turns the player number lights under the touchpad on or off.
 - **TILT STEERING** adds the controller's tilt to the left stick, held like a wheel; **TILT SENSITIVITY** 100% reaches full lock at 45 degrees. Press the touchpad to make the current tilt the centre. It also works with a DualShock 4 or a Switch Pro Controller.
 
@@ -108,7 +108,7 @@ Tested controllers:
 
 | Controller | System | Connection | Triggers | Lightbar | Tilt | Release on quit, focus loss, crash |
 | --- | --- | --- | --- | --- | --- | --- |
-| DualSense | Windows 11 | USB | Yes | Yes | Not checked by hand | Yes |
+| DualSense | Windows 11 | USB | Yes | Yes | Yes | Yes |
 | DualSense | Windows 11 | Bluetooth | Not tested | Not tested | Not tested | Not tested |
 
 Linux, the Steam Deck, macOS, Android and the DualSense Edge have not been tried yet.
