@@ -25,6 +25,12 @@ cr_as_local = true
 ctr_as_local = true
 xer_as_local = true
 
+# The title's fibers run on host fibers ([rexcrt] below), so the host call
+# chain is never abandoned at a guest stack switch and no function needs an
+# entry at a return address: no resume switch, no resume aliases
+# (NEXT_LEVEL_RESEARCH.md NL-1.2).
+interior_resume = false
+
 # Scripted, default-off companion experiment: match the complete original
 # decoded member at the borrowed-buffer stream constructor. This avoids ZIP
 # repacking and does not enable the older scene_insert pointer repairs.
@@ -1343,6 +1349,19 @@ size = 0x28
 memcpy = 0x82B3A7E0
 memmove = 0x82B3AD50
 memset = 0x82B3C1F0
+# XAPI's fiber functions, served by the SDK's host fibers
+# (kernel/crt/threading.cpp). Found from the only callers of
+# KeSetCurrentStackPointers: SwitchToFiber tail-calls the context switch;
+# CreateFiber allocates a 2,640-byte context (the SDK's X_FIBER_CONTEXT size)
+# and a kernel stack with the entry thunk 0x830EBEA0; ConvertThreadToFiber
+# fails with ERROR_ALREADY_FIBER (1280) when KTHREAD+0x164 is set;
+# DeleteFiber frees the kernel stack. GetCurrentFiber (0x830EBC60) stays
+# guest code: it reads the KTHREAD field the SDK maintains.
+ConvertThreadToFiber = 0x830EBC70
+ConvertFiberToThread = 0x830EBD00
+CreateFiber = 0x830EBD50
+DeleteFiber = 0x830EBE30
+SwitchToFiber = 0x830EBE90
 
 # Scale the render scenario's EnvMapFrequencyScale and record the scenarios
 # for pinyon_shift_fh1_shadows after the title loads a DynamicRenderSettings
