@@ -52,21 +52,21 @@ void sub_82XXXXXX(PPCContext& __restrict ctx, uint8_t* base);
 | `b` into another function | `[[clang::musttail]]` call, so loops that cross functions don't grow the host stack |
 | `bctrl`, `bctr` through a pointer | lookup in a dispatch table of host pointers, one slot per guest instruction, placed after the image in guest memory; misses fall back to a search of all loaded modules |
 | Jump table | a C++ `switch` on a 32-bit index |
-| Return address inside the caller | an entry `switch` on `ctx.dispatch_address`, so the runtime can resume a function in the middle |
+| Guest fiber calls (`CreateFiber`, `SwitchToFiber`, ...) | the runtime's host fibers, so no function is ever resumed in the middle (see below) |
 | `lwarx` / `stwcx.` | `std::atomic` compare-exchange on a same-width copy of the reservation |
 | `mtmsrd` (interrupts off) | enter the runtime's global critical region |
 | `sync`, `lwsync`, `eieio`, `isync` | nothing on x86-64; seq_cst, acq_rel, seq_cst and acquire fences on AArch64 |
 | `mftb` | the runtime's guest tick count |
 | Guest `setjmp` / `longjmp` | a host `jmp_buf` per guest buffer, held in a thread-local map |
 
-The resume switch exists because guest threads can be re-entered: when the game calls `KeSetCurrentStackPointers`, the runtime `longjmp`s to the thread's base and dispatches again at `ctx.lr`. In the base image 56,860 functions start with that switch.
+**Single-entry functions.** Until October 2026, 56,860 functions started with a `switch` on `ctx.dispatch_address` (342,683 cases) so the runtime could resume them at a return address: when the game called `KeSetCurrentStackPointers`, the runtime `longjmp`ed to the thread's base and dispatched again at `ctx.lr`. Tracing the only two callers of that kernel function showed they were XAPI's `SwitchToFiber`: the game's job system runs on fibers. Mapping the five XAPI fiber functions to the runtime's host fibers (`[rexcrt]` in the analysis file) keeps the host call chain intact across a guest fiber switch, so no interior entry is needed and the generator emits none (`interior_resume = false`). Every function now has one entry and its loops are reducible to Clang. Statically: host instructions 13.72 M to 12.70 M (−7.4 %), code 59.7 to 54.1 MB (−9.3 %). The race route completed with the runtime's re-entry trace on and recorded no stack switch; the frame rate was unchanged within run noise (116–119 fps median).
 
 **Condition registers in locals.** Generated code keeps guest registers in `ctx`, so every compare stores its CR bits to memory that a guest store might alias, and Clang can't drop or forward them. With `cr_as_local`, a function keeps the CR fields it uses in C++ locals, loaded from `ctx` on entry. Writing them all back and reloading them around every call cost what it saved: binaries grew 13–26 % for no change in instructions. What made it pay is the PowerPC calling convention:
 
 - cr2–cr4 are preserved across calls, and the other fields are dead at a call and at a return.
 - So a call, return or tail call writes back only the cr2–cr4 locals and reloads nothing.
 - Hooks that read `ctx`, the `setjmp` copy, `longjmp` and exceptions keep a full write-back and reload.
-- A function resumed mid-body loads its locals from `ctx` on entry, which is correct because only preserved fields are live at a return address.
+- A function always loads its locals from `ctx` on entry; while functions could still be resumed mid-body this was correct because only preserved fields are live at a return address.
 
 On the Odin this cut guest instructions per second by 11 % on the render thread and 12 % on the simulation thread, and the executable shrank 9 %. The other registers stay in `ctx`.
 

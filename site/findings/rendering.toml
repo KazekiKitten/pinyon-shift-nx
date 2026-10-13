@@ -670,3 +670,12 @@ how = """Prepared-draw census and private replay of the car families."""
 confidence = """confirmed"""
 negative = true
 source = """docs/native-renderer/RESEARCH.md Vehicles and shadow epochs"""
+
+[[finding]]
+group = """Frame structure and views"""
+name = """GPU registers the title reads"""
+what = """Through the register read path (`GraphicsSystem::ReadRegister`, which the guest reaches by MMIO loads) a full race reads exactly two registers: `CP_PROG_COUNTER` (0x044B) and `D1MODE_VBLANK_VLINE_STATUS` (0x1951, the vblank status its interrupt handler polls). It never reads `D1MODE_V_COUNTER` (0x194C), so a free-running vertical counter (xenia-edge `9d93773228`) would change nothing for FH1, and it is not the lead for #381."""
+how = """`gpu_log_register_reads=true` logs the first guest read of each register; one race route (`fh1-race-sustained`, boot to race end)."""
+confidence = """confirmed"""
+negative = true
+source = """docs/NEXT_LEVEL_RESEARCH.md NL-5"""

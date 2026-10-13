@@ -39,6 +39,10 @@ The same reasoning applies to tracked modes such as the float flush mode: a smal
 
 Keeping guest registers in host locals pays only if the synchronization with the register file is bounded by what the callee can see, and the natural bound is the calling convention: volatile registers are dead after a call. A checking build tested that on the race route by poisoning every volatile register after every call with a value naming the register and the call site. It crashed within two seconds: one function calls another in a loop without setting the fourth argument again, so the callee stores through whatever its previous call left in r6. The non-volatile registers, by contrast, were preserved by every call checked. So the convention bounds the callee-saved state, not the caller's: a generator may only drop a volatile register at a call when the callee's own code never reads it before writing it, which the generator can compute from the callee bodies it has. See [NEXT_LEVEL_RESEARCH.md](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/NEXT_LEVEL_RESEARCH.md).
 
+## Find the API behind a kernel primitive
+
+Generated functions carried an entry switch so the runtime could resume them at a return address, because the game switches stacks through a kernel call that abandons the host call chain. The kernel call had exactly two callers, and reading them showed the OS API they implement: `SwitchToFiber`. The runtime already had host-fiber versions of the five fiber functions; mapping the game's copies onto them made every generated function single-entry, removed 342,683 switch cases and 7.4 % of the generated host instructions, and let Clang see reducible loops. A primitive the runtime emulates at the kernel level usually belongs to a small, well-documented API one layer up, which is cheaper to serve whole than to emulate underneath. See [Recompiler](recompiler.md).
+
 ## Ask why an inherited offset exists
 
 The largest instruction class in the hottest generated functions was not game work. It was a select that added 4 KB to every guest address at or above `0xE0000000`, inherited from the emulator's memory layout: Windows' classic view-mapping call only places a view at a 64 KB file offset, so the view that should start 4 KB into the physical heap was mapped short and every access paid the difference. Newer placeholder views accept any page-aligned offset. Mapping the view where it belongs removed 625,000 selects and, with two volatile registers moved into locals, 22.6 % of the generated host instructions and 20 % of the code. Before optimizing translated code, check what each fixed cost in the access path is for and whether the host still needs it. See [Runtime](runtime.md#guest-memory).
@@ -80,6 +84,8 @@ Negative results, so they aren't retried without a new reason:
 | Idea | Result |
 | --- | --- |
 | CR fields in C++ locals, synced at every call | binaries 13–26 % larger for no gain; syncing by the calling convention instead paid (see above) |
+| Canary's scalar-ALU swizzle fix (`b` from Z under a three-operand vector op) | no FH1 shader is affected: of 478,372 ALU instructions in the 12,846 disc shaders, none co-issues a scalar operation with `mad`, `cnd*` or `dp2add` (the XNA compiler never shares source 3) |
+| A free-running `V_COUNTER` (Edge) | FH1 never reads it: a race reads only `CP_PROG_COUNTER` and the vblank status through the register path (one-time read log, `gpu_log_register_reads`) |
 | ThinLTO on the generated code | neutral on guest-thread instructions |
 | More CRT functions as native code | the remaining candidates are 0.02 % each in a race |
 | A native guest heap allocator | 0.05 % of a race, inclusive |
