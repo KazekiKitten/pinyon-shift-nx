@@ -34,6 +34,10 @@ interior_resume = false
 direct_calls_bypass_thunk = true
 host_overridden_functions = [0x82438EA8, 0x830F2210, 0x82A6D7D8]
 
+# Loads from a constant .rdata address (lis/addi then lfs, lfd, lwz, ...) become
+# literals; the runtime refuses an image whose folded bytes differ (NL-1.10).
+fold_rodata_loads = true
+
 # Scripted, default-off companion experiment: match the complete original
 # decoded member at the borrowed-buffer stream constructor. This avoids ZIP
 # repacking and does not enable the older scene_insert pointer repairs.
