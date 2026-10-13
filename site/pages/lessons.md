@@ -35,6 +35,14 @@ Keeping guest registers in host locals only pays if the syncs with the register 
 
 The same reasoning applies to tracked modes such as the float flush mode: a small dataflow pass over the generated function, meeting the state of every path into a label, removed 29 % of the toggles.
 
+## Check the calling convention before trusting it
+
+Keeping guest registers in host locals pays only if the synchronization with the register file is bounded by what the callee can see, and the natural bound is the calling convention: volatile registers are dead after a call. A checking build tested that on the race route by poisoning every volatile register after every call with a value naming the register and the call site. It crashed within two seconds: one function calls another in a loop without setting the fourth argument again, so the callee stores through whatever its previous call left in r6. The non-volatile registers, by contrast, were preserved by every call checked. So the convention bounds the callee-saved state, not the caller's: a generator may only drop a volatile register at a call when the callee's own code never reads it before writing it, which the generator can compute from the callee bodies it has. See [NEXT_LEVEL_RESEARCH.md](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/NEXT_LEVEL_RESEARCH.md).
+
+## Ask why an inherited offset exists
+
+The largest instruction class in the hottest generated functions was not game work. It was a select that added 4 KB to every guest address at or above `0xE0000000`, inherited from the emulator's memory layout: Windows' classic view-mapping call only places a view at a 64 KB file offset, so the view that should start 4 KB into the physical heap was mapped short and every access paid the difference. Newer placeholder views accept any page-aligned offset. Mapping the view where it belongs removed 625,000 selects and, with two volatile registers moved into locals, 22.6 % of the generated host instructions and 20 % of the code. Before optimizing translated code, check what each fixed cost in the access path is for and whether the host still needs it. See [Runtime](runtime.md#guest-memory).
+
 ## Port to a second architecture early
 
 ARM found bugs x86 hid:
@@ -85,6 +93,9 @@ Negative results, so they aren't retried without a new reason:
 | `VK_KHR_present_wait` | worse spacing |
 | Store-op tuning, render-area trimming on tilers | too few cases, or the driver already did it |
 | Bloom, motion blur and depth of field off | no measurable saving |
+| `-ffp-model=strict` on the generated code | 1–2 % more host instructions in the hot partitions, for a reordering across MXCSR writes never observed; kept as an option |
+| `-fasync-exceptions` on the generated code | no generated unit has an SEH scope; the flag moved code size under 1 % either way, now off |
+| x86-64-v3 (MOVBE, AVX2, BMI) for the generated code | MOVBE replaced a fifth of the byte swaps in the audio routines, under 1 % of their instructions; an opt-in variant until a cycle measurement says more |
 
 Other recompilers' published optimizations, and which applied here, are surveyed in [RECOMP_OPTIMIZATION_SURVEY.md](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/RECOMP_OPTIMIZATION_SURVEY.md).
 

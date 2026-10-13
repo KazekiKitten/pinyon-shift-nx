@@ -74,7 +74,9 @@ Each function is defined as a weak alias, so host code can replace a guest funct
 
 ## Memory access
 
-Guest memory stays big-endian. Every load and store is a `volatile` access through `__builtin_bswap16/32/64` at `base + address`, plus `0x1000` for addresses at or above `0xE0000000` on hosts whose allocation granularity is over 4 KB ([why](runtime.md#guest-memory)). Accesses through `r1`, the stack pointer, skip that test because guest stacks live at `0x70000000`; that made the binaries 5.4–5.7 % smaller and cut the Odin's guest instructions per second by 17–18 % on the simulation and render threads. Addresses in `0x7F000000`–`0x7FFFFFFF` go to the MMIO handler.
+Guest memory stays big-endian. Every load and store is a `volatile` access through `__builtin_bswap16/32/64` at `base + address`. Until October 2026 an address at or above `0xE0000000` also added `0x1000`, because Windows mapped that view 4 KB short of its place in the physical heap ([why](runtime.md#guest-memory)); the select behind that add was a compare, a conditional set and a shift on 70 % of all guest accesses. Skipping it for accesses through `r1`, the stack pointer, had already made the binaries 5.4–5.7 % smaller and cut the Odin's guest instructions per second by 17–18 % on the simulation and render threads. Mapping the view exactly removed the remaining 625,000 selects: with the count register and XER kept in locals (below), the generated x86-64 code went from 17.7 M to 13.7 M host instructions (−22.6 %) and from 75.0 to 59.7 MB of code (−20.4 %). Only Apple silicon, with 16 KB pages, still adds the offset. Addresses in `0x7F000000`–`0x7FFFFFFF` go to the MMIO handler.
+
+**Count register and XER in locals.** Both are volatile in the PowerPC ABI and dead at every return address, so a function keeps them in zero-initialized locals that never touch `ctx` (`ctr_as_local`, `xer_as_local`). FH1 has no overflow-enabled integer instruction and its one `mtxer` is a context restore, so XER's summary-overflow bit is never set and the copy of it into every compare's condition field folds to zero.
 
 ## Floating point and vectors
 
@@ -99,8 +101,8 @@ Output is split into files of at most 1 MiB, with the function-to-file assignmen
 | Setting | Value |
 | --- | --- |
 | Compiler | Clang 20.1.8, pinned and SHA-256 checked (Command Line Tools clang on macOS, NDK r29 on Android) |
-| Optimization | `-O3`, `-ffp-contract=off`, `-gline-tables-only` |
-| x86-64 baseline | SSE4.1; an FMA3 variant when the CPU has it, guarded at start |
+| Optimization | `-O3`, `-ffp-contract=off`, `-fno-strict-aliasing` (measured to change nothing in the output), `-gline-tables-only`. `-ffp-model=strict` is an option: it costs 1–2 % host instructions for a risk never observed. No asynchronous exceptions: no generated unit has an SEH scope |
+| x86-64 baseline | SSE4.1; an FMA3 variant when the CPU has it, guarded at start. An x86-64-v3 variant (`-CpuBaseline v3`) is opt-in: MOVBE replaced a fifth of the byte swaps in the audio routines, under 1 % of their instructions |
 | Linux x86-64 | `-mcmodel=large -Wl,--no-relax` for the 300 MB of code |
 | Android | `-Wl,-Bsymbolic-functions`: PLT stubs fell from 1.6 % to 0.1 % of cycles |
 | LTO, PGO | wired up, off. ThinLTO is neutral on guest-thread instructions. PGO trained on one route and measured on another cuts 1–6 % per guest thread on the Odin, but a release would need a profile kept in step with the generated code |

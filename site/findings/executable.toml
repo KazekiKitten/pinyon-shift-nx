@@ -260,6 +260,15 @@ source = """docs/NEXT_LEVEL_RESEARCH.md NL-1.3; config/rexglue/analysis/main-xex
 
 [[finding]]
 group = """Analysis notes"""
+base = """sub_823F3048, sub_823F2ED8"""
+name = """volatile registers are read after calls"""
+what = """The title does not treat every volatile register as dead after a call. A checking build that poisons r0, r5-r12, f0, f5-f13 and the volatile vector registers after every guest call, with a value naming the register and the call site, crashes on the simulation thread within two seconds of the race route: `sub_823F3048` calls `sub_823F2ED8` in a loop and sets r3, r4 and r5 before each call but not r6, so the callee receives whatever its previous call left in r6 and stores through it. The non-volatile registers (r1, r2, r13, r14-r31, f14-f31, v14-v31, v64-v127) were preserved by every call checked (0 mismatches in two runs). So code generation may keep non-volatile registers in locals across calls by the ABI, but may not treat a volatile register as dead at a call without knowing that the callee never reads it before writing it."""
+how = """Experiment: the ABI poison checking build (PINYON_SHIFT_RECOMP_ABI_POISON, rex/ppc/abi_poison.h) on `fh1-race-sustained`; the poison value in the faulting store address decodes to r6 as left by the call at `0x823F30B0`."""
+confidence = """confirmed"""
+source = """docs/NEXT_LEVEL_RESEARCH.md NL-0.1"""
+
+[[finding]]
+group = """Analysis notes"""
 name = """instruction census"""
 what = """The image has 70 `sync`/`eieio`, 230 `lwsync` and 20 `isync` sites, and Xenon fused multiply-adds at 11,725 sites. The title interleaves vector and scalar floating point code closely: the generated code needs 42,445 conditional switches of the denormal (flush) mode one way and 2,153 the other."""
 how = """Instruction counts over the analysed image and the generated code."""
