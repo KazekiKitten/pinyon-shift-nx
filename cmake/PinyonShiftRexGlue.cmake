@@ -63,11 +63,25 @@ if(PINYON_SHIFT_CAPTURE_PERFORMANCE)
     add_compile_definitions(REXGLUE_ENABLE_PERF_COUNTERS)
 endif()
 
+# NEXT_LEVEL_RESEARCH.md NL-1.1: the 0xE0000000 physical view starts 4 KB into
+# the physical heap. On 4 KB-page kernels the runtime maps it there and the
+# generated code adds nothing to a guest access; a build made with this option
+# assumes that and refuses to start on a 16 KB-page kernel (some Android 15+
+# devices, some ARM64 Linux distributions), which otherwise reads the offset at
+# run time on every access. x86-64 Linux kernels always use 4 KB pages.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_SYSTEM_NAME STREQUAL "Android")
+    option(PINYON_SHIFT_PHYSICAL_HEAP_4K_PAGES
+        "Assume 4 KB memory pages: no run-time host offset on 0xE0000000 guest accesses" ON)
+    if(PINYON_SHIFT_PHYSICAL_HEAP_4K_PAGES)
+        add_compile_definitions(REX_PHYSICAL_HEAP_4K_PAGES=1)
+    endif()
+endif()
+
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
-    if(NOT PINYON_SHIFT_CPU_BASELINE MATCHES "^(sse4\\.1|fma)$")
+    if(NOT PINYON_SHIFT_CPU_BASELINE MATCHES "^(sse4\\.1|fma|v3)$")
         message(FATAL_ERROR
-            "Pinyon Shift supports the audited SSE4.1 AMD64 baseline and its FMA3 "
-            "variant (PINYON_SHIFT_CPU_BASELINE sse4.1 or fma)")
+            "Pinyon Shift supports the audited SSE4.1 AMD64 baseline, its FMA3 "
+            "variant and the x86-64-v3 variant (PINYON_SHIFT_CPU_BASELINE sse4.1, fma or v3)")
     endif()
     if(NOT CMAKE_C_FLAGS MATCHES "(^| )-msse4\\.1($| )" OR
        NOT CMAKE_CXX_FLAGS MATCHES "(^| )-msse4\\.1($| )")
@@ -178,6 +192,14 @@ endif()
 # Its code is generated from the patched executables in a separate tree.
 option(PINYON_SHIFT_TITLE_UPDATE_V4
     "Build the FH1 v4 title-update executable (separate generated tree)" OFF)
+# NEXT_LEVEL_RESEARCH.md NL-0.1: a checking build whose generated code wraps
+# every guest call in PowerPC ABI checks (rex/ppc/abi_poison.h). Its tree is
+# generated into .local/generated-abipoison from its own manifest.
+option(PINYON_SHIFT_RECOMP_ABI_POISON
+    "Checking build: PowerPC ABI preservation checks and register poisoning around guest calls" OFF)
+if(PINYON_SHIFT_TITLE_UPDATE_V4 AND PINYON_SHIFT_RECOMP_ABI_POISON)
+    message(FATAL_ERROR "PINYON_SHIFT_RECOMP_ABI_POISON has no v4 manifest; build it from the base game")
+endif()
 set(PINYON_SHIFT_CODEGEN_EXTRA_ARGS)
 if(PINYON_SHIFT_TITLE_UPDATE_V4)
     set(_pinyon_default_manifest "config/rexglue/pinyon_shift_v4_manifest.toml")
@@ -185,6 +207,12 @@ if(PINYON_SHIFT_TITLE_UPDATE_V4)
     add_compile_definitions(PINYON_SHIFT_TITLE_UPDATE_V4=1)
     list(APPEND PINYON_SHIFT_CODEGEN_EXTRA_ARGS --xex_apply_patches=true)
     set(_pinyon_codegen_log_suffix "-v4")
+elseif(PINYON_SHIFT_RECOMP_ABI_POISON)
+    set(_pinyon_default_manifest "config/rexglue/pinyon_shift_abipoison_manifest.toml")
+    set(_pinyon_default_generated ".local/generated-abipoison")
+    add_compile_definitions(PINYON_SHIFT_RECOMP_ABI_POISON=1)
+    list(APPEND PINYON_SHIFT_CODEGEN_EXTRA_ARGS --abi-poison)
+    set(_pinyon_codegen_log_suffix "-abipoison")
 else()
     set(_pinyon_codegen_log_suffix "")
     set(_pinyon_default_manifest "config/rexglue/pinyon_shift_manifest.toml")
