@@ -160,6 +160,25 @@ source = """src/pinyon_shift_runtime_hooks.cpp PinyonShiftGuardUiInvalidRttiCast
 
 [[finding]]
 group = """Runtime library"""
+base = """82A7DDD0-82A7DE5C, 82A7E328"""
+name = """register save and restore helpers dominate the call count"""
+what = """The compiler's `__savegprlr_N`/`__restgprlr_N` helpers (one pair per first saved register, 14 to 31, at `0x82A7DDD0`-`0x82A7DE5C`) and the `__savefpr_N`/`__restfpr_N` pairs (`0x82A7E328` is `__savefpr_28`) are the most-called functions in a race: `__savegprlr_29` and `__restgprlr_29` 232 M calls each, the `_26`, `_27` and `_20` pairs 167, 156 and 78 M, about 1.9 G of the route's 6.15 G function calls (31 %). Each is a run of stores or loads of the non-volatile registers to the caller's frame; with the generator keeping those registers in host locals (NEXT_LEVEL_RESEARCH.md NL-1.4) they become empty."""
+how = """Probe build (`PINYON_SHIFT_RECOMP_PROBE`, per-function entry counts) over `fh1-race-sustained`; the helpers are named by the generator's analysis."""
+confidence = """confirmed"""
+source = """docs/NEXT_LEVEL_RESEARCH.md NL-2.3"""
+
+[[finding]]
+group = """Runtime library"""
+base = """18,017 indirect call sites"""
+name = """indirect calls are mostly monomorphic"""
+what = """A race makes 1.02 G indirect calls (`bctrl`, `bctr`) through 18,017 sites; 17,144 of them (95 %) reached a single target in the whole route, 496 two, and the real virtual dispatches fan out widely (one site in the object update loop at `0x82450328` reached 264 targets, the sound and physics callbacks 55-97). A single-target site is a candidate for a guarded direct call (compare the target, call it directly, fall back to the table): the hottest two are in the render frame function (Threads page)."""
+how = """Probe build, per-site target histogram over `fh1-race-sustained` (`.local/re/probe/race-summary.json`)."""
+confidence = """confirmed"""
+note = """One route; a site that is monomorphic in a race may not be in free roam or the menus."""
+source = """docs/NEXT_LEVEL_RESEARCH.md NL-2.3"""
+
+[[finding]]
+group = """Runtime library"""
 base = """0x82A7D730, 0x82A7DCA0, 0x82A7F140"""
 v4 = """0x82B3A7E0, 0x82B3AD50, 0x82B3C1F0"""
 name = """CRT memcpy, memmove, memset"""

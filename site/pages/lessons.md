@@ -66,6 +66,7 @@ Running above 30 fps needed no engine changes beyond faster vblanks: the game al
 - **Frame replay.** A dumped frame replays deterministically on any device, to 0.02 ms. It turns "slower on device X" into a bisectable problem.
 - **Knock-outs over timestamps.** Per-phase GPU timestamps distorted the phases they measured.
 - **Validation layers in routes.** The AMD device loss in 0.4.0 was a threading bug the validation layer reported directly.
+- **Normalize the render thread by what it drew.** Six alternating runs of the race route on the Odin varied from 953 to 1,503 draw calls a frame (traffic and weather), and the render and decoder threads' instructions followed the scene, not the build. The simulation thread does not depend on the scene and separated two builds at 5.6 % with three runs each; the render thread needs instructions per draw call, a replayed frame, or many more runs.
 - **Instructions, not CPU time, across builds.** CPU time per guest thread is bimodal between runs of the same build. Retired instructions a second per thread, sampled at a fixed frame-rate limit, separate builds within four runs each.
 - **Inclusive profiles from frame pointers.** `simpleperf record --call-graph fp` gives caller totals on Android without a profiling build; about 1 % of chains break. Rank callers this way before porting a leaf.
 - **Train and measure PGO on different routes**, so the profile can't fit the measured run.
