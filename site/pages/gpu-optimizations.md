@@ -55,8 +55,11 @@ At 1x on the desktop the frame was bound by CPU work on the recorder thread, not
 | System constants memo, hit on 58–73 % of draws; a verify mode found no difference over about 38 million draws | 88–103 to 68–78 ns per draw for that step |
 | Draw registers fused into the draw record, shader loads as typed entries, cheaper batch handoff (record entries 92,100 to 56,800 a heavy frame) | recorder CPU −7 to −14 % |
 | A constants descriptor set key included 4 bytes of uninitialized padding, so 43 % of draws wrote a new set | about 1.1 ms of recorder time |
+| The decoder compares a register run with its register file four registers at a time when the run holds no register whose write always matters (the per-register loop was 11 % of the decoder thread) | heavy race frames: decoder work 7.2 to 6.6 ms; frame time unchanged, because the recorder bounds those frames too |
 
 Together with the binding memo table and ThinLTO for the GPU code, the 1x race went from 20.79 ms (48 fps) on 2026-09-30 to an 8.3 ms median, the 120 fps limit.
+
+On 2026-10-13 (RTX 4080, `fh1-race-sync`, last 600 frames, three runs) the frames with more than 5,000 draws, about half of them at about 6,500 draws, have a median of 8.5-9.0 ms. In them the decoder does 6.4-7.1 ms of work besides 1.6 ms of waiting for the title, and the recorder 7.6-8.0 ms, so both threads sit at the 8.33 ms budget: making either one alone faster leaves the frame where it is. A sampled profile of the decoder with a PDB: 22-27 % waiting, about 25 % applying register runs, 18 % packet dispatch, 2 % hashing shader microcode on load.
 
 **Tried and dropped.**
 
