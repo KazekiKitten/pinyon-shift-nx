@@ -1353,15 +1353,15 @@ memset = 0x82B3C1F0
 # (kernel/crt/threading.cpp). Found from the only callers of
 # KeSetCurrentStackPointers: SwitchToFiber tail-calls the context switch;
 # CreateFiber allocates a 2,640-byte context (the SDK's X_FIBER_CONTEXT size)
-# and a kernel stack with the entry thunk 0x830EBEA0; ConvertThreadToFiber
+# and a kernel stack with the entry thunk 0x831ADD20; ConvertThreadToFiber
 # fails with ERROR_ALREADY_FIBER (1280) when KTHREAD+0x164 is set;
-# DeleteFiber frees the kernel stack. GetCurrentFiber (0x830EBC60) stays
+# DeleteFiber frees the kernel stack. GetCurrentFiber (0x831ADAE0) stays
 # guest code: it reads the KTHREAD field the SDK maintains.
-ConvertThreadToFiber = 0x830EBC70
-ConvertFiberToThread = 0x830EBD00
-CreateFiber = 0x830EBD50
-DeleteFiber = 0x830EBE30
-SwitchToFiber = 0x830EBE90
+ConvertThreadToFiber = 0x831ADAF0
+ConvertFiberToThread = 0x831ADB80
+CreateFiber = 0x831ADBD0
+DeleteFiber = 0x831ADCB0
+SwitchToFiber = 0x831ADD10
 
 # Scale the render scenario's EnvMapFrequencyScale and record the scenarios
 # for pinyon_shift_fh1_shadows after the title loads a DynamicRenderSettings
