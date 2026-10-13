@@ -80,6 +80,16 @@ void Dispatch(Replacement& replacement, PPCFunc* original, PPCContext& ctx, uint
 // Writes one summary event per replacement that ran (route end, shutdown).
 void RecordSummary();
 
+// The registers a caller may read after a return, compared between a reference
+// run and the optimized run: empty when equal, otherwise what differed.
+std::string CompareReferenceRegisters(const PPCContext& reference, const PPCContext& optimized);
+
+// Lockstep verify of the generator's reference copies (NEXT_LEVEL_RESEARCH.md
+// NL-0.2, src/guest_native/reference_verify.cpp): one summary event at route end.
+namespace reference {
+void RecordSummary();
+}
+
 // FNV-1a 64 over guest code bytes, as stored in Replacement.
 uint64_t HashGuestCode(const uint8_t* code, uint32_t size);
 

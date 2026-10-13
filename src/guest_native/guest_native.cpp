@@ -189,6 +189,14 @@ void Verify(Replacement& replacement, PPCFunc* original, PPCContext& ctx, uint8_
 
 }  // namespace
 
+std::string CompareReferenceRegisters(const PPCContext& reference, const PPCContext& optimized) {
+  // Everything a caller may read after a return: the three return registers and
+  // the non-volatile set the ABI preserves.
+  Replacement all{};
+  all.returns = kReturnR3 | kReturnF1 | kReturnV3;
+  return CompareRegisters(all, reference, optimized);
+}
+
 uint64_t HashGuestCode(const uint8_t* code, uint32_t size) {
   uint64_t hash = 0xCBF29CE484222325ull;
   for (uint32_t i = 0; i < size; ++i) {

@@ -20,6 +20,7 @@
 #include <thread>
 #include <vector>
 
+#include <rex/ppc/probe.h>
 #include <rex/input/device_assignment.h>
 #include <rex/cvar.h>
 #include <rex/filesystem.h>
@@ -1171,6 +1172,12 @@ bool ObserveOutput(
       g_test.next_capture == g_test.captures.size() && !g_test.stopping) {
     g_test.stopping = true;
     guest_native::RecordSummary();
+    guest_native::reference::RecordSummary();
+    // Probe build: the process hard-exits when the title ends, and the
+    // runtime library has its own copy of the probe state, so write here.
+    if (rex::ppc::ProbeActive()) {
+      rex::ppc::ProbeDump(diagnostics::StateRoot() / "logs" / "probe.json");
+    }
     diagnostics::RecordEvent(
         "fh1.render_test.complete",
         {{"frame", std::to_string(g_test.stop_frame)},

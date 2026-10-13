@@ -38,6 +38,12 @@ host_overridden_functions = [0x82438EA8, 0x830F2210, 0x82A6D7D8]
 # literals; the runtime refuses an image whose folded bytes differ (NL-1.10).
 fold_rodata_loads = true
 
+# Lockstep verify (NL-0.2): every 40th leaf function is also emitted as a
+# reference copy with every register in ctx and no folding; with
+# pinyon_shift_reference_verify=N the host runs both every Nth call and
+# compares (src/guest_native/reference_verify.cpp).
+reference_sample_every = 40
+
 # Scripted, default-off companion experiment: match the complete original
 # decoded member at the borrowed-buffer stream constructor. This avoids ZIP
 # repacking and does not enable the older scene_insert pointer repairs.
