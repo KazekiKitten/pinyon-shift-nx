@@ -302,6 +302,11 @@ exists with driver type 0 and the gameplay camera is on. The car's control
 word `+0x3B78` reads 1 while the player drives in the base game, so it
 cannot be used for this.
 
+**v4.** The title-update build reads the same values from the same
+offsets (a route from the v4 seed: 700-800 RPM idle, 7300 RPM redline,
+gears, the ABS flag), finds the player's car through the driver type, and
+the pad showed the same effects and the release on quit.
+
 ## Risks and open questions
 
 - **Which motor is which.** The guest path swaps the motors on kernels before
