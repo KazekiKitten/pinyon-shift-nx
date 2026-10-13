@@ -50,6 +50,10 @@ The renderer supports 1x, 2x, 3x and 4x, the same horizontally and vertically. P
 
 Connect it before starting the game. Close Steam or other remapping software, reconnect and relaunch. When reporting an unsupported controller, include its exact name, USB vendor and product IDs, and a screenshot from a gamepad tester.
 
+## A DualSense's triggers or lightbar do nothing
+
+Steam Input is probably holding the controller: when Steam starts the game with Steam Input on, the game only sees Steam's virtual Xbox controller, and **F6 > CONTROLS > DUALSENSE** says **STEAM INPUT HAS THE CONTROLLER**. In Steam, open the game's **Properties > Controller**, choose **Disable Steam Input**, and restart the game. Started outside Steam, the game drives the controller itself. See [DualSense](playing.md#dualsense).
+
 ## A menu item doesn't respond to the mouse
 
 The Xbox menus don't use pointer targeting. Use A, <kbd>Space</kbd> or a left click to activate the selected row, and <kbd>Enter</kbd> for Start.

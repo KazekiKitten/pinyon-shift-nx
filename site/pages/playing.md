@@ -92,6 +92,27 @@ Connect the controller before starting the game. XInput controllers work as they
 
 A wheel drives through the same controller path: steering on the left stick, throttle on the right trigger and brake on the left trigger. Wheels that SDL knows are detected; for another, open **F6 > CONTROLS > MAP CONTROLLER**, map it, and set **RACING WHEEL** to **YES** on its page. **F6 > CONTROLS > RACING WHEEL** then shapes its input, since the game expects a thumbstick: **STEERING SATURATION** (full lock at that share of the wheel's rotation, so 50% on a 900-degree wheel locks at 225 degrees each way), **STEERING DEADZONE** (skips the game's stick deadzone), **STEERING CURVE** and **PEDAL DEADZONE**. Gamepads are not affected. Force feedback isn't supported yet, and the shaping has been tested with simulated input, not yet on a physical wheel.
 
+### DualSense
+
+A Sony DualSense or DualSense Edge is driven directly through SDL's PlayStation 5 driver, so it can do things the Xbox 360 game never asked for. **F6 > CONTROLS > DUALSENSE** appears once a PlayStation controller is connected. Everything there is off until you turn it on, and applies at once:
+
+- **ADAPTIVE TRIGGERS**: **BRAKE** gives the brake trigger a resistance that rises through its travel, a pulsing band while the car's ABS releases a wheel, and a buzz when a wheel locks. **FULL** also gives the throttle a light spring that buzzes while the driven wheels spin. **GEAR CLICK** adds a short click on the throttle at each gear change. The effects come from the car's own physics (engine, gear, ABS and wheel slip, read from the game each frame). The triggers go slack in menus, on the pause map, in the F6 menu, when the game window loses focus, and when the game quits or crashes. **TRIGGER STRENGTH** scales all of it.
+- **LIGHTBAR**: **PLAYER** keeps the colour of the controller's number, **RPM** runs from green through yellow to red as the engine nears its redline and flashes at the limiter, **OFF** turns it off. **PLAYER LIGHTS** turns the player number lights under the touchpad on or off.
+- **TILT STEERING** adds the controller's tilt to the left stick, held like a wheel; **TILT SENSITIVITY** 100% reaches full lock at 45 degrees. Press the touchpad to make the current tilt the centre. It also works with a DualShock 4 or a Switch Pro Controller.
+
+The settings menu and the mapping assistant show PlayStation button marks while a PlayStation controller is the one in your hands. The game's own on-screen prompts keep the Xbox buttons.
+
+If Steam starts the game with Steam Input on, Steam hands the game a virtual Xbox controller instead, and none of this reaches the pad; the page then says **STEAM INPUT HAS THE CONTROLLER**. Turn Steam Input off for the game (**Properties > Controller > Disable Steam Input**) and restart. On Android only a controller on USB-C gets these features; over Bluetooth Android passes buttons and rumble only.
+
+Tested controllers:
+
+| Controller | System | Connection | Triggers | Lightbar | Tilt | Release on quit, focus loss, crash |
+| --- | --- | --- | --- | --- | --- | --- |
+| DualSense | Windows 11 | USB | Yes | Yes | Not checked by hand | Yes |
+| DualSense | Windows 11 | Bluetooth | Not tested | Not tested | Not tested | Not tested |
+
+Linux, the Steam Deck, macOS, Android and the DualSense Edge have not been tried yet.
+
 ## Gameplay switches
 
 **F6 > GAMEPLAY** turns on three switches the game kept from its development builds. All are off by default and apply at once. **SKIP VOICE-OVERS WITH A** lets A close a dialog before its voice-over ends. **AUTOMATIC CAR RESET** off stops the game from putting the car back on the road when it strays too far. **REPLAY INTRO WHEN IDLE** off keeps the title screen from replaying the intro movie after about a minute without input. The HUD is hidden with <kbd>F2</kbd>.

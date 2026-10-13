@@ -76,7 +76,7 @@ pinyon = "Your own packages, verified and imported; Treasure Map included; Horiz
 feature = "Controls"
 link = "playing.md#controllers"
 xbox = "Xbox 360 controller"
-pinyon = "XInput and SDL controllers with button mapping, keyboard driving with rebindable keys"
+pinyon = "XInput and SDL controllers with button mapping, keyboard driving with rebindable keys, DualSense adaptive triggers and lightbar"
 
 [[original]]
 feature = "Saves"
@@ -228,6 +228,16 @@ cells = [
 feature = "Controllers and button mapping"
 link = "playing.md#controllers"
 cells = ["yes", "yes: Steam Input on the Deck", "yes", "yes: and touch controls"]
+
+[[platform]]
+feature = "DualSense triggers, lightbar and tilt steering"
+link = "playing.md#dualsense"
+cells = [
+  "yes: tested over USB; Bluetooth and tilt not checked yet",
+  "partly: built, not tried on a pad yet",
+  "partly: built, not tried on a pad yet",
+  "partly: built, not tried on a pad yet; USB-C only, Android passes rumble only over Bluetooth",
+]
 
 [[platform]]
 feature = "Keyboard driving"

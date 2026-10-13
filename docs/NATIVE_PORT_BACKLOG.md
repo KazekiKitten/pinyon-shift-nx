@@ -174,7 +174,7 @@ runs on the development machine (Ryzen 7 5800X, RTX 4080).
 | NP-3.1 | Latency-critical thread placement on P-cores and E-cores | A hybrid Intel CPU |
 | NP-3.7 | Which animation plays too fast after buying a car before a race at the unlocked rate (the race crowd running fast, reported 2026-09-30, is reproducible by route and tracked in NP-3.7 itself) | A short clip or the moment it happens, from the player who saw it |
 | NP-4.5 | That VARIABLE REFRESH RATE runs the display at the game's rate without tearing artifacts | A VRR (G-SYNC or FreeSync) display |
-| NP-6.3 | DualSense and Steam Input through SDL, a Deck controls layout | Those controllers and a Steam Deck |
+| NP-6.3 | DualSense over Bluetooth and on the other platforms (DS-8.0), a Deck controls layout | The pad paired over Bluetooth and a Steam Deck |
 | NP-12.1, 12.2, 12.7, 12.8 | Configuring and building on Linux (the presets and POSIX sources of NP-12.1 and NP-12.2 are written but unbuilt), Linux tooling and Steam Deck qualification | A Steam Deck LCD on the LAN since 2026-10-08, reached with the SteamOS devkit key, and the Linux toolchain approved in WSL (2026-09-30); what still needs a person is in the [Linux backlog](LINUX_PORT_BACKLOG.md#needs-a-person-or-hardware) |
 | NP-13 | The macOS port (ARM64 baseline, MoltenVK, app bundle) | A Mac and its toolchain |
 | NP-14 | The Android port (NDK build, fibers, mobile GPU, sideloading; running NP-14.3 on a 16 KiB kernel) | The Android NDK and a reference device |
@@ -368,7 +368,7 @@ renders it; a restored backup loads and the original file hash is unchanged.
 | --- | --- | --- |
 | NP-6.1 | **Done** (SDK `1167b52`): `pad_remap` maps each physical control (buttons and triggers) to the control the title receives as `PHYSICAL=GAME` pairs, and `pad_invert_right_stick_y` inverts look; CONTROLS > CONTROLLER BUTTONS edits them live. Only the title's reads are remapped: host menus keep the physical layout, so a remap cannot lock the player out of the remap screen. Mouse and keyboard keep their keybinds. `fh1-host-features` with `pad_remap=B=A` reaches free roam pressing only B. Stick-to-stick remapping is not offered | M |
 | NP-6.2 | **Done** (NP-1.4): CONTROLS lists the key each pad control maps to in mouse-and-keyboard mode. Keyboard glyphs in the game's own HUD need texture replacement and stay with NP-10.3 | S |
-| NP-6.3 | **In part** (SDK `1167b52`): `pad_rumble_strength` (CONTROLS > RUMBLE) scales vibration. Verifying DualSense and Steam Input through SDL and documenting a Deck layout need the hardware (see the human-only list) | S |
+| NP-6.3 | **In part** (SDK `1167b52`): `pad_rumble_strength` (CONTROLS > RUMBLE) scales vibration. A DualSense over USB on Windows is verified with adaptive triggers, lightbar and glyphs, and Steam Input's hold on it is detected and explained ([DualSense backlog](DUALSENSE_BACKLOG.md#results)); Bluetooth and a Deck controls layout need the hardware (see the human-only list) | S |
 | NP-6.4 | **Done** (SDK `e2eb60f`): Controls has MOUSE (off, camera, steering) and MOUSE SENSITIVITY. Steering (`mnk_mouse_steering`) turns horizontal mouse movement into a virtual wheel on the left stick that eases back to centre at `mnk_steering_return` locks per second, with the camera on the right-stick keys | S |
 
 **Gates.** Swapping A and B in the remap screen changes pause navigation and
