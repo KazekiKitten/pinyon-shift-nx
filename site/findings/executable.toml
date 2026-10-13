@@ -307,6 +307,14 @@ source = """docs/NEXT_LEVEL_RESEARCH.md NL-0.1"""
 
 [[finding]]
 group = """Analysis notes"""
+name = """non-volatile registers read from the caller"""
+what = """Some functions read a non-volatile register (r14-r31, f14-f31 or a non-volatile vector register) before writing it, so they depend on the value their caller left in it, not only on the values they save and restore. A generator that keeps those registers in per-function locals and starts them at zero crashes FH1 at boot (a null read with lr `0x823E9DE4`). In a race 13 such functions are reached through indirect calls, so no list of direct callees can cover them, and 854 functions write a non-volatile register without restoring it (vector scratch in the Direct3D code and SEH funclets). Locals are only correct if every function publishes the registers it writes at each call and return; that made the code 42-66 % larger and slower, so the registers stay in `ctx`."""
+how = """Experiment: generator option `non_volatile_as_local` on `fh1-race-sustained`, with a probe build for the indirect-call targets and a scan of the generated bodies for registers read before written and written without a restore."""
+confidence = """confirmed"""
+source = """docs/NEXT_LEVEL_RESEARCH.md NL-1.4"""
+
+[[finding]]
+group = """Analysis notes"""
 name = """instruction census"""
 what = """The image has 70 `sync`/`eieio`, 230 `lwsync` and 20 `isync` sites, and Xenon fused multiply-adds at 11,725 sites. The title interleaves vector and scalar floating point code closely: the generated code needs 42,445 conditional switches of the denormal (flush) mode one way and 2,153 the other."""
 how = """Instruction counts over the analysed image and the generated code."""
