@@ -951,7 +951,11 @@ void HostUi::DrawMenu(rex::ui::UIDrawContext& context) {
   const auto& rows = screen.rows();
   // A note takes the last row's place, above the button help.
   const std::string note = screen.note();
-  const size_t visible_rows = note.empty() ? kVisibleRows : kVisibleRows - 1;
+  // The body takes the place of the rows it pushes down, so the last rows
+  // scroll into view instead of sliding under the button help.
+  const size_t body_rows = size_t(std::ceil((rows_top - kRowsTop) / kRowPitch));
+  const size_t room = kVisibleRows > body_rows + 1 ? kVisibleRows - body_rows : 1;
+  const size_t visible_rows = note.empty() || room == 1 ? room : room - 1;
   size_t first = 0;
   if (rows.size() > visible_rows && screen.focus() >= visible_rows / 2) {
     first = std::min(screen.focus() - visible_rows / 2, rows.size() - visible_rows);
