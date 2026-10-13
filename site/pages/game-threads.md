@@ -7,7 +7,7 @@ description: Which guest threads Forza Horizon runs and what each does, how its 
 
 # Threads and frame timing
 
-Forza Horizon splits a frame between two threads. The **main thread** runs the simulation and game logic and records what should be drawn as deferred commands ([The executable](game-executable.md#classes)); the **render thread** replays those commands into D3D and builds the GPU's command buffer. An audio thread and a pool of job workers do the rest. The console ran this at 30 frames a second on a 60 Hz display, and the timing rules below were written for that.
+Forza Horizon splits a frame between two threads. The **main thread** runs the simulation and game logic and records what should be drawn as deferred commands ([The executable](game-executable.md#classes)); the **render thread** replays those commands into D3D and builds the GPU's command buffer. FMOD's mixer thread, the game's own audio thread and a pool of job workers that mostly run car physics do the rest. The console ran this at 30 frames a second on a 60 Hz display, and the timing rules below were written for that.
 
 {{diagram:game-frame-timing|One 30 fps frame on the console. The simulation steps every second vblank; the render thread draws the step the simulation finished and idles until the next one; the GPU executes it and the frame is shown on the following whole vblank.}}
 

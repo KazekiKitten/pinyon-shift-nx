@@ -46,7 +46,7 @@ media/tracks/colorado/
 
 ## Render scenarios and car level of detail
 
-Car LOD distances live in the render scenarios ([Rendering](game-rendering.md#render-scenarios)). Hooks on every writer of these tables showed they are read, but scaling them by 0.01 did not change which car model is drawn: the visible LOD is chosen elsewhere, below the scene walk on the main thread.
+Car LOD distances live in the render scenarios ([Rendering](game-rendering.md#render-scenarios)). Hooks on every writer of these tables showed they are read, but scaling them by 0.01 did not change which car model is drawn: the visible LOD is chosen elsewhere, and where is not yet traced. The main-thread chain once suspected (see "scene draw on the render thread" above) is most likely the physics-world step.
 
 {{findings:world/Render scenarios and car level of detail}}
 

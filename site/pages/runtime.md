@@ -33,7 +33,7 @@ Implementations include threads, events, semaphores, timers, the file system, co
 
 ## Threads
 
-Each guest thread is one host thread, named `Guest <start address>`. About 42 are alive in a race; the busy ones are the simulation and render threads, the audio thread and 11 job workers. Guest CPU numbers rotate over six virtual hardware threads, and guest affinities are ignored by default: honouring them, with one host core per Xenon hardware thread, gave no consistent gain.
+Each guest thread is one host thread, named `Guest <start address>`. About 42 are alive in a race; the busy ones are the simulation and render threads, FMOD's mixer thread and 11 job workers. Guest CPU numbers rotate over six virtual hardware threads, and guest affinities are ignored by default: honouring them, with one host core per Xenon hardware thread, gave no consistent gain.
 
 The job workers run the game's jobs on XAPI fibers. The game's five fiber functions (`ConvertThreadToFiber`, `ConvertFiberToThread`, `CreateFiber`, `DeleteFiber`, `SwitchToFiber`) are served by the runtime's host fibers (Windows fibers; a stack switch of the runtime's own on Linux and Android; `ucontext` on macOS), so a guest fiber switch never leaves the host call chain. Before that mapping the switch went through the kernel's stack-switch call, and every generated function needed an entry for each return address ([why that mattered](recompiler.md#what-the-generator-emits)).
 

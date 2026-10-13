@@ -101,7 +101,8 @@ name = """scene draw on the render thread"""
 what = """In free roam the render thread (guest `825A6320`) spends most of its busy time in `sub_82DB8AE8` > `sub_82DC1CB0` > `sub_82D65608`, and below `sub_82D65608` only in draw submission (`sub_82440CF8`). The main thread (guest `8255AE10`, also `82C0C8C8`) walks the scene through `sub_82D4E2E0` > `sub_82D4DE30`, into `sub_82D46EF8` > `sub_82D3A528` and `sub_82D4DCC8` > `sub_82D43818` > `sub_82D41A30` next to the culling-group table's method: the next place to look for where a model LOD is chosen."""
 how = """A sampling profiler over every guest thread during a free-roam drive."""
 confidence = """probable"""
-source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 World detail"""
+note = """`sub_82D4E2E0` was later found to be `CPhysicsWorld` vtable slot 22, the physics-world step (see "job worker threads" on the threads page). Its subtree is mostly collision and broadphase (`CRigidBodyColl`, `CCullingGroupTable`, `CWCStreamWorldGame`), so this main-thread chain is probably physics rather than where a model LOD is chosen."""
+source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 World detail; docs/NEAR_NATIVE_RESEARCH.md NN-5.1"""
 
 [[finding]]
 group = """Draw distance"""

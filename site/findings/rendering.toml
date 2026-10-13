@@ -44,8 +44,8 @@ name = """shader constant sources"""
 what = """About 700,000 constant dwords are written per race frame: about 90 % as register writes inside the command buffers (repeating with them) and about 10 % as one 16-dword `LOAD_ALU_CONSTANT` per draw (a 4x4 matrix, 3,300-6,000 a frame); inline `SET_CONSTANT` is never used. About 120 float registers (the frame globals) change at most four times a frame and about 200 carry the per-object changes. A draw carries about 17 register runs (167 float, 25 fetch and 35 other words), and the title often rewrites constants with unchanged values. `SCRATCH_REG6` is written 2-4 times a draw and never written back."""
 how = """Decoder counts in 600-frame windows; register-elision and entry census."""
 confidence = """confirmed"""
-note = """Sources disagree on the matrix data: one census found 99.9 % of `LOAD_ALU_CONSTANT` source data unchanged from the previous frame, another found the same address with new contents every frame."""
-source = """docs/DESKTOP_RENDERER_BACKLOG.md DR-4.1; docs/PERFORMANCE_BACKLOG.md Final pass, PB-7.1, PB-2.6; docs/RECORDER_PER_DRAW_BACKLOG.md PD-0, PD-1.6"""
+note = """Sources disagree on the matrix data: one census found 99.9 % of `LOAD_ALU_CONSTANT` source data unchanged from the previous frame, another found the same address with new contents every frame. This record also conflicts with "engine side of the display lists", which finds the only `LOAD_ALU_CONSTANT` emitter loading static shader tables rather than a matrix per draw. The conflict is not resolved; NN-0.10 in the near-native research plans the probe that settles it."""
+source = """docs/DESKTOP_RENDERER_BACKLOG.md DR-4.1; docs/PERFORMANCE_BACKLOG.md Final pass, PB-7.1, PB-2.6; docs/RECORDER_PER_DRAW_BACKLOG.md PD-0, PD-1.6; docs/NEAR_NATIVE_RESEARCH.md NN-0.10"""
 
 [[finding]]
 group = """Frame structure and views"""
@@ -477,22 +477,23 @@ source = """docs/FEATURE_BACKLOG.md FB-4"""
 
 [[finding]]
 group = """D3D inside the game"""
-base = """82416A00, 82409398, 8240CF68, 8240D070, 829F5FF0, 829F6360"""
+base = """82416A00, 0x82416EFC, 82409398, 8240CF68, 8240D070, 829F5FF0, 829F6360, 8246FB98, 0x8246FC1C"""
 name = """D3D command buffers"""
-what = """FH1 renders from prebuilt D3D command buffers (display lists). `82416A00` is `D3DDevice_RunCommandBuffer`, the per-object list executor; `82409398` writes the ring and moves its write pointer; `8240CF68` and `8240D070` close and submit segments. A list is an `IDirect3DCommandBuffer` (resource type 9): +116 chains (size, physical address) pairs, one indirect buffer each; +24..+56 mark inherited and +64..+96 overwritten state, +108 holds flags and +112 dependent resources. Nothing patches a list when it runs: per-frame state goes into the calling segment just before the indirect-buffer packet. `829F5FF0` and `829F6360` are D3D runtime code that replays the tiling stream into the ring once per tile on D3D's worker threads."""
-how = """Reverse engineering of the generated code, matched against the decoder's indirect-buffer census."""
+what = """FH1 renders from prebuilt D3D command buffers (display lists). `82416A00` is `D3DDevice_RunCommandBuffer`, the per-object list executor; `82409398` writes the ring and moves its write pointer; `8240CF68` and `8240D070` close and submit segments. A list is an `IDirect3DCommandBuffer` (resource type 9): +116 chains (size, physical address) pairs, one indirect buffer each; +24..+56 mark inherited and +64..+96 overwritten state, +108 holds flags and +112 dependent resources. Nothing patches a list when it runs: per-frame state goes into the calling segment just before the indirect-buffer packet. `829F5FF0` and `829F6360` are D3D runtime code that replays the tiling stream into the ring once per tile on D3D's worker threads. The executor stores each list's `INDIRECT_BUFFER` header at `0x82416EFC`, inside its loop over the +116 chain. The whole function is 407 instructions with 27 calls, up to four of them segment closes that can wait on a fence, so that store, not a native body, is the place to hook list execution. A second producer of `INDIRECT_BUFFER` packets, `8246FB98`, stores its header at `0x8246FC1C` (59,382 calls in a desktop race, 4.6 a presented frame, from 14 callers). The executor itself ran 542 times a presented frame."""
+how = """Reverse engineering of the generated code, matched against the decoder's indirect-buffer census; call counts from the probe build (NL-2.3, 12,992 presents)."""
 confidence = """probable"""
-note = """Corrects an earlier guess that `8240xxxx`-`8246xxxx` were engine constructors."""
-source = """docs/DESKTOP_RENDERER_BACKLOG.md DR-0.4"""
+note = """Corrects an earlier guess that `8240xxxx`-`8246xxxx` were engine constructors. How the lists' contents come to exist (who writes the +116 chain) is not traced; NN-0.10 plans a write-watch probe."""
+source = """docs/DESKTOP_RENDERER_BACKLOG.md DR-0.4; docs/NEAR_NATIVE_RESEARCH.md NN-2.3, NN-0.10"""
 
 [[finding]]
 group = """D3D inside the game"""
 base = """824167F8, 82417060, 82417BC0, 824365B0, 824168B0, 82411BD0"""
 name = """engine side of the display lists"""
-what = """The engine calls the list executor from `824167F8` and `82417060`, reached from `CProceduralModels` vtable slot 41 (`82417BC0`) and from `824365B0`. `824168B0` writes a list's float constants as register writes in the calling segment (2.0 % of the render thread). The only `LOAD_ALU_CONSTANT` emitter, `82411BD0`, loads static shader tables. The command stream has six `PM4_INDIRECT_BUFFER` store sites, with four owners, three producers and four context roots."""
-how = """Reverse engineering of the generated code; command-buffer lineage census; thread-sampler profile."""
+what = """The engine calls the list executor from `824167F8` and `82417060`, reached from `CProceduralModels` vtable slot 41 (`82417BC0`) and from `824365B0`. `824168B0` writes float constants as register writes in the calling segment (2.0 % of the render thread). It is D3D's generic dirty-constant flush, not a list-specific step: nine functions call it, each from two sites (vertex and pixel constants): `823EA3E0`, `82408B70`, `8240DC70`, `82415F68`, `82416380`, `82416A00`, `829EBD50`, `829EC928` and `829F6B18`. It ran 23.45 million times in a desktop race, 1,805 a presented frame. The only `LOAD_ALU_CONSTANT` emitter, `82411BD0`, loads static shader tables. The command stream has six `PM4_INDIRECT_BUFFER` store sites, with four owners, three producers and four context roots."""
+how = """Reverse engineering of the generated code; command-buffer lineage census; thread-sampler profile; callers and call counts from the generated code and the probe build (NL-2.3, 12,992 presents)."""
 confidence = """probable"""
-source = """docs/DESKTOP_RENDERER_BACKLOG.md DR-0.4, Where it stands; docs/PERFORMANCE_BACKLOG.md PB-3.1"""
+note = """This record conflicts with "shader constant sources", which has about 10 % of constants arriving as one 16-dword `LOAD_ALU_CONSTANT` matrix per draw. The conflict is not resolved; NN-0.10 in the near-native research plans the probe that settles it. For scale, `82411BD0` ran 264 times a presented frame in a desktop race, called from `82411C80` (156 a frame)."""
+source = """docs/DESKTOP_RENDERER_BACKLOG.md DR-0.4, Where it stands; docs/PERFORMANCE_BACKLOG.md PB-3.1; docs/NEAR_NATIVE_RESEARCH.md NN-2.3, NN-0.10"""
 
 [[finding]]
 group = """D3D inside the game"""
@@ -502,7 +503,18 @@ name = """title draw wrappers"""
 what = """The title draw adapter `0x824079B8` (38 call sites in 25 functions) calls the indexed draw wrapper `0x8240F4D8`, which stores a `PM4_DRAW_INDX_2` header at `0x82410328`, returns at `0x82410620` and has six consume-then-clear dirty-mask sites. The immediate draw wrapper `0x829F7C70` stores a count-one header. Only about 42 draws a race frame (about 70 us of guest time) go through these emitters: the scene's draws arrive in prebuilt indirect buffers."""
 how = """Static inventory; pass-through hooks with exact packet-address provenance (107,455 exact matches); profiling probes at entry, header and exit; decoder census of the race."""
 confidence = """confirmed"""
+note = """The 42 counts these wrappers only. D3D has other draw entry points that store their own draw headers, about 540 calls a presented frame (see "D3D draw entry points")."""
 source = """docs/native-renderer/archive/RENDER_PASS_CENSUS.md Verified inventory; config/rexglue/analysis/main-xex.toml PERF-11 probes; docs/native-renderer/RESEARCH.md Capture, provenance and admission; docs/PERFORMANCE_BACKLOG.md Final pass"""
+
+[[finding]]
+group = """D3D inside the game"""
+base = """sub_82416380, sub_82415F68, sub_82415CE0, sub_82460998, sub_82408B70, sub_8240DC70"""
+name = """D3D draw entry points"""
+what = """Most draw calls the title makes do not go through the draw wrappers above. `sub_82416380` (3,543,451 calls in a desktop race, 272.7 a presented frame, 11 callers) and `sub_82415F68` (3,463,307, 266.6 a frame, 9 callers, among them `sub_82415CE0`, which an indirect call in `sub_82417418` reaches) store type-3 `DRAW_INDX` headers themselves. Like the list executor `82416A00` they call the dirty-constant flush `824168B0` twice, the shader and constant-load setup `82411C80` and the segment close `8240CF68`, which can wait on a fence. Together they are about 540 calls a presented frame, against 35 through the indexed draw wrapper `8240F4D8` and 542 list executions (route averages, menus included). Three smaller emitters run 17.3 (`sub_82460998`), 9.2 (`sub_82408B70`) and 8.5 (`sub_8240DC70`) times a frame. On the Odin they are sampled on the render thread and on the presentation worker `82589AE8`, where `sub_82416380` is 11.9 % of that thread's cycles, next to the segment closes `8240CF68` (4.4 %) and `8240D070` (4.8 %)."""
+how = """Packet-header constants, callees and callers in the generated code; call counts and indirect targets from the probe build (NL-2.3, 12,992 presents); the Odin call-graph profile cg2 (30 fps), split by thread."""
+confidence = """probable"""
+note = """Whether they write into the current ring segment or into a command buffer being recorded is not known. A display-list compiler at `82416A00` would have to cover them, the second producer thread and the second `INDIRECT_BUFFER` producer `8246FB98` (NN-2.3)."""
+source = """docs/NEAR_NATIVE_RESEARCH.md NN-2.3"""
 
 [[finding]]
 group = """D3D inside the game"""

@@ -115,6 +115,9 @@ Negative results, so they aren't retried without a new reason:
 | `-ffp-model=strict` on the generated code | 1–2 % more host instructions in the hot partitions, for a reordering across MXCSR writes never observed; kept as an option |
 | `-fasync-exceptions` on the generated code | no generated unit has an SEH scope; the flag moved code size under 1 % either way, now off |
 | x86-64-v3 (MOVBE, AVX2, BMI) for the generated code | MOVBE replaced a fifth of the byte swaps in the audio routines, under 1 % of their instructions; an opt-in variant until a cycle measurement says more |
+| Untiling predicated tiling on the desktop as it works today | CPU-neutral at 1x on the RTX 4080 (decoder 7.73 to 7.83 ms, recorder about 4.7 ms either way, submission 2.4-2.5 to 2.1 ms): the first pass selects every bin and the later tiles stay predicated, so the decoder still walks them and the saving on duplicate draws comes back as decoder work |
+| Letting the GPU read guest memory in place instead of the 512 MB shared-memory mirror (host-pointer import, dma-buf) | not available on the Android drivers (no `VK_EXT_external_memory_host` on Turnip or Qualcomm), and the mirror is not only a copy: fence words are written into it at decode and record time with three frames in flight, so sharing one copy would tear |
+| Guest stack slots as host locals ("stack symbolization") | a census found only 29-39 % of slots promotable (non-escaping), against the 60 % the proposal set as its bar; the 83 % first seen came from one function, and hooks read saved-register slots on the guest stack |
 
 Other recompilers' published optimizations, and which applied here, are surveyed in [RECOMP_OPTIMIZATION_SURVEY.md](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/RECOMP_OPTIMIZATION_SURVEY.md).
 

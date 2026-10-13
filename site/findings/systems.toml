@@ -263,6 +263,17 @@ how = """Reading the generated code and vtables; the host runs the same reveal a
 confidence = """confirmed"""
 source = """src/dlc_treasure_map.cpp"""
 
+[[finding]]
+group = """Online services"""
+base = """0x82A90000-0x82B40000, 82ADA220, sub_82AC5B00, sub_82AF5930, sub_82AC6EB0"""
+name = """online and Kinect code range is not dead"""
+what = """The block at about `0x82A90000`-`0x82B40000` holds XDK online, Kinect (NUI), XHV2 voice and party code, but single-player play runs it, so it cannot be stubbed as a whole. In a desktop race 310 of its 3,123 generated functions ran, 13.2 million calls (about 1,016 a frame). Most of those calls go to two two-instruction leaves that game code also uses: `sub_82AF5930` (8,529,252 calls, all from `sub_82CE51F0`) and `sub_82AC6EB0` (3,258,524, from game and FMOD callers). The guest thread that starts at `82ADA220` is in the range: it calls `XamXStudioRequest` and `XamNuiCameraTiltSetCallback`, then requests the speech facade module. The XHV2 voice code at about `0x82AC0E20`-`0x82AC5BC0` is there too; `sub_82AC5B00` creates and closes the voice engine through `XamVoiceCreate` and `XamVoiceClose`. On the Odin the range is 0.23-0.25 % of the process."""
+how = """Function and call counts over the range from the probe build (NL-2.3, 115 s race); imports and callers in the generated code; the Odin runtime log (thread starts, first imports and module loads); Odin call-graph profiles (30 fps)."""
+confidence = """probable"""
+note = """The counts are measured; the range's bounds and its XDK identity come from its structure and imports and are probable. The two hot leaves are probably shared helpers the linker placed there, not online code."""
+negative = true
+source = """docs/NEAR_NATIVE_RESEARCH.md Considered and rejected (Stubbing the online range)"""
+
 # --------------------------------------------------- Leftover modes and hardware
 
 [[finding]]

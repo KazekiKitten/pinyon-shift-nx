@@ -18,10 +18,11 @@ group = """Audio engine"""
 base = """sub_82BB5918"""
 v4 = """sub_82C74230"""
 name = """CAudioEngine::Update"""
-what = """`CAudioEngine::Update` (`0x82BB5918`) is the audio update, called through a function slot on the audio thread before the ordinary FMOD update. It owns cue operations: cues are safe to start, stop and release from here."""
-how = """Replacement hook used by the base-disc Rally adapter to schedule pace notes; v4 address by context mapping."""
+what = """`CAudioEngine::Update` (`0x82BB5918`) is the audio update, called through a function slot on the game audio thread (`CAudioThread`) before the ordinary FMOD update. It owns cue operations: cues are safe to start, stop and release from here. In a desktop race it ran 3,253 times (about 28 a second), through the indirect calls at `0x824B8114` (2,939) and `0x824B8200` (314)."""
+how = """Replacement hook used by the base-disc Rally adapter to schedule pace notes; slot 0 of the `CAudioEngine` vtable `0x82139774` in the RTTI records; call counts and indirect targets from the probe build (NL-2.3); v4 address by context mapping."""
 confidence = """probable"""
-source = """docs/TITLE_UPDATE_V4_BACKLOG.md Review of the base-disc Rally adapter; src/fh1_v4_addresses.inc"""
+note = """`UpdateRallyPace` is the name of Pinyon's replacement hook for it (installed with `SetFunction` in the runtime hooks), which calls the original; the guest function is `CAudioEngine::Update`."""
+source = """docs/TITLE_UPDATE_V4_BACKLOG.md Review of the base-disc Rally adapter; src/fh1_v4_addresses.inc; src/pinyon_shift_runtime_hooks.cpp UpdateRallyPace"""
 
 [[finding]]
 group = """Audio engine"""
@@ -35,23 +36,13 @@ source = """docs/DLC_BACKLOG.md Saved-garage stage-three finish; Rally audio upd
 
 [[finding]]
 group = """Audio engine"""
-base = """82FB4AF8"""
-name = """XMA audio output"""
-what = """The title's audio output is 48 kHz six-channel XMA, written by the audio thread through the XMA hardware registers. About 22 % of that thread's time goes to stores to the XMA MMIO range (15.6 %) and the XMA context decode they trigger (14.6 %), besides reverb (about 12 %) and biquad filters."""
-how = """`simpleperf` inclusive call-graph profiles on Android devices (Odin, 8 Elite)."""
-confidence = """confirmed"""
-note = """Shares are from the recompiled build on ARM devices, not console timings."""
-issue = """#469"""
-source = """docs/PERFORMANCE_BACKLOG.md PB-3.11; docs/ANDROID_PORT_BACKLOG.md; docs/RECOMP_OPTIMIZATION_SURVEY.md"""
-
-[[finding]]
-group = """Audio engine"""
 base = """sub_830A42E0, sub_830A40F8, sub_830A4868, sub_830A4190, sub_830A3EF8, sub_830A3E28, sub_830B54F0, sub_830B5D18, sub_830B5490"""
 name = """XMA register writers"""
-what = """Every access to the XMA register window (`0x7FEAxxxx`) is in nine small XAUDIO2 routines; the title's own code never touches the hardware. Four write a register whose address and value arrive in r4 and r5 (`sub_830A42E0`, `sub_830A40F8`, `sub_830A3EF8`) or in r7/r8 and r10/r30 (`sub_830A4868`, two stores), two read one (`sub_830A4190` reads a word and a halfword at +80 of the register block, `sub_830A3E28` one word), and the three `sub_830B5xxx` routines are off the race path. Over one 12,993-frame race the writers ran 249,317, 249,238, 249,238 and 956 times and the reader 249,238 times: about 1.0 million register writes and 0.5 million reads, 77 and 38 a frame. In the recompiled build the store is not a trap: the generator recognised the window from the address construction and emits the store as a direct call into the decoder's register handler, so what the audio thread pays for is the handler's work, which decodes the kicked context on the calling thread, not the dispatch."""
+what = """Every access to the XMA register window (`0x7FEAxxxx`) is in nine small XDK routines, the XMA helpers that FMOD's XMA codec calls (see "FMOD XMA codec"); the title's own code never touches the hardware. Four write a register whose address and value arrive in r4 and r5 (`sub_830A42E0`, `sub_830A40F8`, `sub_830A3EF8`) or in r7/r8 and r10/r30 (`sub_830A4868`, two stores), two read one (`sub_830A4190` reads a word and a halfword at +80 of the register block, `sub_830A3E28` one word), and the three `sub_830B5xxx` routines are off the race path. Over one 12,993-frame race the writers ran 249,317, 249,238, 249,238 and 956 times and the reader 249,238 times: about 1.0 million register writes and 0.5 million reads, 77 and 38 a frame. In the recompiled build the store is not a trap: the generator recognised the window from the address construction and emits the store as a direct call into the decoder's register handler, so what the FMOD mixer thread pays for is the handler's work, which decodes the kicked context on the calling thread, not the dispatch."""
 how = """The `REX_MM_` sites in the generated code; call counts from the probe build on `fh1-race-sustained` (NL-2.3); the kick path in the SDK's `XmaDecoder::WriteRegister`."""
 confidence = """confirmed"""
-source = """docs/NEXT_LEVEL_RESEARCH.md NL-4.1"""
+note = """An earlier version called these XAudio2 routines on the audio thread's output path; they belong to the XMA input codec."""
+source = """docs/NEXT_LEVEL_RESEARCH.md NL-4.1; docs/NEAR_NATIVE_RESEARCH.md NN-4.1, NN-4.8"""
 
 [[finding]]
 group = """Audio engine"""
@@ -94,6 +85,69 @@ how = """Generated file overlay; native PCM capture."""
 confidence = """probable"""
 negative = true
 source = """docs/REVERSE_ENGINEERING.md@fc1751fe2a38 Developer options and leftover systems"""
+# ---------------------------------------------------------- Mixer and output
+
+[[finding]]
+group = """Mixer and output"""
+base = """0x82F44670-0x83016060"""
+name = """FMOD Ex code range"""
+what = """FMOD Ex is linked into the executable at about `0x82F44670`-`0x83016060`: 367 functions there reference FMOD Ex's own source-file and component-name strings, and every hot audio function sits in the range or is called from it. The image also names FMOD's threads (mixer, stream, file, geometry, nonblocking, XMic), its codecs (XMA, MPEG, Ogg Vorbis, FSB, WAV, raw, VAG and others) and its Xenon output. Code without strings reaches past both ends (the MPEG synthesis is at `0x8302xxxx`), and a structural reading puts the library at about `0x82F34000`-`0x83031000`. In a desktop race 1,220 of the 2,810 generated functions in the string range ran, 185 million calls, about 3 % of all guest calls."""
+how = """A scan of the image for code that builds the addresses of FMOD's strings; call counts from the probe build (NL-2.3, 115 s race)."""
+confidence = """confirmed"""
+note = """The string range is confirmed; the structural bounds are probable."""
+source = """docs/NEAR_NATIVE_RESEARCH.md NN-4.2, NN-4.3, NN-4.8"""
+
+[[finding]]
+group = """Mixer and output"""
+base = """sub_82FBBB40, sub_8300A508, sub_82FB76C0, sub_82FFFC38, 830C68B8, sub_830C9D78, sub_8246F268, sub_830C9FA0"""
+id = "xma-audio-output"
+name = """audio output path"""
+what = """The title's output is float 5.1 from FMOD, not XMA. FMOD's mixer thread mixes one 256-sample block every 5.33 ms (21,570 blocks in a 115 s race): `sub_82FBBB40` calls the mix entry `sub_8300A508`, which runs the recursive DSP-graph execute `sub_82FB76C0` (233 node visits a block). FMOD's Xenon output init `sub_82FFFC38` (run once) creates the title's XAudio2 engine (`sub_830A9968`) and one float source voice; after that FMOD only polls the voice's state (`sub_830B0A38`, 66,517 calls, through its position query `sub_82FFF930`). The XAudio2 pass thread `830C68B8` mixes that voice into the six-channel master. The host Audio Worker runs the render-driver callback `sub_830C9D78` > `sub_8246F268` once per block (21,571 calls), which wakes the pass, waits for it and submits the frame with `XAudioSubmitRenderDriverFrame`; `sub_830C9FA0` registers the driver client and reads the speaker configuration. The host copies 1,536 big-endian floats a block and folds six channels to stereo on Android. XMA is the compressed input of 975 of the 984 FSB banks (the other 9 are MPEG), decoded by FMOD's XMA codec. Other XAudio2 voices come from XHV2 voice chat, the movie glue `sub_82E5DB08` and four creates not yet attributed. On the Odin at the 60 fps limit the four FMOD threads take 4.86 ms of CPU a frame, the XAudio2 pass 0.59 ms, the host Audio Worker 0.32 ms and the host XMA decoder thread 0.45 ms."""
+how = """Call sequences, imports and indirect targets in the generated code; call counts from the probe build on `fh1-race-sustained` (NL-2.3); a format census of the shipped FSB banks; the SDK's render-driver and SDL output code; per-thread `simpleperf stat` on the Odin (run `xa2`, base image)."""
+confidence = """confirmed"""
+note = """Earlier versions of this record, named "XMA audio output", said the audio thread wrote the output as 48 kHz six-channel XMA through the XMA registers. Those register writes are the XMA codec decoding compressed input (see "XMA register writers"). The Odin times are the base image's."""
+issue = """#469"""
+source = """docs/NEAR_NATIVE_RESEARCH.md Where the overhead is, NN-4.1, NN-4.4; docs/PERFORMANCE_BACKLOG.md PB-3.11"""
+
+[[finding]]
+group = """Mixer and output"""
+base = """sub_82F90A00, sub_82F904E8, sub_82F86298, sub_82F86498, sub_82F96658, sub_82F8F8F0"""
+name = """speaker mode and the 5.1 mix"""
+what = """FMOD mixes in 5.1 because the title keeps FMOD's defaults. The system constructor `sub_82F90A00` stores the float output format (5) at +1184, speaker mode 5 (5.1) at +22064 and six output channels at +1200. The internal speaker-mode setter `sub_82F904E8` (modes 1-6 give 1, 2, 4, 5, 6 and 8 channels; it refuses once the system is initialised) is called only from its public wrapper `sub_82F86298`, which never runs, startup included. The title's `System::init` wrapper `sub_82F86498` calls FMOD's init `sub_82F96658` once, which passes the +1200 count to the Xenon output init (`sub_83000130` > `sub_82FFFC38`); that builds both the mastering voice and the source voice with it, so nothing else hard-codes six channels. The DTS Neural 7.1 branch `sub_82F8F8F0` never runs. Every FSB sample is mono or stereo (16,068 and 3,197 in 984 banks), so the six-channel width comes only from the bus format: ParamEQ, echo `sub_82FCD580` and the highpass/lowpass unit `sub_82FCEAB0` each spend about 98 % of their Odin time in their six-channel loops, and the host then folds the mix to stereo on Android. A `Stereo`/`PL2Stereo`/`5.1PCM` name table in the data has no code references."""
+how = """Constants and call arguments in the generated code (constructor, setter, init and output init); call counts from the probe build (NL-2.3, startup included); a channel-count census of the shipped FSB banks; Odin call-graph samples (cg2, 30 fps) placed on each unit's per-channel-count loops by their multiply counts; a string and reference scan of the image."""
+confidence = """probable"""
+note = """The stored defaults and the call counts are confirmed; reading them as format, speaker mode and channel count follows FMOD Ex's documented enums and is probable. Forcing stereo before init is NN-4.2."""
+source = """docs/NEAR_NATIVE_RESEARCH.md NN-4.2"""
+
+[[finding]]
+group = """Mixer and output"""
+base = """sub_82FAE0B8, sub_82FAB740"""
+name = """FMOD matrix mix"""
+what = """`sub_82FAE0B8` mixes a voice's channels into its output through a level matrix: 1,437,684 calls in a race, 66.7 a mix block. It dispatches on the input channel count. On the Odin 46 % of its time is the six-in, six-out loop (36 multiply-adds a sample, against 4 for stereo) and 45 % the conversion of the half-precision level matrix to floats, which it redoes on every call. `sub_82FAB740` is a helper (108,798 calls) whose channel dependence is not known. Together they are 2.0 % of the Odin process."""
+how = """Loop structure in the generated code; call counts from the probe build (NL-2.3); Odin call-graph samples (cg2, 30 fps) placed on its loops by their multiply counts."""
+confidence = """probable"""
+source = """docs/NEAR_NATIVE_RESEARCH.md NN-4.3"""
+
+[[finding]]
+group = """Mixer and output"""
+base = """sub_83002C20, sub_82FFB3F8, sub_82FD7228, sub_82FD6940"""
+name = """FMOD XMA codec"""
+what = """FMOD's XMA codec decodes the compressed banks for the mixer. `sub_83002C20` (127,787 calls in a race, 5.9 a mix block) calls FMOD's codec read dispatch `sub_82FFB3F8` (307,704), whose indirect call at `0x82FFB51C` reaches the XMA codec read `sub_82FD6940` (246,882 calls, 11.4 a block) through the this-adjusting thunk `sub_82FD7228`. That read drives the nine XDK XMA helpers (see "XMA register writers") and, through them, the SDK's XMA decoder. `sub_83002C20` and the dispatch are the API boundary where a host decoder could write straight into FMOD's buffer, with no contexts, registers, worker or ring (NN-4.8). On the Odin the XMA path under `sub_82FD6940` was 4.3 % of the process cycles, nearly all of it register emulation and decode."""
+how = """Call sequences and indirect targets in the generated code; call counts from the probe build (NL-2.3, 115 s race); FMOD's codec-name strings; the Odin call-graph profile cg2 (30 fps, before NL-4.1)."""
+confidence = """probable"""
+note = """The read is confirmed as the XMA codec's by its calls into the XMA helpers; the role of `sub_83002C20` is probable."""
+source = """docs/NEAR_NATIVE_RESEARCH.md NN-4.1, NN-4.8"""
+
+[[finding]]
+group = """Mixer and output"""
+base = """sub_82FD5850, sub_82FD4F20, sub_82FD4890, sub_83014F08, sub_8302A1B8, sub_83029B48, sub_830142C8, sub_83011C50"""
+name = """FMOD MPEG codec"""
+what = """FMOD's MPEG codec decodes the radio music and the other MPEG banks in guest software. Its descriptor `sub_82FD5850` holds FMOD's MPEG codec name string, and the codec read dispatch's indirect call at `0x82FFB470` reaches its read `sub_82FD4890` through the thunk `sub_82FD4F20`. Below the read are the frame decode `sub_83014F08`, the synthesis pair `sub_8302A1B8`/`sub_83029B48`, the inverse MDCT `sub_830142C8` and the Huffman decode `sub_83011C50`. With the radio off the read still ran 1,963 times in a desktop race (the synthesis 72,036 times), most likely for voice-over, which ships as mono 48 kHz MPEG; the Odin race profile has no samples in it. Its cost with a station playing is not measured."""
+how = """FMOD's codec-name string and the descriptor that holds it; indirect targets and call counts from the probe build (NL-2.3, radio off in the seed); the Odin call-graph profile cg2; a format census of the FSB banks."""
+confidence = """probable"""
+note = """The descriptor and the read are confirmed; the unit names below the read come from call shape and counts and are probable."""
+source = """docs/NEAR_NATIVE_RESEARCH.md NN-4.6"""
+
 # --------------------------------------------------- Speech and ambience banks
 
 [[finding]]
