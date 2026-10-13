@@ -1,6 +1,7 @@
 # DualSense backlog
 
-Status: **open; created 2026-10-12** from a read-only audit of the tree
+Status: **open; created 2026-10-12**, tracked in
+[#561](https://github.com/arcanite24/pinyon-shift/issues/561); from a read-only audit of the tree
 (`dev` at `18fc79e`, vendored SDL `release-3.4.0-428-g8bf3b7215`) and from
 the public protocol references listed at the end. Nothing has been built or
 tried on a controller yet. This is the detailed plan for FB-3.2, FB-3.3 and
