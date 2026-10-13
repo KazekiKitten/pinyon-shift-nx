@@ -86,6 +86,7 @@ Negative results, so they aren't retried without a new reason:
 | Idea | Result |
 | --- | --- |
 | CR fields in C++ locals, synced at every call | binaries 13–26 % larger for no gain; syncing by the calling convention instead paid (see above) |
+| Hooking the guest XMA API to avoid a "trap" on every audio register write | there was no trap to avoid: the generator recognises the register window statically and emits those stores as direct calls into the decoder; the cost was the decode done inline on the audio thread. Moving it to the decoder thread (an SDK cvar) cut the guest audio thread 15 % on the desktop and 21 % on the Odin without touching guest code. Check how a hardware access actually reaches the runtime before designing around it |
 | Canary's scalar-ALU swizzle fix (`b` from Z under a three-operand vector op) | no FH1 shader is affected: of 478,372 ALU instructions in the 12,846 disc shaders, none co-issues a scalar operation with `mad`, `cnd*` or `dp2add` (the XNA compiler never shares source 3) |
 | Trusting a byte-match for a small function's title-update address | the five XAPI fiber thunks "mapped" to their base addresses in v4 (they sit 0xC1E80 higher); the v4 build then hooked five unrelated functions and failed to load. Check a small function's mapping by its cross-references |
 | Guest stack accesses without `volatile` | 1.5 % fewer host instructions statically, but the race route ran 7-9 % slower on the desktop (108-110 against 117-119 fps median, worse p99); kept as an off build option |

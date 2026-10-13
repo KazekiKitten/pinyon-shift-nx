@@ -144,6 +144,16 @@ Probe mods found the launch-option flags, the Treasure Map's reveal path and the
 
 `pinyon_shift_thread_sampler` samples every guest thread and maps the samples to guest functions; on Android, `simpleperf record --call-graph fp` does the same with call chains. A function's share of a thread is often the first hint of what it is: the render thread's idle loop and the LZX decoder were both found this way ([Threads and frame loop](game-threads.md)).
 
+### The probe build
+
+A sampler sees where time goes; the probe build counts what happens. `PINYON_SHIFT_RECOMP_PROBE=ON` generates the game a second time into `.local/generated-probe` with a counter at every function entry and a per-thread record of every indirect call's target (`rex/ppc/probe.h`). When a scripted route completes, the runtime writes `logs/probe.json` into the run's state directory, and one script reads any number of them:
+
+```powershell
+python tools/re/probe-summary.py .local/runs/probe-race/state/logs/probe.json --generated .local/generated-probe/default
+```
+
+It lists functions by call count with the knowledge base's names, the functions no route entered, and each indirect call site with the number of distinct targets it reached. One race route answered three questions at once: half of the 76,257 functions are never entered during a race; two save/restore helpers make up 31 % of all calls; and 95 % of the 18,017 indirect call sites that ran reached exactly one target, so the game's virtual calls are mostly monomorphic in practice. The build is slower than the normal one (the counters are atomic), so the runner's `--no-performance-gate` flag keeps its timing from failing the route.
+
 ## Verifying
 
 A finding that changes what the player sees is checked on a scripted route from a pinned save, so the run does not depend on how far the live save has progressed:

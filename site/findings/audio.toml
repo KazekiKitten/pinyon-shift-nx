@@ -46,6 +46,15 @@ source = """docs/PERFORMANCE_BACKLOG.md PB-3.11; docs/ANDROID_PORT_BACKLOG.md; d
 
 [[finding]]
 group = """Audio engine"""
+base = """sub_830A42E0, sub_830A40F8, sub_830A4868, sub_830A4190, sub_830A3EF8, sub_830A3E28, sub_830B54F0, sub_830B5D18, sub_830B5490"""
+name = """XMA register writers"""
+what = """Every access to the XMA register window (`0x7FEAxxxx`) is in nine small XAUDIO2 routines; the title's own code never touches the hardware. Four write a register whose address and value arrive in r4 and r5 (`sub_830A42E0`, `sub_830A40F8`, `sub_830A3EF8`) or in r7/r8 and r10/r30 (`sub_830A4868`, two stores), two read one (`sub_830A4190` reads a word and a halfword at +80 of the register block, `sub_830A3E28` one word), and the three `sub_830B5xxx` routines are off the race path. Over one 12,993-frame race the writers ran 249,317, 249,238, 249,238 and 956 times and the reader 249,238 times: about 1.0 million register writes and 0.5 million reads, 77 and 38 a frame. In the recompiled build the store is not a trap: the generator recognised the window from the address construction and emits the store as a direct call into the decoder's register handler, so what the audio thread pays for is the handler's work, which decodes the kicked context on the calling thread, not the dispatch."""
+how = """The `REX_MM_` sites in the generated code; call counts from the probe build on `fh1-race-sustained` (NL-2.3); the kick path in the SDK's `XmaDecoder::WriteRegister`."""
+confidence = """confirmed"""
+source = """docs/NEXT_LEVEL_RESEARCH.md NL-4.1"""
+
+[[finding]]
+group = """Audio engine"""
 base = """sub_82A63F40, sub_82A63FE8, sub_823F2960"""
 name = """custom soundtrack and the radio mute"""
 what = """FH1 supports the console's custom soundtrack only minimally: it sends XMPSetPlaybackController (`0x0007001A`, from `sub_82A63F40`) and XMPGetPlaybackController (`0x0007001B`, from `sub_82A63FE8`) and never drives the player. It polls the controller every frame and mutes its own radio and music while the system player owns it (title music fell silent within a second and came back); effects and ambience keep playing. The `0x0A000003` notification and voice category 1's volume (`XAudioGetVoiceCategoryVolume`, read in a loop and cached by `sub_823F2960` at object+536) change nothing audible."""

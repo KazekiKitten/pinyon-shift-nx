@@ -42,6 +42,8 @@ On `Radio_Music.fsb` it yields 127 samples, each with `SongStart`, `EventStart` 
 
 ## Audio engine
 
+The title's output is XMA, written by the audio thread through the console's XMA registers. In the recompiled game those writes never fault: the generator recognises the register window when the address is built and emits each store as a direct call into the runtime's decoder, so the hardware path is nine small XAUDIO2 routines calling the decoder about 115 times a frame. The decoder's register handler used to decode each kicked context on the audio thread itself; the SDK cvar `xma_decode_kicks_inline=false` leaves that to the decoder thread, which measured 15 % fewer audio-thread cycles on the desktop and 21 % fewer instructions on the Odin with no stall or queue change ([research record](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/NEXT_LEVEL_RESEARCH.md), NL-4.1). It stays off by default until a race has been listened to with it on.
+
 {{findings:audio/Audio engine}}
 
 ## Speech and ambience banks

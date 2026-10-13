@@ -555,6 +555,16 @@ source = """docs/DESKTOP_RENDERER_BACKLOG.md DR-1.2"""
 
 [[finding]]
 group = """D3D inside the game"""
+base = """sub_82409398, sub_829EE118, sub_829EEC48, sub_829EED78, sub_829EE1F8, sub_829E9570, sub_829F6878, sub_829FCB58, sub_823E6568, sub_823F2C48, sub_831217A8, sub_831464C0, sub_829FF978"""
+name = """GPU register accesses"""
+what = """The generator marks a load or store whose base register was built from the GPU register window (`0x7FC8xxxx`) or is followed by `eieio` as a hardware access, so every site the title has is known statically: 13 D3D functions touch GPU registers, and none of the title's own code does. Decoding each displacement against the register table: `sub_82409398` stores `CP_RB_WPTR` (the ring-buffer write pointer; 510,243 calls in one race), `sub_829EE118` stores the same register on a path a race never takes; the vblank handler `sub_829EEC48` and the swap interrupt `sub_829EED78` store `D1GRPH_PRIMARY_SURFACE_ADDRESS`, which is the flip itself (27,753 and 12,992 calls); the callback handler `sub_829EE1F8` reads `D1MODE_VBLANK_VLINE_STATUS` (90,826 calls); `sub_829E9570` reads `RBBM_PERFCOUNTER0_LOW` and `CP_PROG_COUNTER` and `sub_829F6878` reads `CP_PROG_COUNTER`, both diagnostics that a race calls at most once; `sub_829FCB58` writes `PA_CL_ENHANCE` and `SQ_INST_STORE_MANAGMENT` at device setup. `sub_823E6568` (227,950 calls) and `sub_823F2C48` (21,569 calls, sixteen accesses at offsets 0 to 88 of a base passed in) take the register address from a caller, so their registers are not resolved statically; `sub_831217A8`, `sub_831464C0` and `sub_829FF978` are off the race path."""
+how = """The `REX_MM_` sites in the generated code (the generator's MMIO detection), displacements decoded with the SDK's GPU register table, call counts from the probe build on `fh1-race-sustained` (NL-2.3). The two register reads match the only GPU registers the register-read log saw a race read (NL-5)."""
+confidence = """probable"""
+note = """The two read sites and the ring write pointer are confirmed; the other register names rest on the base register holding the window's start, which is how the generator recognised them."""
+source = """docs/NEXT_LEVEL_RESEARCH.md NL-4.1, NL-2.3"""
+
+[[finding]]
+group = """D3D inside the game"""
 base = """guest phys 0x1FCA4000, 0x1FCA4004, sub_829EEC48"""
 name = """GPU scratch write-back words"""
 what = """Every `WAIT_REG_MEM` in a race is an equality wait on one of two words in the GPU's scratch register write-back area: physical `0x1FCA4000` (toggling 0 and 4) and `0x1FCA4004` (0 and 1). Guest CPU code writes only the second, from the interrupt callback `sub_829EEC48` (thread `F800001C`); the first is written by the GPU's scratch write-backs."""
