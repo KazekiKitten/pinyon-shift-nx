@@ -138,12 +138,13 @@ The same frame replayed on every device. The results differ enough that no savin
 | Above 1x, the game's 4x MSAA surfaces had 36 host samples per guest pixel at 3x; one sample per pixel | 3x race 29.1 to 22.3 ms; transfers 10.3 to 4.4 ms |
 | MSAA off at any scale, the desktop default | 8 Elite race 25 to 17 ms; RTX 4080 only 0.2–0.35 ms, but surfaces 501 to 265 MB |
 | Two host samples for the game's 4x | Odin GPU 18.69 (4x), 16.19 (2x), 15.19 ms (off); 2x now holds 60 and is the SMOOTH 60 preset |
+| Surfaces allocated for the rows they use, not the whole EDRAM period (`fh1_surface_rows_on_demand`) | RTX 4080, 3x race: 34 surfaces 2,388 to 635 MB, device memory 4,479 to 2,747 MB; two surfaces grew during the route; captures unchanged |
 
 | Desktop race | Median | p95 | Graphics memory |
 | --- | ---: | ---: | ---: |
 | 1x | 8.41 ms | 10.75 ms | 0.9 GB |
 | 2x with the game's 4x MSAA | 8.43 ms | 11.71 ms | 3.3 GB |
-| 3x | 9.82 ms | 13.58 ms | 4.3 GB |
+| 3x | 9.82 ms | 13.58 ms | 4.3 GB (2.7 GB with surfaces sized by rows) |
 
 ## Quality cuts
 
