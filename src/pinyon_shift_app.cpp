@@ -3,6 +3,7 @@
 #include "fh1_render_test.h"
 #include "audio_mix.h"
 #include "dlc/rally_audio_probe.h"
+#include "guest_native/retire_code.h"
 #include "dlc/rally_pace_notes.h"
 
 #include <cmath>
@@ -1190,6 +1191,7 @@ void PinyonShiftApp::OnPostSetup() {
     }
   }
 #endif
+  pinyon_shift::guest_native::RetireGuestCode(runtime() ? runtime()->memory() : nullptr);
   pinyon_shift::diagnostics::RecordEvent(
       "runtime.setup.complete",
       {{"memory", runtime() && runtime()->memory() ? "1" : "0"},

@@ -77,6 +77,15 @@ struct Replacement {
 
 void Dispatch(Replacement& replacement, PPCFunc* original, PPCContext& ctx, uint8_t* base);
 
+// Every replacement in the build, listed at static initialization so their
+// guest code can be checked before the code bytes are retired (NN-6.7).
+struct Declared {
+  explicit Declared(Replacement& replacement);
+};
+// Checks the guest code of every declared replacement now, as its first call
+// would; returns how many matched.
+size_t CheckAllGuestCode(uint8_t* base);
+
 // Writes one summary event per replacement that ran (route end, shutdown).
 void RecordSummary();
 
@@ -106,6 +115,8 @@ uint64_t HashGuestCode(const uint8_t* code, uint32_t size);
 // Replaces guest function sub_<base_hex> (sub_<v4_hex> in a v4 build) with
 // `replacement`. Give the hex digits without 0x, e.g. 82438EA8.
 #define PINYON_GUEST_NATIVE(base_hex, v4_hex, replacement)                                   \
+  static ::pinyon_shift::guest_native::Declared PINYON_GUEST_NATIVE_JOIN(                    \
+      pinyon_guest_native_declared_, PINYON_GUEST_NATIVE_PICK(base_hex, v4_hex)){replacement}; \
   extern "C" REX_FUNC(PINYON_GUEST_NATIVE_JOIN(                                              \
       __imp__sub_, PINYON_GUEST_NATIVE_PICK(base_hex, v4_hex)));                             \
   extern "C" REX_FUNC(PINYON_GUEST_NATIVE_JOIN(sub_,                                         \

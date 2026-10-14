@@ -40,6 +40,9 @@ set(PINYON_SHIFT_HOST_SOURCES
     src/guest_native/crt_math.cpp
     src/guest_native/lzx_decoder.cpp
     src/guest_native/title_waits.cpp
+    src/guest_native/voice_chat.cpp
+    src/guest_native/retire_code.cpp
+    src/guest_native/fmod_stereo.cpp
     src/guest_native/reference_verify.cpp
     src/dlc/rally_progress.cpp
     src/dlc/rally_pace_notes.cpp
@@ -97,6 +100,25 @@ elseif(ANDROID)
     # here; native replacements are strong definitions in this library and
     # still win at link time.
     target_link_options(pinyon_shift PRIVATE -Wl,-Bsymbolic-functions)
+    # NN-1.9: an lld symbol ordering file from a probe build's call counts
+    # (tools/make-symbol-order.py) puts the hot generated functions together:
+    # on the Odin race, libmain's resident pages fell from 52 to 34-36 MB.
+    # The tracked file comes from the base image's boot-to-race route, so v4
+    # builds go without one.
+    if(PINYON_SHIFT_TITLE_UPDATE_V4)
+        set(_pinyon_symbol_order_default "")
+    else()
+        set(_pinyon_symbol_order_default "${CMAKE_CURRENT_SOURCE_DIR}/config/performance/symbol-order-base.txt")
+    endif()
+    set(PINYON_SHIFT_SYMBOL_ORDER_FILE "${_pinyon_symbol_order_default}" CACHE FILEPATH
+        "lld symbol ordering file for libmain (tools/make-symbol-order.py); empty for none")
+    if(PINYON_SHIFT_SYMBOL_ORDER_FILE)
+        target_link_options(pinyon_shift PRIVATE
+            "-Wl,--symbol-ordering-file=${PINYON_SHIFT_SYMBOL_ORDER_FILE}"
+            -Wl,--no-warn-symbol-ordering)
+        set_property(TARGET pinyon_shift APPEND PROPERTY LINK_DEPENDS
+            "${PINYON_SHIFT_SYMBOL_ORDER_FILE}")
+    endif()
 else()
     add_executable(pinyon_shift
         ${PINYON_SHIFT_HOST_SOURCES}
@@ -225,13 +247,6 @@ add_executable(pinyon_shift_fh1_texture_import EXCLUDE_FROM_ALL
     ${REXSDK_DIR}/src/graphics/pipeline/texture/info_formats.cpp)
 target_include_directories(pinyon_shift_fh1_texture_import PRIVATE
     ${REXSDK_DIR}/include)
-if(WIN32)
-    target_sources(pinyon_shift_fh1_texture_import PRIVATE
-        ${REXSDK_DIR}/src/core/math_msvc.cpp)
-else()
-    target_sources(pinyon_shift_fh1_texture_import PRIVATE
-        ${REXSDK_DIR}/src/core/math_gcc.cpp)
-endif()
 target_include_directories(pinyon_shift_fh1_archive_extract PRIVATE
     src ${REXSDK_DIR}/include)
 target_link_libraries(pinyon_shift_fh1_archive_extract PRIVATE rex::runtime)

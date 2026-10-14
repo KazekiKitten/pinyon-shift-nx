@@ -29,14 +29,23 @@ xer_as_local = true
 interior_resume = false
 
 # Direct calls name the strong `__imp__sub_` definitions so Clang can inline
-# guest functions; the three functions src/guest_native replaces with a strong
+# guest functions; the functions src/guest_native replaces with a strong
 # `sub_` of its own keep going through the weak thunk (NL-1.5).
 direct_calls_bypass_thunk = true
-host_overridden_functions = [0x82438EA8, 0x830F2210, 0x82A6D7D8]
+host_overridden_functions = [0x82438EA8, 0x830F2210, 0x82A6D7D8, 0x8245DBE0, 0x82F86498]
 
 # Loads from a constant .rdata address (lis/addi then lfs, lfd, lwz, ...) become
 # literals; the runtime refuses an image whose folded bytes differ (NL-1.10).
 fold_rodata_loads = true
+
+# A function whose prologue calls __savegprlr_N keeps rN-r31 in host locals
+# instead of the guest stack slots (NEAR_NATIVE_RESEARCH.md NN-1.2): ctx is
+# write-through, so the copy back at each __restgprlr_N gives the caller the
+# same registers. The LR slot and back chain are still written. Functions the
+# generator's save-area scan cannot clear (slot loads, dynamic frames, tail
+# branches, exception info, mid-asm hooks such as the UI trace hooks that read
+# r1+160/168) keep the helpers; host_local_register_saves_keep lists more.
+host_local_register_saves = true
 
 # Lockstep verify (NL-0.2): every 40th leaf function is also emitted as a
 # reference copy with every register in ctx and no folding; with

@@ -30,6 +30,11 @@ constexpr uint64_t kMaxLoggedMismatches = 16;
 std::mutex registry_mutex;
 std::vector<Replacement*> registry;
 
+std::vector<Replacement*>& DeclaredReplacements() {
+  static std::vector<Replacement*> declared;
+  return declared;
+}
+
 void Register(Replacement& replacement) {
   std::lock_guard lock(registry_mutex);
   registry.push_back(&replacement);
@@ -204,6 +209,16 @@ uint64_t HashGuestCode(const uint8_t* code, uint32_t size) {
     hash *= 0x100000001B3ull;
   }
   return hash;
+}
+
+Declared::Declared(Replacement& replacement) { DeclaredReplacements().push_back(&replacement); }
+
+size_t CheckAllGuestCode(uint8_t* base) {
+  size_t matched = 0;
+  for (Replacement* replacement : DeclaredReplacements()) {
+    matched += CheckGuestCode(*replacement, base) ? 1 : 0;
+  }
+  return matched;
 }
 
 void Dispatch(Replacement& replacement, PPCFunc* original, PPCContext& ctx, uint8_t* base) {
