@@ -510,6 +510,16 @@ source = """docs/DESKTOP_RENDERER_BACKLOG.md DR-0.4, Where it stands; docs/PERFO
 
 [[finding]]
 group = """D3D inside the game"""
+base = """8246E100, 82CE5FF8, 824E3B38, 825A7CB0, 825A8348, 829F56D0, 82D06C28, 824168B0, 82409848"""
+name = """write-watch fault sites in a race"""
+what = """On the Odin at the 60 fps limit, write-watch faults cost 0.2-0.3 ms of CPU a frame from the signal handler on (half of it the `mprotect` that re-protects the page), half to two thirds of it on the render thread (`Guest 825A6320`) and about a third on the main thread (`Guest 8255AE10`). The code that faults, taken from the interrupted frame below the signal frame: a libc `memcpy` called from `8246E100` and from `82CE5FF8` (together 30-40 % of the handler samples in three of four records), and stores in `824E3B38`, `825A7CB0`, `825A8348`, `829F56D0`, `82D06C28`, `824168B0` (D3D's dirty-constant flush, see "engine side of the display lists") and `82409848`. The ranking moves between records: the fourth puts `82D06C28` and `829F56D0` first and has no `memcpy` faults in its top six."""
+how = """simpleperf dwarf call graphs of four 15-18 s race records on builds J and K (stage 1 runs j-rec1, k-rr1, k-rr2, k-rb1), samples whose stack holds the kernel signal-return frame, attributed to the frame below it; then the fault log of the `write_watch_fault_trace` probe (guest lr, physical page, upload kind) on build P (run p-cen)."""
+confidence = """probable"""
+note = """Counted with the `write_watch_fault_trace` probe on build P (a 600-frame race window): 7.4 faults a frame, 533 distinct pages and none recurrent, but the pages stay in two ranges that vertex uploads made valid, physical `0x12EC1000-0x132C0FFF` (writers by guest lr `829F56D8` on thread `829F6620`, and `82401258`, `824168B8`, `823F5854`, `824098AC` on the render thread) and `0x14B84000-0x14B95FFF` (lr `825A8494`, `825A7E68`). The other writers are lr `8246E1E8` (1.6 a frame, vertex, 4 pages at `0x11BE8000-0x11D6DFFF`), `82CE62C0` and `824E3B80` on the main thread (vertex and texture pages) and `825A84EC` (GPU-written pages). By kind: vertex 5.1, texture 1.8, GPU-written 0.55 faults a frame. These are dynamic geometry buffers the CPU refills every frame, with more than three writers. Learning these ranges and invalidating them at each ring kick instead of write-protecting them was tried (NN-3.12) and rejected: the kicks re-uploaded about 379 pages a frame and faults fell only by about 1 a frame (see Lessons). A fault in `824168B0` means a page the constant flush writes was watched; not confirmed what shares it. No v4 addresses yet."""
+source = """docs/NEAR_NATIVE_RESEARCH.md NN-3.12; .local/backlog-research/near-native-2026-10-13/stage2/NOTES.md NN-3.10/3.12 probe"""
+
+[[finding]]
+group = """D3D inside the game"""
 base = """0x8240F4D8, 0x82410328, 0x82410620, 0x824079B8, 0x829F7C70"""
 v4 = """0x8243F488, 0x824402D8, 0x824405D0"""
 name = """title draw wrappers"""
