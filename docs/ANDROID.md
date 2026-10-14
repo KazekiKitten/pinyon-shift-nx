@@ -59,6 +59,18 @@ at 60 (`host_present_fps_limit` and `pinyon_shift_fh1_render_fps_limit`),
 the Odin 2 Portal holds 60 fps in free roam and races on Turnip Gen8 V37
 (15.5 ms of GPU a frame); with 4x MSAA it runs near 52 fps.
 
+`android_thread_cores` (default `auto`, changes apply while the game
+runs) pins threads to cores by thread-name prefix. `auto` puts the GPU
+command decoder on the fastest cores when two or more of them form
+their own cluster and do not cover every core (Snapdragon 8 Elite:
+cores 6-7); other devices are left to the scheduler. On the Astra, in an
+in-run A/B at the 60 fps limit, frames over 17.5 ms went from about
+25 % to 2 %, p95 from 18.7 to 17.2 ms and decoder CPU from 16.2 to
+10.2 ms a frame, with GPU time unchanged. The 22-minute soak with it
+has not been run. Explicit values look like
+`GPU_Commands=6-7;*=0-5` (`_` matches a space, `*` every other
+thread); `off` restores the threads' earlier masks.
+
 ## What stays private
 
 The package holds the game translated from your own disc, exactly as
