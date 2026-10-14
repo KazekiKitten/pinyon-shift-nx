@@ -20,6 +20,10 @@
 #include <thread>
 #include <vector>
 
+#if defined(__linux__)
+#include <unistd.h>
+#endif
+
 #include <rex/ppc/probe.h>
 #include <rex/input/device_assignment.h>
 #include <rex/cvar.h>
@@ -48,6 +52,12 @@ REXCVAR_DEFINE_BOOL(fh1_render_test_log_file_opens, false, "Pinyon Shift",
 REXCVAR_DEFINE_BOOL(fh1_render_test_physical_pads, false, "Pinyon Shift",
                     "Render tests: real controllers join the scripted pad on user 0 (hardware "
                     "checks such as DualSense trigger effects)")
+    .lifecycle(rex::cvar::Lifecycle::kRequiresRestart);
+
+REXCVAR_DEFINE_BOOL(fh1_render_test_memory_ledger, false, "Pinyon Shift",
+                    "Render tests on Linux and Android: at every capture, copy the process's "
+                    "smaps, smaps_rollup, status and KGSL per-process memory files into "
+                    "memory-<capture> in the output directory (NEAR_NATIVE_RESEARCH NN-0.4)")
     .lifecycle(rex::cvar::Lifecycle::kRequiresRestart);
 
 #ifdef PINYON_SHIFT_PGO_GENERATE
@@ -656,8 +666,43 @@ bool WritePpm(const Capture& capture, const rex::ui::RawImage& image,
   return true;
 }
 
+// Copies the kernel's view of the process's memory at a capture, for
+// tools/summarize-memory-ledger.py: every mapping with its resident,
+// proportional and anonymous sizes, and the GPU driver's per-process totals.
+void DumpMemoryLedger(const std::string& capture_name) {
+#if defined(__linux__)
+  if (!REXCVAR_GET(fh1_render_test_memory_ledger)) {
+    return;
+  }
+  const auto dir = g_test.output / ("memory-" + capture_name);
+  std::error_code error;
+  std::filesystem::create_directories(dir, error);
+  const auto copy = [&](const std::filesystem::path& from, const std::string& to) {
+    std::ifstream in(from, std::ios::binary);
+    if (!in) {
+      return;
+    }
+    std::ofstream out(dir / to, std::ios::binary);
+    out << in.rdbuf();
+  };
+  copy("/proc/self/smaps", "smaps.txt");
+  copy("/proc/self/smaps_rollup", "smaps_rollup.txt");
+  copy("/proc/self/status", "status.txt");
+  const std::filesystem::path kgsl =
+      std::filesystem::path("/sys/class/kgsl/kgsl/proc") / std::to_string(getpid());
+  for (const auto& entry : std::filesystem::directory_iterator(kgsl, error)) {
+    if (entry.is_regular_file(error)) {
+      copy(entry.path(), "kgsl-" + entry.path().filename().string() + ".txt");
+    }
+  }
+#else
+  (void)capture_name;
+#endif
+}
+
 void RecordCaptureEvent(const Capture& capture, uint32_t width, uint32_t height,
                         const char* source, const std::string& raw_hash) {
+  DumpMemoryLedger(capture.name);
   {
     bool vehicle_pose_valid = false;
     float vehicle_x = 0.0f;

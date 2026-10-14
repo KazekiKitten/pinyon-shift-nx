@@ -7523,6 +7523,7 @@ static bool PinyonShiftGuestRangeReadable(uint32_t address, uint32_t size) {
   while (cursor <= end) {
     auto* host_address =
         memory->TranslateVirtual(static_cast<uint32_t>(cursor));
+    rex::perf::IncrementCounter(rex::perf::CounterId::kGuestRangeReadableChecks);
     if (!rex::memory::IsHostReadable(host_address)) {
       return false;
     }
