@@ -48,7 +48,7 @@ Most banks are XMA, which FMOD's XMA codec decodes through the console's XMA reg
 
 ## Mixer and output
 
-FMOD mixes on its own thread, one 256-sample block every 5.33 ms, and it mixes in 5.1: the title never changes FMOD's default speaker mode. Every sample in the banks is mono or stereo, so the six channels come only from the mix buses, and the effect units spend nearly all their time in their six-channel loops before the host folds the result to stereo on Android. Each block takes this path (threads on the left, CPU a frame on the Odin at 60 fps from the [research record](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/NEAR_NATIVE_RESEARCH.md#where-the-overhead-is)):
+FMOD mixes on its own thread, one 256-sample block every 5.33 ms, and it mixes in 5.1: the title never changes FMOD's default speaker mode. Every sample in the banks is mono or stereo, so the six channels come only from the mix buses, and the effect units spend nearly all their time in their six-channel loops before the host folds the result to stereo. On Android and Linux (the Steam Deck) Pinyon Shift now sets FMOD to stereo before it starts (`pinyon_shift_fmod_stereo`), which cut the mixer's instructions by 45 % and its CPU by about 1 ms a frame on the Odin; Windows and macOS keep the 5.1 mix for surround speakers. Each block takes this path (threads on the left, CPU a frame on the Odin at 60 fps from the [research record](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/NEAR_NATIVE_RESEARCH.md#where-the-overhead-is)):
 
 ```text
 CAudioThread, once a frame (2.39 ms)    game sound logic, FMOD Event System

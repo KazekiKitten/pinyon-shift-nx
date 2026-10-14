@@ -23,7 +23,9 @@
 #include "guest_native/guest_native.h"
 #include "pinyon_shift_diagnostics.h"
 
-REXCVAR_DEFINE_BOOL(pinyon_shift_fmod_stereo, REX_PLATFORM_ANDROID, "Pinyon Shift",
+// On by default on Android and Linux (the Steam Deck); off on Windows and macOS, where
+// 5.1 speaker setups are common.
+REXCVAR_DEFINE_BOOL(pinyon_shift_fmod_stereo, REX_PLATFORM_LINUX, "Pinyon Shift",
                     "Mix the game's audio in stereo instead of 5.1 (FMOD's speaker mode, set "
                     "before it starts; NN-4.2). Saves mixer CPU on stereo devices; a 5.1 "
                     "speaker setup loses its surround channels")
