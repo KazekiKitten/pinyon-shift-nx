@@ -44,6 +44,7 @@ set(PINYON_SHIFT_HOST_SOURCES
     src/guest_native/retire_code.cpp
     src/guest_native/fmod_stereo.cpp
     src/guest_native/fmod_dsp.cpp
+    src/guest_native/fmod_output.cpp
     src/guest_native/reference_verify.cpp
     src/dlc/rally_progress.cpp
     src/dlc/rally_pace_notes.cpp
