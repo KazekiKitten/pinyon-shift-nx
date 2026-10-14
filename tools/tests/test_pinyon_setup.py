@@ -167,6 +167,30 @@ class ToolchainPinTests(unittest.TestCase):
             pinyon_setup.discard_unfinished_configure(build)
             self.assertTrue((build / "CMakeCache.txt").exists())
 
+    def test_the_cpu_baseline_follows_the_build_cpu(self):
+        deck = ("fpu sse4_1 sse4_2 movbe popcnt aes xsave avx f16c rdrand abm fma bmi1 "
+                "avx2 bmi2")
+        cases = {deck: "v3", "sse4_1 fma avx avx2": "fma", "sse4_1 sse4_2": "sse4.1"}
+        with tempfile.TemporaryDirectory() as temp:
+            cpuinfo = Path(temp) / "cpuinfo"
+            saved = pinyon_setup.os.environ.pop("PINYON_SHIFT_CPU_BASELINE", None)
+            try:
+                for flags, expected in cases.items():
+                    cpuinfo.write_text(f"processor\t: 0\nflags\t\t: {flags}\n")
+                    self.assertEqual(pinyon_setup.cpu_baseline("linux-x86_64", cpuinfo),
+                                     expected)
+                pinyon_setup.os.environ["PINYON_SHIFT_CPU_BASELINE"] = "sse4.1"
+                cpuinfo.write_text(f"flags\t\t: {deck}\n")
+                self.assertEqual(pinyon_setup.cpu_baseline("linux-x86_64", cpuinfo), "sse4.1")
+                pinyon_setup.os.environ["PINYON_SHIFT_CPU_BASELINE"] = "avx512"
+                with self.assertRaises(pinyon_setup.SetupError):
+                    pinyon_setup.cpu_baseline("linux-x86_64", cpuinfo)
+            finally:
+                pinyon_setup.os.environ.pop("PINYON_SHIFT_CPU_BASELINE", None)
+                if saved is not None:
+                    pinyon_setup.os.environ["PINYON_SHIFT_CPU_BASELINE"] = saved
+        self.assertEqual(pinyon_setup.cpu_baseline("macos-arm64"), "native")
+
     def test_the_payload_ships_the_posix_setup(self):
         script = (ROOT / "tools/package-launcher.ps1").read_text(encoding="utf-8")
         include = script.split("$include = @(", 1)[1].split("\n)", 1)[0]

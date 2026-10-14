@@ -38,6 +38,7 @@
         "CMAKE_C_FLAGS": "-msse4.1",
         "CMAKE_CXX_FLAGS": "-msse4.1",
         "PINYON_SHIFT_CPU_BASELINE": "sse4.1",
+        "REXGLUE_X86_64_CODE_MODEL": "small",
         "REXSDK_DIR": "${sourceDir}/thirdparty/shiftglue-sdk",
         "PINYON_SHIFT_GENERATED_ROOT": "${sourceDir}/.local/generated",
         "PINYON_SHIFT_GENERATED_DIR": "${sourceDir}/.local/generated/default"
@@ -129,6 +130,17 @@
       "inherits": "linux-base",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "linux-amd64-v3",
+      "displayName": "Linux AMD64 Release, x86-64-v3 CPU baseline (Steam Deck)",
+      "inherits": "linux-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_C_FLAGS": "-msse4.1 -mfma -ffp-contract=off -march=x86-64-v3",
+        "CMAKE_CXX_FLAGS": "-msse4.1 -mfma -ffp-contract=off -march=x86-64-v3",
+        "PINYON_SHIFT_CPU_BASELINE": "v3"
       }
     },
     {
@@ -268,6 +280,10 @@
     {
       "name": "linux-amd64-release",
       "configurePreset": "linux-amd64-release"
+    },
+    {
+      "name": "linux-amd64-v3",
+      "configurePreset": "linux-amd64-v3"
     },
     {
       "name": "macos-arm64-debug",

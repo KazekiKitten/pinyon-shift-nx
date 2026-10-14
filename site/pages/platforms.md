@@ -11,7 +11,7 @@ The same generated C++ and the same Vulkan renderer run on every platform. What 
 
 | | Windows | Linux, Steam Deck | macOS | Android |
 | --- | --- | --- | --- | --- |
-| CPU | x86-64, SSE4.1 (FMA3 variant) | x86-64 | arm64 | arm64 |
+| CPU | x86-64, SSE4.1 (FMA3 variant) | x86-64, SSE4.1 (x86-64-v3 variant, the Deck's) | arm64 | arm64 |
 | Compiler | Clang 20.1.8 (`clang-cl`) | Clang 20.1.8, Steam Runtime 3 sysroot | Command Line Tools clang | NDK r29 |
 | Vulkan | system driver | RADV or NVIDIA | MoltenVK, bundled | Turnip on Adreno 7xx, else the system driver |
 | Host page size | 4 KB, 64 KB granularity | 4 KB | 16 KB | 4 or 16 KB |
@@ -57,6 +57,22 @@ The core-count limits were tested on the same PC with the game restricted to few
 - SteamOS ships `librenderdoc.so`, which hooked every run; RenderDoc is now used only when it is already loaded.
 - Input comes from SDL3, including SDL's Deck driver and Steam Input's virtual pad when Steam starts the game.
 - LLVM's Linux `ld.lld` and the sysroot's `wayland-scanner` link `libxml2.so.2`, which SteamOS, Arch and other distributions with libxml2 2.14 or newer no longer have. Setup runs both through small wrappers that load only that library and its ICU from the sysroot, so nothing has to be installed on the host.
+
+**Toolchain.** Linux x86-64 builds use the small code model with linker relaxation. The large model with `--no-relax` was there for code over 2 GB, but the executable's code is 53 MB, and the large model made nearly every call a `movabs` plus a register-indirect call (13 direct calls in the whole executable against 365,000 with the small model). The build also uses x86-64-v3 (AVX2, FMA3, BMI, MOVBE) when the CPU has it: setup reads `/proc/cpuinfo`, since the game is built on the machine that runs it, and the `linux-amd64-v3` preset builds the Deck variant on another PC. The same guard as on Windows stops a v3 build on an older CPU; the SSE4.1 build stays for those. Measured together on the Deck LCD, in six interleaved Steam launches of the race (three per build) with per-thread `perf stat` over 40 s from the start, against the spread of the three old-build runs:
+
+| Per frame | Change | Old-build spread |
+| --- | ---: | ---: |
+| Simulation thread cycles | −10.5 ± 1.2 % | 1.5 % |
+| Render thread cycles | −7.1 ± 3.0 % | 4.5 % |
+| Audio thread cycles | −26.4 ± 2.2 % | 0.7 % |
+| Job thread cycles | −14.3 ± 2.8 % | 2.0 % |
+| GPU command decoder cycles per draw | −2.9 ± 0.6 % | 0.9 % |
+| Process CPU time, adjusted for draws | −5.5 ± 0.5 % | |
+| Frame time p99 | −6.6 % | 1.0 % |
+
+GPU time and APU power did not change; the APU stays at its 15 W limit in both builds.
+
+**Thread placement.** On a Steam Deck (LCD or OLED, detected from the board's DMI name or the CPU model), `linux_thread_cores=auto`, the default, pins threads by name: the simulation and audio threads on core 0's two SMT siblings, render and GPU submission on core 1's, the GPU command decoder and the recorder on cores 2 and 3, and every other thread on the remaining siblings of cores 2 and 3. Elsewhere it changes nothing; the runtime log states the decision. An in-run A/B on the Deck race, switching placement on and off every 180 frames in five runs with two toggle orders (the toggles fall on fixed route frames), gave process CPU −6.1 ± 1.3 % and −6.8 ± 1.5 % adjusted for draws, mostly from the decoder (−7 to −10 %) and the recorder (−6 to −8 %), each alone on a physical core. p99 stayed level (23.45 ms unpinned against 23.56 ms pinned, both orders weighted alike, capture frames excluded) and p95 was about 1 ms better; frames over 25 ms were 3.3 against 4.8 a run, too few to call. Two later smoke runs of the default build had a worse tail than the earlier unpinned build (p99 24.5 against 22.6-23.1 ms), single runs from another session; a randomised A/B of frame pacing is still to come. `linux_thread_cores` takes the same `NAME=CORES;...` entries as [Android's](android.md) `android_thread_cores` and changes while the game runs; `off` leaves placement to the scheduler.
 
 **The Deck.** The Steam Deck LCD (Zen 2, 4 cores and 8 threads, RDNA 2 on Mesa RADV) runs the race and free roam at 60 fps at 1x under its default 15 W limit. A replayed frame at 1x:
 

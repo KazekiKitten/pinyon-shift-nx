@@ -51,7 +51,8 @@ password, no `pacman`, no developer mode.
 
 Requirements:
 
-- An x86-64 CPU with SSE4.1. AVX2 and FMA are used when present.
+- An x86-64 CPU with SSE4.1. The build uses x86-64-v3 (AVX2, FMA3, BMI2,
+  MOVBE) when the CPU has it, as the Steam Deck's does.
 - A Vulkan 1.3 driver: Mesa's RADV on AMD (Mesa 23 or newer), or NVIDIA's
   proprietary driver. Intel and NVIDIA on Linux are not qualified yet.
 - glibc 2.31 or newer, `python3` 3.9 or newer, `git`, and GLib. Every current
@@ -85,6 +86,33 @@ mounts), checks every file against the supported dump and builds. Run
 `setup --build-only` to rebuild after an update, and `shortcuts add
 --no-steam` for only the applications menu entry. `shortcuts remove` undoes
 both.
+
+### Build options
+
+- **CPU baseline.** Setup builds for the CPU it runs on: x86-64-v3 when
+  `/proc/cpuinfo` lists `avx2 bmi1 bmi2 fma movbe f16c abm` (Haswell, Zen
+  and later, the Steam Deck included), otherwise the FMA3 variant or
+  SSE4.1. Set `PINYON_SHIFT_CPU_BASELINE=sse4.1` (or `fma`, `v3`) before
+  `setup --build-only` to choose one, for example for a build that will be
+  copied to an older PC. A build started on a CPU without its baseline stops
+  with a message instead of crashing.
+- **Code model.** Linux x86-64 builds use the small code model with linker
+  relaxation (`REXGLUE_X86_64_CODE_MODEL=small`, the default). `large`
+  (`-mcmodel=large -Wl,--no-relax`) is still accepted at configure time; it
+  makes every call register-indirect.
+- **Thread placement.** `linux_thread_cores` (default `auto`) pins threads by
+  name. `auto` applies the layout measured on the Steam Deck when it detects a
+  Deck (LCD or OLED) and does nothing on other PCs; the runtime log says
+  which. `off` leaves every thread to the scheduler, and entries such as
+  `GPU_Commands=4;*=5,7` set a layout of your own, as `android_thread_cores`
+  does on Android. It can be changed while the game runs.
+- **Building for a Deck on another PC** (the developer loop: WSL or a Linux
+  PC, then `python3 tools/pinyon.py deck install`): configure with
+  `cmake --preset linux-amd64-v3`, the Deck's x86-64-v3 variant, since a PC
+  build cannot see the Deck's CPU. `deck install` copies
+  `out/build/linux-amd64-v3` by default and falls back to the SSE4.1
+  `linux-amd64-release` build with a note; `--build-directory` picks any
+  other.
 
 ## Where things live
 

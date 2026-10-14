@@ -27,7 +27,7 @@ The race and free roam hold 60 fps at 1x within the Deck's default 15 W limit. L
 
 ## Linux PCs
 
-- x86-64 with SSE4.1, and a Vulkan 1.3 driver (RADV from Mesa 23 or newer, or NVIDIA's).
+- x86-64 with SSE4.1 (the build uses x86-64-v3 when the CPU has it), and a Vulkan 1.3 driver (RADV from Mesa 23 or newer, or NVIDIA's).
 - glibc 2.31 or newer, `python3` 3.9 or newer, `git` and GLib.
 - About 45 GB free for the first build.
 

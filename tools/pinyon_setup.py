@@ -689,14 +689,43 @@ def build_environment(tools: dict) -> dict:
     return environment
 
 
-def cpu_baseline(name: str) -> str:
+# x86-64-v3 as /proc/cpuinfo names it (abm is LZCNT); every one of them
+# implies the FMA3 variant's fma and avx2.
+V3_CPU_FLAGS = ("avx2", "bmi1", "bmi2", "fma", "movbe", "f16c", "abm")
+CPU_BASELINE_FLAGS = {
+    "v3": "-msse4.1 -mfma -ffp-contract=off -march=x86-64-v3",
+    "fma": "-msse4.1 -mfma -ffp-contract=off",
+    "sse4.1": "-msse4.1",
+}
+
+
+def cpu_baseline(name: str, cpuinfo: Path = Path("/proc/cpuinfo")) -> str:
+    """The game is built on the machine that runs it (a Deck builds its own),
+    so the baseline follows this CPU: x86-64-v3 when it has it (Haswell, Zen
+    and later, the Steam Deck included; NN-1.8), the FMA3 variant, or SSE4.1.
+    PINYON_SHIFT_CPU_BASELINE (sse4.1, fma or v3) overrides it, for example
+    for a build copied to an older PC; the game's own guard stops a build on
+    a CPU without its baseline."""
     if name != "linux-x86_64":
         return "native"
+    chosen = os.environ.get("PINYON_SHIFT_CPU_BASELINE", "").strip()
+    if chosen:
+        if chosen not in CPU_BASELINE_FLAGS:
+            raise SetupError(f"PINYON_SHIFT_CPU_BASELINE must be one of "
+                             f"{', '.join(CPU_BASELINE_FLAGS)}, not {chosen!r}", "build")
+        return chosen
     try:
-        flags = Path("/proc/cpuinfo").read_text(encoding="ascii", errors="replace")
+        text = cpuinfo.read_text(encoding="ascii", errors="replace")
     except OSError:
         return "sse4.1"
-    return "fma" if " fma " in flags and " avx2 " in flags else "sse4.1"
+    flags = set()
+    for line in text.splitlines():
+        if line.startswith("flags"):
+            flags = set(line.split(":", 1)[-1].split())
+            break
+    if all(flag in flags for flag in V3_CPU_FLAGS):
+        return "v3"
+    return "fma" if {"fma", "avx2"} <= flags else "sse4.1"
 
 
 def discard_unfinished_configure(directory: Path) -> None:
@@ -751,10 +780,11 @@ def build(progress: Progress, tools: dict, sdk: Path, python: Path, name: str,
     preset = f"{presets['game']}-{configuration.lower()}"
     baseline = cpu_baseline(name)
     flags = []
-    if baseline == "fma":
-        flags = ["-DPINYON_SHIFT_CPU_BASELINE=fma",
-                 "-DCMAKE_C_FLAGS=-msse4.1 -mfma -ffp-contract=off",
-                 "-DCMAKE_CXX_FLAGS=-msse4.1 -mfma -ffp-contract=off"]
+    if baseline in CPU_BASELINE_FLAGS:
+        # Always passed: a reconfigure must not keep an earlier baseline.
+        flags = [f"-DPINYON_SHIFT_CPU_BASELINE={baseline}",
+                 f"-DCMAKE_C_FLAGS={CPU_BASELINE_FLAGS[baseline]}",
+                 f"-DCMAKE_CXX_FLAGS={CPU_BASELINE_FLAGS[baseline]}"]
     discard_unfinished_configure(ROOT / "out" / "build" / preset)
     run_logged([cmake, "--preset", preset, f"-DREXSDK_DIR={sdk}", f"-DPYTHON_EXECUTABLE={python}",
                 "-DREXGLUE_ENABLE_TRACY=OFF", "-DSDL_HIDAPI_LIBUSB=OFF"] + flags,

@@ -4,7 +4,7 @@ set(REXSDK_VERSION "" CACHE STRING "Override the pinned ReXGlue SDK version")
 set(REXSDK_DIR "" CACHE PATH "Path to the ReXGlue SDK source tree")
 set(PINYON_SHIFT_CPU_BASELINE "sse4.1" CACHE STRING
     "Minimum AMD64 CPU feature baseline used by the host and source-built SDK")
-set_property(CACHE PINYON_SHIFT_CPU_BASELINE PROPERTY STRINGS "sse4.1" "fma")
+set_property(CACHE PINYON_SHIFT_CPU_BASELINE PROPERTY STRINGS "sse4.1" "fma" "v3")
 
 # Tracy opens a network listener in non-Release configurations. Private M3
 # qualification uses the structured event log and lightweight counters instead,

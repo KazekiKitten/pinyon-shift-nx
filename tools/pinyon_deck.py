@@ -169,9 +169,23 @@ def sync(deck: Deck, source: Path, files: list[Path], destination: str, hashes: 
 
 
 def build_directory(args: argparse.Namespace) -> Path:
+    """A Release build for the Deck defaults to the linux-amd64-v3 preset: a
+    PC build (in WSL, say) cannot detect the Deck's CPU, and the Deck's Zen 2
+    has x86-64-v3 (NN-1.8: simulation thread cycles -10 %, process -5.5 %).
+    The SSE4.1 linux-amd64-release build is used only when no v3 build
+    exists; --build-directory picks any other."""
     if args.build_directory:
         return args.build_directory.resolve()
-    return ROOT / "out" / "build" / f"linux-amd64-{args.configuration.lower()}"
+    builds = ROOT / "out" / "build"
+    if args.configuration == "Release":
+        if (builds / "linux-amd64-v3" / "pinyon_shift").is_file():
+            return builds / "linux-amd64-v3"
+        if (builds / "linux-amd64-release" / "pinyon_shift").is_file():
+            print("note: no linux-amd64-v3 build; installing the SSE4.1 linux-amd64-release "
+                  "build (cmake --preset linux-amd64-v3 builds the faster Deck variant)")
+            return builds / "linux-amd64-release"
+        return builds / "linux-amd64-v3"
+    return builds / f"linux-amd64-{args.configuration.lower()}"
 
 
 def doctor(args: argparse.Namespace) -> int:
