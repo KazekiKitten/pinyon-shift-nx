@@ -111,14 +111,53 @@ source = """docs/NEAR_NATIVE_RESEARCH.md Where the overhead is, NN-4.1, NN-4.4; 
 
 [[finding]]
 group = """Mixer and output"""
+base = """sub_830A9860, sub_830A86F8, sub_830A96A8, sub_830A8918, sub_830B0570, sub_830B08B0, sub_830B0A38, sub_830AF090, sub_82AC0E20, sub_82AC2E48, sub_88058310, 0x822B4450, 0x822B4508, 0x822B4630, 0x822B46E0, sub_830A8470, sub_830A8688, sub_830B06C8, sub_830B6510, sub_830B6500, sub_830B5260, sub_830AF230"""
+name = """XAudio2 voices in a race"""
+what = """Only FMOD's source voice is ever started or fed in single-player play. The engine methods, named by their vtable slots and how FMOD's output init `sub_82FFFC38` uses them: `XAudio2Create` `sub_830A9860` (reached through `sub_830A9968`), +32 `CreateSourceVoice` `sub_830A86F8`, +36 `CreateSubmixVoice` `sub_830A96A8`, +40 `CreateMasteringVoice` `sub_830A8918`; on a voice, +48 a volume set `sub_830AF090`, +72 destroy, +76 `Start` `sub_830B0570`, +84 `SubmitSourceBuffer` `sub_830B08B0` and +100 `GetState` `sub_830B0A38`. A race makes 23 source voices: FMOD's one (site `0x82FFFF3C`), 18 by the XHV2 voice code `sub_82AC0E20` (site `0x82AC0F10`) and 4 by the movie player (`XMediaFacade_default.xex`: `sub_88058310` builds a 16-bit PCM format and calls +32, `sub_880584A0` recreates its voice). XHV2 also makes 38 submix voices (`sub_82AC2E48`, two per call, and `sub_82AC3F70`). `Start` and `SubmitSourceBuffer` each run once in the whole race, both for FMOD's voice, which plays one looping buffer and is then only polled. The movie glue `sub_82E5DB08` sets a voice's volume and creates none. So the guest XAudio2 pass has work beyond FMOD's voice only while a movie plays (NN-4.4). The engine's interface table is at `0x822B4450` and the source, submix and mastering voices' at `0x822B4508`, `0x822B4630` and `0x822B46E0`; the voice tables are identical through +80. Further slots: engine +20 `Initialize` `sub_830A8470` (once, from `XAudio2Create`), +24 `RegisterForCallbacks` `sub_830A8688` (never called, so no engine callback depends on the pass); voice +8 `SetEffectChain` thunk `sub_830B5260` (36, XHV2), +64 `SetOutputMatrix` `sub_830B6500` (73, XHV2), +72 `DestroyVoice` `sub_830B6510` (4), +80 `Stop` `sub_830B06C8` (never), source +88 `FlushSourceBuffers` `sub_830AF230` (4). The four creates without a site are the movie player's: the engine pointer is handed out only four times (see "who holds the XAudio2 engine"), once to XHV2 and three times to `CWMVMovie` opens; the four destroys and flushes also have no `default.xex` site, which matches the facade tearing its voices down when it unloads after Press Start. None of the movie voices was started in the boot-to-race run."""
+how = """Vtable-slot calls in the generated code of FMOD's output init; call counts and indirect-site targets from the probe build (one boot-to-race run, 12,993 frames). The probe records indirect call sites only in `default.xex`, which is how the four creates without a site were placed in another module. Interface tables read from the loaded base image; the probe's call counts per slot."""
+confidence = """probable"""
+note = """Counts confirmed; slot names follow the XDK interface order (probable); the movie attribution is probable (by the handle count and the destroy/flush pattern; `sub_8912B220` in the speech module is ruled out because that module never received the engine)."""
+source = """docs/NEAR_NATIVE_RESEARCH.md NN-4.4; .local/backlog-research/near-native-2026-10-13/stage2/NOTES.md; .local/backlog-research/near-native-2026-10-13/stage2/audio-census.md"""
+
+[[finding]]
+group = """Mixer and output"""
+base = """sub_82F86770, sub_82F8D610, sub_82FFFBD8, sub_82FFFB38, sub_82FFF930, sub_82BAB058"""
+name = """who holds the XAudio2 engine"""
+what = """Only FMOD creates an XAudio2 engine; every other user borrows it through FMOD's `getOutputHandle`. The public call `sub_82F86770` reaches the Xenon output plugin's handle getter `sub_82FFFBD8` through `sub_82F8D610` (4 calls in a boot-to-race run). The game calls it only from `CAudioEngine` slot +924 `sub_82BAB058`, for the XHV2 setup (`sub_825E6CF0`, once) and for each `CWMVMovie` open (`sub_82E69950`, three times: the two splash intros and `PressStart.wmv`). The same plugin's start `sub_82FFFB38` makes the only `Start` call in the run, on FMOD's voice, and its position query `sub_82FFF930` is the only caller of `GetState` (66,513 calls, about three per 5.33 ms block)."""
+how = """Call chains and indirect-site targets from the probe build (NL-2.3, boot to race); RTTI class slots for the callers; movie file opens from the Odin `m-fmv` runtime log."""
+confidence = """probable"""
+note = """Call counts and chains confirmed; the FMOD API names follow FMOD Ex's documented `System::getOutputHandle` and the plugin's call shape (probable)."""
+source = """.local/backlog-research/near-native-2026-10-13/stage2/audio-census.md; docs/NEAR_NATIVE_RESEARCH.md NN-4.4"""
+
+[[finding]]
+group = """Mixer and output"""
+base = """sub_825E6CF0, sub_824CAB28, sub_82AC1870, sub_82AC17D0, sub_82AC5210, sub_82AC12E8, sub_82463E10, sub_82AC2E48, sub_82AC0E20, sub_82AC3F70"""
+name = """XHV2 voice setup"""
+what = """XHV2's XAudio2 voices are made once at boot from `CAudioManager` init (slot +4 `sub_824CAB28`, on the main thread): `sub_825E6CF0` takes the engine from `CAudioEngine`, then `sub_82AC1870` > `sub_82AC17D0` > `sub_82AC5210` sets up the voice engine; `sub_82AC12E8` runs once per local user (4) and, through `sub_82463E10` (18 calls), `sub_82AC2E48` makes a submix pair, sets their effect chains and output matrix and calls `sub_82AC0E20` for a source voice; `sub_82AC3F70` adds the last two submixes and reads the ducker level. 18 source and 38 submix voices; offline none is started, but the 38 submixes are walked by every XAudio2 pass."""
+how = """Call chains and counts from the probe build (NL-2.3); slot calls per site."""
+confidence = """probable"""
+note = """The chain and counts are confirmed; 'once per local user' is from the count of four (guess)."""
+source = """.local/backlog-research/near-native-2026-10-13/stage2/audio-census.md"""
+
+[[finding]]
+group = """Mixer and output"""
+base = """sub_823F27E8, sub_823F2660, sub_823F20B0, sub_823F25A0, sub_823F1BF0, sub_8245F200, sub_823F2960"""
+name = """XAudio2 pass cost is the voice walk"""
+what = """Per 5.33 ms block the XAudio2 pass `sub_823F27E8` visits about 41 voices (`sub_823F20B0` and `sub_823F25A0`, 884,289 calls each in a 21,569-block race) but runs its mixing loop `sub_823F1BF0` only about three times (64,704), because in play only FMOD's source voice plays while XHV2's 38 submix voices are processed anyway. Its per-pass calls out of the library are empty leaves; it also polls the ducker (`sub_8245F200`, the `XAudioGetDucker*` and `XAudioEnableDucker` imports) and the music category volume (`sub_823F2960`), both constants in the SDK. A bypass of FMOD's voice alone would leave most of the pass's cost (NN-4.4)."""
+how = """Call counts from the probe build (NL-2.3); Odin cg2 self samples of thread `830C68B8` (`sub_823F1BF0` 0.17 % of process cycles of about 1.0 % for the thread)."""
+confidence = """probable"""
+source = """.local/backlog-research/near-native-2026-10-13/stage2/audio-census.md; docs/NEAR_NATIVE_RESEARCH.md NN-4.4"""
+
+[[finding]]
+group = """Mixer and output"""
 base = """sub_82F90A00, sub_82F904E8, sub_82F86298, sub_82F86498, sub_82F96658, sub_82F8F8F0"""
 v4 = """sub_83051B00, sub_830515E8, sub_83047350, sub_83047550, sub_83057758, sub_830509F0"""
 name = """speaker mode and the 5.1 mix"""
 what = """FMOD mixes in 5.1 because the title keeps FMOD's defaults. The system constructor `sub_82F90A00` stores the float output format (5) at +1184, speaker mode 5 (5.1) at +22064 and six output channels at +1200. The internal speaker-mode setter `sub_82F904E8` (modes 1-6 give 1, 2, 4, 5, 6 and 8 channels; it refuses once the system is initialised) is called only from its public wrapper `sub_82F86298`, which never runs, startup included. The title's `System::init` wrapper `sub_82F86498` calls FMOD's init `sub_82F96658` once, which passes the +1200 count to the Xenon output init (`sub_83000130` > `sub_82FFFC38`); that builds both the mastering voice and the source voice with it, so nothing else hard-codes six channels. The DTS Neural 7.1 branch `sub_82F8F8F0` never runs. Every FSB sample is mono or stereo (16,068 and 3,197 in 984 banks), so the six-channel width comes only from the bus format: ParamEQ, echo `sub_82FCD580` and the highpass/lowpass unit `sub_82FCEAB0` each spend about 98 % of their Odin time in their six-channel loops, and the host then folds the mix to stereo on Android. A `Stereo`/`PL2Stereo`/`5.1PCM` name table in the data has no code references."""
 how = """Constants and call arguments in the generated code (constructor, setter, init and output init); call counts from the probe build (NL-2.3, startup included); a channel-count census of the shipped FSB banks; Odin call-graph samples (cg2, 30 fps) placed on each unit's per-channel-count loops by their multiply counts; a string and reference scan of the image."""
 confidence = """probable"""
-note = """The stored defaults and the call counts are confirmed; reading them as format, speaker mode and channel count follows FMOD Ex's documented enums and is probable. Forcing stereo before init is NN-4.2."""
-source = """docs/NEAR_NATIVE_RESEARCH.md NN-4.2"""
+note = """The stored defaults and the call counts are confirmed; reading them as format, speaker mode and channel count follows FMOD Ex's documented enums and is probable. Forcing stereo before init (NN-4.2, on Android by default) confirms the reading: calling `sub_82F86298` with mode 2 before `sub_82F86498` returns 0, the title then builds a two-channel output, and the FMOD mixer thread drops from 17.6-18.1 to 9.3-10.6 M instructions a frame (about 3.8 to 2.8 ms of CPU) on the Odin race, in two restart pairs."""
+source = """docs/NEAR_NATIVE_RESEARCH.md NN-4.2; src/guest_native/fmod_stereo.cpp"""
 
 [[finding]]
 group = """Mixer and output"""
@@ -132,11 +171,11 @@ source = """docs/NEAR_NATIVE_RESEARCH.md NN-4.3"""
 
 [[finding]]
 group = """Mixer and output"""
-base = """sub_83002C20, sub_82FFB3F8, sub_82FD7228, sub_82FD6940"""
+base = """sub_83002C20, sub_82FFB3F8, sub_82FD7228, sub_82FD6940, sub_82FD7240, sub_82FD6F30, sub_82FD7210, sub_82FD6820, sub_82FD5AF0"""
 v4 = """sub_830C3DA8, sub_830BC540, sub_830982E0, sub_830979F8"""
 name = """FMOD XMA codec"""
-what = """FMOD's XMA codec decodes the compressed banks for the mixer. `sub_83002C20` (127,787 calls in a race, 5.9 a mix block) calls FMOD's codec read dispatch `sub_82FFB3F8` (307,704), whose indirect call at `0x82FFB51C` reaches the XMA codec read `sub_82FD6940` (246,882 calls, 11.4 a block) through the this-adjusting thunk `sub_82FD7228`. That read drives the nine XDK XMA helpers (see "XMA register writers") and, through them, the SDK's XMA decoder. `sub_83002C20` and the dispatch are the API boundary where a host decoder could write straight into FMOD's buffer, with no contexts, registers, worker or ring (NN-4.8). On the Odin the XMA path under `sub_82FD6940` was 4.3 % of the process cycles, nearly all of it register emulation and decode."""
-how = """Call sequences and indirect targets in the generated code; call counts from the probe build (NL-2.3, 115 s race); FMOD's codec-name strings; the Odin call-graph profile cg2 (30 fps, before NL-4.1)."""
+what = """FMOD's XMA codec decodes the compressed banks for the mixer. `sub_83002C20` (127,787 calls in a race, 5.9 a mix block) calls FMOD's codec read dispatch `sub_82FFB3F8` (307,704), whose indirect call at `0x82FFB51C` reaches the XMA codec read `sub_82FD6940` (246,882 calls, 11.4 a block) through the this-adjusting thunk `sub_82FD7228`. That read drives the nine XDK XMA helpers (see "XMA register writers") and, through them, the SDK's XMA decoder. The dispatch is shared by all of FMOD's codecs (the same site also reaches `sub_82FF5158`, 53,428 calls, and MPEG reads come from `0x82FFB470`), so the narrowest boundary for a host decoder (NN-4.8) is the XMA codec's own three entries, each a thunk behind one dispatch site: the read above, the seek/reset `sub_82FD6F30` through `sub_82FD7240` (site `0x82FFB1F4`, 2,399 calls, plus 36 direct from `sub_82FF4938`) and the close `sub_82FD6820` through `sub_82FD7210` (site `0x82FFA89C`, 104 calls). The codec uses only the `XMACreateContext` and `XMAReleaseContext` imports; everything else is direct register access. Seek/reset creates contexts through `sub_82FD5AF0` > `sub_830A4930` > `sub_830A3EF8` (956 creates in a race) and releases them through `sub_830A4730` > `sub_830A3FC0` (877), about 0.07 a frame; a read makes about 77 register writes and 38 reads a frame. On the Odin the XMA path under `sub_82FD6940` was 4.3 % of the process cycles, nearly all of it register emulation and decode."""
+how = """Call sequences and indirect targets in the generated code; call counts and indirect-site targets from the probe build (NL-2.3, 115 s race, 12,993 frames); FMOD's codec-name strings; the Odin call-graph profile cg2 (30 fps, before NL-4.1)."""
 confidence = """probable"""
 note = """The read is confirmed as the XMA codec's by its calls into the XMA helpers; the role of `sub_83002C20` is probable."""
 source = """docs/NEAR_NATIVE_RESEARCH.md NN-4.1, NN-4.8"""

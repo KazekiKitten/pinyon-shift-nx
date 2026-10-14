@@ -56,6 +56,16 @@ source = """docs/native-renderer/FH1_RENDER_TEST_AUTOMATION.md; src/save/live_pr
 # --------------------------------------------------------- Imports and modules
 
 [[finding]]
+group = """Image layout"""
+base = """823E0000-831EF59C, 0x82FFFE2C"""
+name = """switch jump tables inside the code section"""
+what = """The compiler placed some of the title's `switch` jump tables in the code section, next to the functions that use them: 258 of the 421 tables the code generator detects in the base image sit in `.text` (14,344 bytes on 79 of its 3,599 4 KB pages); the rest are in read-only data below it. The generated code turns each table into a host `switch`, but it still runs the guest's load of the table entry, so the code section is read at run time. FMOD's Xenon output init `sub_82FFFC38` reads its table at `0x82FFFE2C` during startup, which is how this was found: making the whole code section no-access (NN-6.7) faulted there two seconds in. The generator now lists every table range (`PPCJumpTableRanges` in the generated folds file), and code that retires the code section keeps those pages."""
+how = """An Odin run with the code section made no-access (`pinyon_shift_retire_guest_code=1`): the runtime's access-violation log named the guest read address `0x82FFFE40` and the function; the table ranges come from the code generator's jump-table detection."""
+confidence = """confirmed"""
+note = """Counted in the base image only; the v4 image has not been counted."""
+source = """docs/NEAR_NATIVE_RESEARCH.md NN-6.7; src/guest_native/retire_code.cpp"""
+
+[[finding]]
 group = """Imports and modules"""
 name = """supported retail disc"""
 what = """The supported dump is the USA retail disc MS-2505 (title `4D5309C9`, media `2DC7007B`, version 0.0.0.10) with 18 languages. The ISO is 8,738,846,720 bytes (SHA-256 prefix `83DFC7D0B58B8042`); extract-xiso yields 2,400 files totalling 7,221,319,555 bytes, skipping `$SystemUpdate`."""

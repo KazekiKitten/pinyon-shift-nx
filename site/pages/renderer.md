@@ -64,7 +64,7 @@ Fast paths sit on top. A resolve also stores directly into textures that are alr
 
 **Scaling.** Rendering runs at 1x to 4x the console's resolution, as whole multiples because the shader translator bakes the scale in. Surfaces hold scale × scale host pixels per guest pixel; transfers and resolves scale guest rectangles; and everything the guest can see keeps guest sizes. Resolves of 4 KB or less also write an unscaled copy, because the game reads its 32 × 32 luminance image at guest size for auto-exposure ([#444](https://github.com/arcanite24/pinyon-shift/issues/444)).
 
-**Predicated tiling.** The game draws its 720p scene as three bands of 256, 256 and 208 rows, the Xbox 360 technique for fitting a frame into EDRAM. Merging them was rejected for the desktop because the game culls per band. An option draws the scene once and resolves the bands; it is on by default only on Android.
+**Predicated tiling.** The game draws its 720p scene as three bands of 256, 256 and 208 rows, the Xbox 360 technique for fitting a frame into EDRAM. Merging them was rejected for the desktop because the game culls per band. An option draws the scene once and resolves the bands; it is on by default only on Android. The later bands' draws are then skipped; the command processor checks for that right after the draw's copy dispatch, before it derives the rest of the draw: on the Odin race that took the decoder's time per decoded draw down 7-8 % (about 0.7 ms a frame, in-run A/B).
 
 **MSAA.** The game's 2x and 4x surfaces can be stored with fewer host samples: one per pixel (the desktop default) or two for the game's 4x. Resolves average samples 0–3 or take sample 0, as the guest asks.
 

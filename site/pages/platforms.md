@@ -97,7 +97,7 @@ One trap: with Manual GPU Clock on in the Quick Access menu, Steam can pin the G
 | Older Turnip | 39 ms | 34 ms |
 | Turnip Gen8 V37 (bundled) | 32 ms | 28 ms |
 
-Qualcomm drivers needed three workarounds: infinite fence waits return at once, push descriptors read as null, and the recorder thread is off there. Sparse buffers read back zeros on Turnip, so shared memory uses a plain buffer. RedMagic phones cap an unknown app's clocks until the game is added to their Game Space.
+Qualcomm drivers needed three workarounds: infinite fence waits return at once, push descriptors read as null, and the recorder thread is off there. Sparse buffers read back zeros on an older Turnip, so shared memory used a plain buffer there; with the bundled Turnip gen8-v37 the Adreno 740 renders correctly with the sparse buffer and uses 290 MB less device memory in a race, so it is sparse again on that GPU (`vulkan_sparse_shared_memory_turnip`; other Adrenos are unchecked and keep the plain buffer). RedMagic phones cap an unknown app's clocks until the game is added to their Game Space.
 
 **Heat.** The RedMagic Astra (8 Elite) holds 60 fps for about the first minute, then 37–39 fps at 40–44 °C skin temperature and 26–28 fps above 44.5 °C, with the cores at 2.0–2.2 GHz and the GPU frame at 35.6 ms against 20 ms cold. An ADPF performance hint changed nothing. One build measured 21.5–32 ms in the same scene across a batch, which is why live settings are compared inside one run, flipping every 300 frames.
 

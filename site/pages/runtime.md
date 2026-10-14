@@ -17,6 +17,8 @@ One file-backed mapping of 4.5 GB holds the 4 GB virtual view and the 512 MB phy
 
 The `0xE0000000` view starts 4 KB into the physical heap. Windows' classic `MapViewOfFileEx` can only place a view at a 64 KB file offset, so until October 2026 that view was mapped 4 KB short and every generated access at or above `0xE0000000` added `0x1000` back: a compare, a conditional set and a shift on 70 % of the game's memory accesses, about 14 % of all generated host instructions. The runtime now reserves each view as a placeholder (`VirtualAlloc2`) and maps it with `MapViewOfFile3`, which accepts any page-aligned offset, so on Windows a guest access is `base + address` and nothing else; a Windows older than 10 version 1803, which lacks those functions, is refused at start. x86-64 Linux kernels always use 4 KB pages, so the Linux and Android builds assume 4 KB too (`PINYON_SHIFT_PHYSICAL_HEAP_4K_PAGES`, on by default) and refuse to start on a 16 KB-page kernel, where a build with the option off reads the offset at run time as before. Apple silicon (16 KB pages) keeps the `0x1000` add.
 
+The game's code section (14.7 MB of the image) is never read once the generated code runs, except for 258 `switch` jump tables the compiler placed inside it. On Linux and Android, `pinyon_shift_retire_guest_code=2` makes the rest no-access and releases its pages from the mapping: 14.4 MB, about 12 MB less guest memory on the Odin. Seven test routes ran with it and no access violation, but it stays off by default: a path that reads retired code would end the game, and the routes cannot cover every path. Measuring memory through `/proc/self/smaps` right after the release slowed the next six seconds of a race on the Odin; without that read, races ran as usual.
+
 Writes to memory the GPU has cached are found with page protection: about 60–70 protect calls covering 830 pages per race frame. On hosts with 16 KB pages, one host page holds four guest pages, so its protection must be the union of the four; taking the first guest page's protection made a committed page next to an uncommitted one fault on macOS.
 
 ## Kernel
@@ -37,7 +39,7 @@ Each guest thread is one host thread, named `Guest <start address>`. About 42 ar
 
 The job workers run the game's jobs on XAPI fibers. The game's five fiber functions (`ConvertThreadToFiber`, `ConvertFiberToThread`, `CreateFiber`, `DeleteFiber`, `SwitchToFiber`) are served by the runtime's host fibers (Windows fibers; a stack switch of the runtime's own on Linux and Android; `ucontext` on macOS), so a guest fiber switch never leaves the host call chain. Before that mapping the switch went through the kernel's stack-switch call, and every generated function needed an entry for each return address ([why that mattered](recompiler.md#what-the-generator-emits)).
 
-**The global critical region.** The console disables interrupts for short sections; the runtime turns that into one process-wide recursive mutex, also taken for every guest event and wait (for the handle lookup) and by the vblank interrupt. On the desktop it is contended about 260 times a frame and blocks for about 0.34 ms of a race frame, so it was left alone there. On Android it caused visible hitches ([#416](https://github.com/arcanite24/pinyon-shift/issues/416)): a hold log (`critical_region_hold_log_ms`) and a watchdog that names the holder, matched with `simpleperf`, showed file system path lookups and AAudio stream opens running under the lock, blocking the game's thread for up to 39 ms behind I/O.
+**The global critical region.** The console disables interrupts for short sections; the runtime turns that into one process-wide recursive mutex, also taken for every guest event and wait (for the handle lookup) and by the vblank interrupt. On the desktop it is contended about 260 times a frame and blocks for about 0.34 ms of a race frame, so it was left alone there. On Android it caused visible hitches ([#416](https://github.com/arcanite24/pinyon-shift/issues/416)): a hold log (`critical_region_hold_log_ms`) and a watchdog that names the holder, matched with `simpleperf`, showed file system path lookups and AAudio stream opens running under the lock, blocking the game's thread for up to 39 ms behind I/O. Most of the guest's interrupts-off sections only wrap one load-reserve/store-conditional pair, which the generated code already turns into a host compare-exchange; the generator marks those (1,001 of 1,062) and they run without the lock (`guest_reservation_sections_unlocked`). On the Odin race that took about 5,000 lock entries a frame off it, cut its contentions from 132-160 to 22-25 a frame and the render thread's CPU by 0.36 ms a frame.
 
 | Long drive, Odin, warm | Before | After |
 | --- | ---: | ---: |
@@ -45,7 +47,9 @@ The job workers run the game's jobs on XAPI fibers. The game's five fiber functi
 | Worst frame | 186 ms | 45–48 ms |
 | Lock wait, p99 | 39 ms | 8–9 ms |
 
-The fixes moved file lookups and audio opens off the lock, reused stored pipelines, kept one readback buffer and allocated texture memory at start. Single `mprotect` calls of 6–12 ms under the lock remain, with about 5,000 mappings in the process.
+The fixes moved file lookups and audio opens off the lock, reused stored pipelines, kept one readback buffer and allocated texture memory at start. Single `mprotect` calls of 6–12 ms under the lock were seen then; in October 2026, timing every write-watch protect in three Odin races found none over 2 ms (36–42 a frame, 0.25–0.29 ms a frame in all).
+
+**Critical sections.** The guest's `RtlEnterCriticalSection` and `RtlTryEnterCriticalSection` are host functions that take the current thread from the guest's processor control region instead of a thread-local lookup: on the Odin race, lookups fell from 2,718 to 19 a frame.
 
 ## Waits and clocks
 
@@ -57,6 +61,7 @@ Small changes in how the host waits paid off more than most code generation work
 | Lock-free guest clock reads; the timer queue thread blocks while empty instead of yield-spinning | process CPU 155 to 146 s; timer thread 4 to 0.4 s; vsync thread 1.4 to 0.03 s |
 | Critical sections read before each compare-exchange and stop after 1,024 tries, not up to 65,280 | |
 | The render thread's idle `SleepEx(0, TRUE)` spin became a 200 µs sleep | Odin render thread 477–839 to 242–253 ms of CPU a second, p99 frame 38–40 to 33.6 ms; desktop p99 18.5 to 16.9 ms |
+| The XHV2 voice-chat thread's tick is skipped while no voice session exists, and the thread waits 50 ms instead | Odin race, in-run: that thread 0.121 to 0.013 ms of CPU a frame, instructions −92 % |
 | POSIX multi-object and alertable waits wake on signal instead of polling every 1 ms | Odin process CPU −6 to −9 %, audio thread −9 to −12 % |
 | Vblank timing with high-resolution waitable timers and a spin tail | vblank lateness 43 µs mean |
 
@@ -67,7 +72,7 @@ Two host behaviours to watch for: Windows rounds a sub-millisecond `Sleep` to a 
 - **File system.** Host path devices mount the extracted disc as `game:` and `d:`, the title update as `update:`, and a writable `cache:`. Lookups are case-insensitive. The tree has its own lock (the #416 fix).
 - **DLC.** STFS packages mount through a container device, with the license mask read from the package header. The game's marketplace mount appears as `DLCRoot<n>`.
 - **Mods.** An overlay device layers mod files over the disc's, so a mod never edits game files.
-- **Audio.** XMA is decoded with FFmpeg's `xmaframes` decoder. ShiftGlue added packet handles across buffers and assembly of frames split over up to four packets, ported from Xenia Canary. Output goes through SDL3, or AAudio on Android.
+- **Audio.** XMA is decoded with FFmpeg's `xmaframes` decoder. ShiftGlue added packet handles across buffers and assembly of frames split over up to four packets, ported from Xenia Canary. A context allocates its decoder state when it is first used, and decodes straight into its output instead of through a staging copy: on the Odin race the first saved 112 MB of native heap, the second 0.17 ms of the XMA thread's CPU a frame (instructions −21 to −41 %). Output goes through SDL3, or AAudio on Android. FMOD mixes in 5.1 by default and the runtime folds that to stereo; on Android the game sets FMOD's speaker mode to stereo before it starts (`pinyon_shift_fmod_stereo`), so its effects run on two channels instead of six: on the Odin the FMOD mixer thread ran 45 % fewer instructions and about 1 ms less CPU a frame. Desktop keeps 5.1 for surround setups.
 - **Input.** SDL3 gamepads, XInput, and mouse and keyboard.
 - **Saves.** Raw files under a fixed profile, written atomically and backed up after each write.
 
