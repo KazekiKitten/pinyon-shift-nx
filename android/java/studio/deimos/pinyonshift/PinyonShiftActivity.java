@@ -131,6 +131,37 @@ public class PinyonShiftActivity extends SDLActivity {
         return new String[] {"c++_shared", "rexruntime", "main"};
     }
 
+    // The native libraries are built for ARMv8.2-A (NN-1.11): an older core
+    // would crash on the first LSE atomic, possibly in a library's static
+    // initializer. SDL shows a link error from here as a dialog instead.
+    @Override
+    public void loadLibraries() {
+        if (!cpuHasFeatures("atomics", "asimdrdm")) {
+            throw new UnsatisfiedLinkError("Pinyon Shift needs an ARMv8.2 CPU "
+                    + "(Cortex-A55, Cortex-A75 or newer); this device's CPU is older.");
+        }
+        super.loadLibraries();
+    }
+
+    // Whether the kernel lists every given feature for the CPU. True when
+    // /proc/cpuinfo cannot be read, so an unusual kernel does not lock out a
+    // CPU that would run the game.
+    private static boolean cpuHasFeatures(String... features) {
+        try (BufferedReader reader = new BufferedReader(new FileReader("/proc/cpuinfo"))) {
+            for (String line; (line = reader.readLine()) != null; ) {
+                if (!line.startsWith("Features")) continue;
+                List<String> listed = java.util.Arrays.asList(line.substring(line.indexOf(':') + 1).trim().split("\\s+"));
+                for (String feature : features) {
+                    if (!listed.contains(feature)) return false;
+                }
+                return true;
+            }
+        } catch (IOException ignored) {
+            // Unreadable: let the libraries load.
+        }
+        return true;
+    }
+
     // The intent's args, then the lines of state/config/android-arguments.txt,
     // which the setup screen writes (1000 Club offline with title update v4).
     @Override

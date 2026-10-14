@@ -14,8 +14,10 @@ set(REXGLUE_ENABLE_TRACY OFF CACHE BOOL
     "Disable Tracy networking in Pinyon Shift builds" FORCE)
 set(PINYON_SHIFT_CAPTURE_PERFORMANCE ON CACHE BOOL
     "Capture lightweight per-frame performance counters in preview builds")
-option(PINYON_SHIFT_TRACE_IMPORTS
-    "Record first-use guest import reachability diagnostics" ON)
+# Off by default: every hooked import paid an atomic test-and-set for it,
+# 0.35-0.42 % of the Odin process (NN-3.5).
+option(PINYON_SHIFT_TRACE_IMPORT_REACH
+    "Record first-use guest import reachability diagnostics" OFF)
 option(PINYON_SHIFT_FROZEN_CODEGEN
     "Use an existing generated snapshot without invoking the code generator" OFF)
 # CI has no game, so no generated code: configure only the SDK runtime and
@@ -139,7 +141,26 @@ if(REXSDK_DIR)
     set(REXGLUE_OUTPUT_DIRECTORY
         "${CMAKE_CURRENT_BINARY_DIR}/rexglue-artifacts"
         CACHE PATH "ReXGlue artifacts for the Pinyon Shift host build" FORCE)
+    # NN-1.11/NN-3.6: every handheld the Android build targets is ARMv8.2 or
+    # later, so atomics compile to LSE instructions instead of LL/SC loops and
+    # calls to the __aarch64_* outline helpers, in the SDK and its libraries too.
+    if(ANDROID)
+        set(PINYON_SHIFT_ANDROID_MARCH "armv8.2-a" CACHE STRING
+            "-march for every Android target, the SDK and its libraries included")
+        add_compile_options(-march=${PINYON_SHIFT_ANDROID_MARCH})
+        set(REXGLUE_ARM64_MARCH ${PINYON_SHIFT_ANDROID_MARCH})
+    endif()
     add_subdirectory("${REXSDK_DIR}" rexglue-sdk EXCLUDE_FROM_ALL)
+    # NN-3.6: calls inside the runtime libraries bind locally instead of
+    # through the PLT, as libmain's already do. Nothing interposes on their
+    # functions: the libraries share only inline and template code.
+    if(ANDROID OR (UNIX AND NOT APPLE))
+        foreach(_runtime_library IN ITEMS rexruntime rexgpu-fh1)
+            if(TARGET ${_runtime_library})
+                target_link_options(${_runtime_library} PRIVATE -Wl,-Bsymbolic-functions)
+            endif()
+        endforeach()
+    endif()
     # The generator runs on the build host, from the SDK's standalone build
     # for that host (out/<os>-<arch>/Release).
     if(CMAKE_HOST_WIN32)
@@ -169,7 +190,7 @@ if(REXSDK_DIR)
     endif()
     set(PINYON_SHIFT_REXGLUE_CODEGEN_DEPENDS
         "${PINYON_SHIFT_REXGLUE_CODEGEN}")
-    if(TARGET rexruntime AND PINYON_SHIFT_TRACE_IMPORTS)
+    if(TARGET rexruntime AND PINYON_SHIFT_TRACE_IMPORT_REACH)
         target_compile_definitions(rexruntime PRIVATE REXGLUE_TRACE_IMPORTS=1)
     endif()
     message(STATUS "Using ReXGlue SDK from source tree: ${REXSDK_DIR}")
