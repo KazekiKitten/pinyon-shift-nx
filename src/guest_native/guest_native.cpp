@@ -124,6 +124,10 @@ std::string CompareRegisters(const Replacement& replacement, const PPCContext& n
 }
 
 void Verify(Replacement& replacement, PPCFunc* original, PPCContext& ctx, uint8_t* base) {
+  if (replacement.verify) {
+    replacement.verify(replacement, original, ctx, base);
+    return;
+  }
   SavedRanges before;
   if (replacement.written) {
     before.count = replacement.written(ctx, base, before.ranges.data());

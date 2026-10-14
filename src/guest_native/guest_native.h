@@ -70,6 +70,11 @@ struct Replacement {
   bool (*native)(PPCContext& ctx, uint8_t* base);
   // Guest memory the body may write for this input; null when it writes none.
   size_t (*written)(const PPCContext& ctx, uint8_t* base, GuestRange* ranges);
+  // Optional verify mode for a body accepted within a tolerance instead of
+  // bit for bit (NN-4.3's DSP twins): it replaces the comparison above, must
+  // run `original` on the real registers and memory and leave its results, and
+  // updates `stats.verified`, `declined` and `mismatched` itself.
+  void (*verify)(Replacement& self, PPCFunc* original, PPCContext& ctx, uint8_t* base) = nullptr;
   Stats stats;
   // 0 unchecked, 1 guest code matches, -1 it does not (original only).
   std::atomic<int> code_state{0};
