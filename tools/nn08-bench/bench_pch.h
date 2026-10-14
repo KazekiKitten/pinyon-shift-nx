@@ -16,6 +16,18 @@
 //   NN08_NOLR     link-register stores (ctx.lr = ...) dropped (prepare.py)
 //   NN08_LOCALS   guest registers in host locals inside a function, written
 //                 back to ctx only at calls and returns (prepare.py)
+//   NN08_FIXED    (AArch64) base compiled with -ffixed-x27 -ffixed-x28: the
+//                 cost of taking two callee-saved registers from clang
+//   NN08_PIN      (AArch64, NN-1.12) ctx in x27 and the guest memory base in
+//                 x28 for the whole guest call tree, read through global
+//                 named register variables; guest functions take no
+//                 arguments (prepare.py rewrites the calls), and the entry
+//                 saves and restores the caller's x27/x28
+//   NN08_PIN_SEP  with NN08_PIN: ctx as a plain reference plus a
+//                 separate-storage assumption instead of a restrict body
+//   NN08_NORESTRICT  base with ctx not __restrict: what the noalias ctx
+//                 argument is worth (the AArch64 load/store pair optimizer
+//                 uses it; it ignores the scoped metadata a pinned body has)
 #pragma once
 
 #include <cstdint>
@@ -43,8 +55,76 @@ using u64 = uint64_t;
 #else
 #define NN08_FN_ATTR __attribute__((noinline))
 #endif
-#define REX_FUNC_DECL(name) void name(PPCContext& __restrict ctx, uint8_t* base)
+#ifdef NN08_PIN
+#if !defined(__aarch64__)
+#error "NN08_PIN is AArch64 only"
+#endif
+// Global named register variables need the registers reserved in every unit
+// that names them (-ffixed-x27 -ffixed-x28, build.py). Code compiled without
+// the flag (the harness, libc) may use x27/x28 but preserves them, as AAPCS64
+// makes them callee-saved.
+register PPCContext* nn08_ctx_reg asm("x27");
+register uint8_t* nn08_base_reg asm("x28");
+#define REX_FUNC_DECL(name) void name()
+#define DECLARE_REX_FUNC(name) NN08_FN_ATTR REX_FUNC_DECL(name)
+#ifdef NN08_PIN_SEP
+// "pinsep": ctx is a plain reference to *x27, with only "guest memory never
+// aliases ctx" stated (__builtin_assume_separate_storage). Clang uses that
+// assumption only in queries that carry a context instruction, so it recovers
+// less than the shipped __restrict parameter does.
 #define DEFINE_REX_FUNC(name) NN08_FN_ATTR REX_FUNC_DECL(name)
+#define REX_TAIL_CALL(name) [[clang::musttail]] return name()
+#define REX_FUNC_PROLOGUE()                      \
+  PPCContext& ctx = *nn08_ctx_reg;               \
+  uint8_t* base = nn08_base_reg;                 \
+  __builtin_assume_separate_storage(&ctx, base); \
+  __builtin_assume(((size_t)base & 0x1F) == 0)
+#else
+// "pin": the body keeps the shipped __restrict ctx parameter by being an
+// always-inline function that a no-argument wrapper calls with *x27 and x28.
+// Restrict alone would be unsound here: callees reach ctx through x27, not
+// through an argument, so clang could keep ctx fields in registers across
+// calls. The empty asm captures &ctx at entry, after which LLVM's inliner
+// gives the calls no noalias scope (they may read and write ctx), while guest
+// memory and stack accesses keep it. Tail calls become sibling calls after
+// inlining (musttail needs matching signatures, which the body lacks).
+#define DEFINE_REX_FUNC(name)                                                                  \
+  static inline __attribute__((always_inline)) void name##_nn08_body(PPCContext& __restrict, \
+                                                                      uint8_t*);               \
+  NN08_FN_ATTR void name() { name##_nn08_body(*nn08_ctx_reg, nn08_base_reg); }                \
+  static inline __attribute__((always_inline)) void name##_nn08_body(                         \
+      PPCContext& __restrict ctx, uint8_t* base)
+#define REX_TAIL_CALL(name) \
+  do {                      \
+    name();                 \
+    return;                 \
+  } while (false)
+#define REX_FUNC_PROLOGUE()             \
+  __asm__ volatile("" : : "r"(&ctx));   \
+  __builtin_assume(((size_t)base & 0x1F) == 0)
+#endif
+// The host-to-guest transition: the caller (compiled without -ffixed) may
+// hold its own values in x27/x28.
+#define NN08_PIN_ENTER(c, b)                       \
+  PPCContext* const nn08_saved_ctx = nn08_ctx_reg; \
+  uint8_t* const nn08_saved_base = nn08_base_reg;  \
+  nn08_ctx_reg = &(c);                             \
+  nn08_base_reg = (b)
+#define NN08_PIN_LEAVE()               \
+  do {                                 \
+    nn08_ctx_reg = nn08_saved_ctx;     \
+    nn08_base_reg = nn08_saved_base;   \
+  } while (0)
+#define REX_CALL_FUNC(x) x()
+#else
+#ifdef NN08_NORESTRICT
+#define REX_FUNC_DECL(name) void name(PPCContext& ctx, uint8_t* base)
+#else
+#define REX_FUNC_DECL(name) void name(PPCContext& __restrict ctx, uint8_t* base)
+#endif
+#define DECLARE_REX_FUNC(name) NN08_FN_ATTR REX_FUNC_DECL(name)
+#define DEFINE_REX_FUNC(name) NN08_FN_ATTR REX_FUNC_DECL(name)
+#define REX_CALL_FUNC(x) x(ctx, base)
 
 #if defined(__clang__) && !defined(NN08_INLINE)
 #define REX_TAIL_CALL(name) [[clang::musttail]] return name(ctx, base)
@@ -57,6 +137,7 @@ using u64 = uint64_t;
 #endif
 
 #define REX_FUNC_PROLOGUE() __builtin_assume(((size_t)base & 0x1F) == 0)
+#endif
 
 // The physical-view offset: 0 on Windows and on 4 KB-page Linux/Android
 // builds (REX_PHYSICAL_HEAP_4K_PAGES, the shipped default).
@@ -140,7 +221,6 @@ static inline void nn08_st(uint8_t* p, T v) {
 
 // The bench never takes an indirect call; reaching one is a setup error.
 #define REX_CALL_INDIRECT_FUNC(x) std::abort()
-#define REX_CALL_FUNC(x) x(ctx, base)
 #define REX_UNIMPLEMENTED(addr, opcode) std::abort()
 
 // Flush-mode writes. prepare.py rewrites ctx.fpscr.<op>() into NN08_FPSCR(<op>).

@@ -10,12 +10,15 @@ The generated units get the game's compile options for the target: -O3,
 (Linux x86-64, as the Deck preset), -march=armv8-a (Android). The -v3
 targets add the x86-64-v3 preset's flags (-mfma -ffp-contract=off
 -march=x86-64-v3; NN-1.8), so fma is an instruction instead of a libm call.
+On Android the NN-1.12 variants ("fixed", "pin", "pinsep") also get
+-ffixed-x27 -ffixed-x28; other targets leave them out.
 """
 
 from __future__ import annotations
 
 import concurrent.futures
 import os
+import re
 import subprocess
 import sys
 
@@ -27,6 +30,10 @@ ANDROID_API = 33
 
 
 V3 = ["-mfma", "-ffp-contract=off", "-march=x86-64-v3"]
+# NN-1.12: ctx and the guest memory base in x27/x28 (the "fixed", "pin" and
+# "pinsep" variants' units, Android only).
+FIXED = ["-ffixed-x27", "-ffixed-x28"]
+PIN_UNIT_RE = re.compile(r"^\w+?_(fixed|pin|pinsep)(_callees)?\.cpp$")
 
 
 def toolchain(target: str) -> tuple[list[str], list[str], list[str], list[str], str]:
@@ -75,7 +82,14 @@ def main() -> int:
 
     jobs = []
     for source in units:
-        jobs.append((source, gen_flags))
+        variant = PIN_UNIT_RE.match(os.path.basename(source))
+        if variant:
+            # NN-1.12 variants: AArch64 only, with the two registers reserved.
+            if target != "android":
+                continue
+            jobs.append((source, gen_flags + FIXED))
+        else:
+            jobs.append((source, gen_flags))
     for source in natives + harness:
         jobs.append((source, []))
 

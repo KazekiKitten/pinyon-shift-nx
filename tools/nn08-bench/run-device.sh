@@ -9,6 +9,9 @@ cd "$(dirname "$0")" || exit 1
 CPU=${1:-2}
 OUT="nn08-$(uname -n)-$(date +%Y%m%d-%H%M%S).txt"
 echo "# $(uname -a)" > "$OUT"
+# The cores this shell may use: on the Odin, adb shell cpusets have refused
+# --cpu 7 (sched_setaffinity EINVAL), which leaves the run unpinned.
+echo "# $(grep Cpus_allowed_list /proc/self/status)" >> "$OUT"
 for BIN in ./nn08_bench ./nn08_bench_v3; do
   [ -x "$BIN" ] || continue
   echo "### $BIN" | tee -a "$OUT"
@@ -20,8 +23,9 @@ if grep -q "counters: perf_event_open" "$OUT"; then
   else STAT=""; fi
   if [ -n "$STAT" ]; then
     for c in pow lzx biquad walk physics; do
-      for v in base novol noswap noflush nolr inline locals allswap all native; do
+      for v in base novol noswap noflush nolr inline locals allswap all norestrict fixed pin pinsep native; do
         [ "$c" = physics ] && [ "$v" = native ] && continue
+        case "$(uname -m)-$v" in aarch64-*) ;; *-fixed|*-pin|*-pinsep) continue ;; esac
         echo "## stat $c $v" | tee -a "$OUT"
         $STAT ./nn08_bench --case "$c" --variant "$v" --solo --repeats 3 --ms 200 --cpu "$CPU" 2>&1 \
           | grep -E "instructions|cycles|^   $v " | tee -a "$OUT"

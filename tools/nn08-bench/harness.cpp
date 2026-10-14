@@ -14,6 +14,7 @@
 //              [--cpu N] [--csv] [--solo]
 
 #include <algorithm>
+#include <atomic>
 #include <bit>
 #include <cinttypes>
 #include <cmath>
@@ -45,9 +46,27 @@
 
 using EntryFn = void (*)(PPCContext&, uint8_t*);
 
+// The SDK's fixed IEEE FP mode switch (NN-1.1, cvar ppc_fixed_fp_mode), at
+// the shipped default: on for ARM64, off for x86-64. The translated code reads
+// it on the flush-mode toggles' path.
+namespace rex::ppc {
+#if defined(__aarch64__)
+std::atomic<bool> g_fixed_fp_mode{true};
+#else
+std::atomic<bool> g_fixed_fp_mode{false};
+#endif
+}  // namespace rex::ppc
+
+// NN-1.12 rows: "norestrict" everywhere; the reserved-register and pinned rows
+// (fixed, pin, pinsep) on AArch64 only.
+#if defined(__aarch64__)
+#define NN08_PIN_VARIANTS(X, c) X(c, norestrict) X(c, fixed) X(c, pin) X(c, pinsep)
+#else
+#define NN08_PIN_VARIANTS(X, c) X(c, norestrict)
+#endif
 #define NN08_VARIANTS(X, c) \
   X(c, base) X(c, novol) X(c, noswap) X(c, noflush) X(c, nolr) X(c, inline) X(c, locals) \
-  X(c, allswap) X(c, all)
+  X(c, allswap) X(c, all) NN08_PIN_VARIANTS(X, c)
 #define NN08_DECL(c, v) void nn08_##c##_##v##_entry(PPCContext&, uint8_t*);
 NN08_VARIANTS(NN08_DECL, pow)
 NN08_VARIANTS(NN08_DECL, lzx)
@@ -80,6 +99,10 @@ const char* Describe(const std::string& v) {
   if (v == "locals") return "registers in locals, ctx at calls/returns";
   if (v == "allswap") return "all of the above except no-swap";
   if (v == "all") return "all of the above";
+  if (v == "norestrict") return "base, ctx not __restrict";
+  if (v == "fixed") return "base, x27/x28 reserved (-ffixed)";
+  if (v == "pin") return "ctx in x27, base in x28, no arguments";
+  if (v == "pinsep") return "pin, separate-storage instead of restrict";
   if (v == "native") return "native twin";
   return "";
 }
@@ -858,7 +881,7 @@ int Run(const Options& o) {
     }
     const double base_ns = Median(ns[0]);
     const double base_cyc = Median(cyc[0]);
-    std::printf("   %-8s %11s %8s %12s %12s %6s %10s  %s\n", "variant", "ns/call", "vs base",
+    std::printf("   %-10s %11s %8s %12s %12s %6s %10s  %s\n", "variant", "ns/call", "vs base",
                 "instr/call", "cycles/call", "IPC", "max err", "what");
     for (size_t k = 0; k < vs.size(); ++k) {
       const double n = Median(ns[k]), cy = Median(cyc[k]), in = Median(ins[k]);
@@ -867,10 +890,10 @@ int Run(const Options& o) {
       if (err[k] == 0) std::snprintf(errtext, sizeof(errtext), "exact");
       else std::snprintf(errtext, sizeof(errtext), "%.1e%s", err[k], ok ? "" : "!");
       if (g_counters.ok) {
-        std::printf("   %-8s %11.1f %7.2fx %12.0f %12.0f %6.2f %10s  %s\n", vs[k]->name, n,
+        std::printf("   %-10s %11.1f %7.2fx %12.0f %12.0f %6.2f %10s  %s\n", vs[k]->name, n,
                     base_ns / n, in, cy, cy > 0 ? in / cy : 0.0, errtext, vs[k]->what);
       } else {
-        std::printf("   %-8s %11.1f %7.2fx %12s %12s %6s %10s  %s\n", vs[k]->name, n, base_ns / n,
+        std::printf("   %-10s %11.1f %7.2fx %12s %12s %6s %10s  %s\n", vs[k]->name, n, base_ns / n,
                     "-", "-", "-", errtext, vs[k]->what);
       }
       if (o.csv)

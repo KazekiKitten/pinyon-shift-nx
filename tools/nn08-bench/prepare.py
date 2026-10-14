@@ -40,6 +40,18 @@ VARIANTS = {
             "NN08_LOCALS"],
     # Everything except the byte swap: the safe ceiling of these ablations.
     "allswap": ["NN08_NOVOL", "NN08_NOFLUSH", "NN08_NOLR", "NN08_INLINE", "NN08_LOCALS"],
+    # NN-1.12 control, any target: base without __restrict on ctx.
+    "norestrict": ["NN08_NORESTRICT"],
+    # NN-1.12 (AArch64 only; build.py compiles these with -ffixed-x27
+    # -ffixed-x28): "fixed" is base with the two registers taken from the
+    # allocator, "pin" also keeps ctx in x27 and base in x28 for the whole
+    # guest call tree, so guest functions take no arguments (a text rewrite
+    # done here); "pinsep" pins with a separate-storage assumption instead of
+    # a restrict body (bench_pch.h). build.py and harness.cpp skip these on
+    # other targets.
+    "fixed": ["NN08_FIXED"],
+    "pin": ["NN08_PIN"],
+    "pinsep": ["NN08_PIN", "NN08_PIN_SEP"],
 }
 
 CALL_RE = re.compile(r"\b((?:sub_[0-9A-F]+)|__(?:save|rest)\w+?_\d+|rexcrt_\w+)\(ctx, base\)")
@@ -163,7 +175,17 @@ def localize(body: str) -> str:
     return text
 
 
-def stub(name: str) -> str:
+def pin_calls(body: str) -> str:
+    """Guest-to-guest calls with ctx and base in their fixed registers."""
+    body = re.sub(r"\b(\w+)\(ctx, base\);", r"\1();", body)
+    if "(ctx, base)" in body:
+        raise SystemExit("unhandled call form in pin rewrite")
+    return body
+
+
+def stub(name: str, pinned: bool = False) -> str:
+    if pinned:
+        return f"DEFINE_REX_FUNC({name}) {{ std::abort(); }}\n"
     return f"DEFINE_REX_FUNC({name}) {{ (void)ctx; (void)base; std::abort(); }}\n"
 
 
@@ -189,18 +211,25 @@ def main() -> int:
             texts = {}
             for name in names:
                 if name in stubs:
-                    texts[name] = stub(name)
+                    texts[name] = stub(name, "NN08_PIN" in flags)
                     continue
                 body = normalize(bodies[name])
                 if "NN08_NOLR" in flags:
                     body = drop_lr(body)
                 if "NN08_LOCALS" in flags:
                     body = localize(body)
+                if "NN08_PIN" in flags:
+                    body = pin_calls(body)
                 texts[name] = body
-            decls = "".join(f"DEFINE_REX_FUNC({n});\n" for n in names)
+            decls = "".join(f"DECLARE_REX_FUNC({n});\n" for n in names)
+            # The pinned entry is the host-to-guest transition every runtime
+            # entry would need: save the caller's x27/x28, load ctx and base,
+            # call, restore.
+            call = (f"NN08_PIN_ENTER(ctx, base); {namespace}::{root}(); NN08_PIN_LEAVE();"
+                    if "NN08_PIN" in flags else f"{namespace}::{root}(ctx, base);")
             entry = (f"}}  // namespace {namespace}\n"
                      f"void {namespace}_entry(PPCContext& ctx, uint8_t* base) "
-                     f"{{ {namespace}::{root}(ctx, base); }}\n")
+                     f"{{ {call} }}\n")
             if "NN08_INLINE" in flags:
                 # One unit: the compiler sees every callee.
                 order = [n for n in names if n != root] + [root]
