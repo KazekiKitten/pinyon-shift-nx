@@ -7,7 +7,7 @@ description: How Forza Horizon draws a frame on the Xbox 360: its passes and dra
 
 # Rendering
 
-The game renders through the Xbox 360's Direct3D 9 runtime, which is linked into `default.xex`, so the D3D code is part of the guest and shows up in these records with addresses. Most of what the game draws comes from prebuilt command buffers (display lists) that the render thread chains into the ring once per EDRAM tile. Everything on this page was measured on the recompiled game, whose GPU stream is the one the console would have received.
+The game renders through the Xbox 360's Direct3D 9 runtime, which is linked into `default.xex`, so the D3D code is part of the guest and shows up in these records with addresses. Most of what the game draws comes from command buffers (display lists) that the engine builds ahead of time, rewrites while the game runs, and chains into the ring once per EDRAM tile. Everything on this page was measured on the recompiled game, whose GPU stream is the one the console would have received.
 
 A race frame is 2,900 to 7,400 draws. In order, the GPU fills two depth-only targets (the sun shadow map and a second depth pass), a few 2x MSAA targets, then the 4x MSAA main scene in three horizontal tiles, then a post chain of about 43 small renderings, and finally the HUD and the swap:
 
