@@ -250,10 +250,12 @@ context = true
 
 # PERF-11 read-only critical-path probes around the indexed title draw emitter
 # and its exact PM4 header publication. All return immediately unless the SDK
-# perf_critical_path_trace flag is enabled.
+# perf_critical_path_trace flag is enabled. The begin hook also carries the
+# registers of the D3D census (DL-0.1, below), whose draw entry 5 it is.
 [[midasm_hook]]
 address = 0x8240F4D8
 name = "PinyonShiftObserveTitleDrawEmitterBegin"
+registers = ["r1", "r3", "lr"]
 
 [[midasm_hook]]
 address = 0x82410328
@@ -1518,3 +1520,237 @@ registers = ["r3"]
 address = 0x8261C3B8
 name = "PinyonShiftAiTraceDynamicUpdate"
 registers = ["r3"]
+
+# DL-0.1 / DL-0.2 D3D source census (docs/D3D_RENDERER_RESEARCH.md,
+# src/native_renderer/d3d_census.cpp). Read-only observers at function
+# entries: each returns at once unless pinyon_shift_d3d_census is on. Base
+# disc only: not ported to analysis-v4 (the census stays off on v4).
+#
+# Draw entry points (entry 5, 0x8240F4D8, shares the PERF-11 begin hook).
+[[midasm_hook]]
+address = 0x82416380
+name = "PinyonShiftD3dCensusDraw0"
+registers = ["r1", "r3", "lr"]
+
+[[midasm_hook]]
+address = 0x82415F68
+name = "PinyonShiftD3dCensusDraw1"
+registers = ["r1", "r3", "lr"]
+
+[[midasm_hook]]
+address = 0x8240DC70
+name = "PinyonShiftD3dCensusDraw2"
+registers = ["r1", "r3", "lr"]
+
+[[midasm_hook]]
+address = 0x82408B70
+name = "PinyonShiftD3dCensusDraw3"
+registers = ["r1", "r3", "lr"]
+
+[[midasm_hook]]
+address = 0x82460998
+name = "PinyonShiftD3dCensusDraw4"
+registers = ["r1", "r3", "lr"]
+
+[[midasm_hook]]
+address = 0x829F7C70
+name = "PinyonShiftD3dCensusDraw6"
+registers = ["r1", "r3", "lr"]
+
+[[midasm_hook]]
+address = 0x824610C0
+name = "PinyonShiftD3dCensusDraw7"
+registers = ["r1", "r3", "lr"]
+
+[[midasm_hook]]
+address = 0x823FA0A8
+name = "PinyonShiftD3dCensusDraw8"
+registers = ["r1", "r3", "lr"]
+
+# D3D-internal draws (built-in shaders).
+[[midasm_hook]]
+address = 0x8240E130
+name = "PinyonShiftD3dCensusInternal0"
+registers = ["r1", "r3", "lr"]
+
+[[midasm_hook]]
+address = 0x829E82D0
+name = "PinyonShiftD3dCensusInternal1"
+registers = ["r1", "r3", "lr"]
+
+[[midasm_hook]]
+address = 0x829E8428
+name = "PinyonShiftD3dCensusInternal2"
+registers = ["r1", "r3", "lr"]
+
+[[midasm_hook]]
+address = 0x829F0928
+name = "PinyonShiftD3dCensusInternal3"
+registers = ["r1", "r3", "lr"]
+
+[[midasm_hook]]
+address = 0x829FEFB0
+name = "PinyonShiftD3dCensusInternal4"
+registers = ["r1", "r3", "lr"]
+
+# Engine device class slots (vtable 0x821451EC), by slot number.
+[[midasm_hook]]
+address = 0x8240BA48
+name = "PinyonShiftD3dCensusSlot12"
+
+[[midasm_hook]]
+address = 0x82415C88
+name = "PinyonShiftD3dCensusSlot22"
+
+[[midasm_hook]]
+address = 0x82444B18
+name = "PinyonShiftD3dCensusSlot23"
+
+[[midasm_hook]]
+address = 0x823FA198
+name = "PinyonShiftD3dCensusSlot24"
+
+[[midasm_hook]]
+address = 0x82418F50
+name = "PinyonShiftD3dCensusSlot25"
+
+[[midasm_hook]]
+address = 0x82417B90
+name = "PinyonShiftD3dCensusSlot26"
+
+[[midasm_hook]]
+address = 0x8244A450
+name = "PinyonShiftD3dCensusSlot30"
+
+[[midasm_hook]]
+address = 0x82415CA8
+name = "PinyonShiftD3dCensusSlot31"
+
+[[midasm_hook]]
+address = 0x824131B8
+name = "PinyonShiftD3dCensusSlot38"
+
+[[midasm_hook]]
+address = 0x823F5980
+name = "PinyonShiftD3dCensusSlot39"
+
+[[midasm_hook]]
+address = 0x82415CE0
+name = "PinyonShiftD3dCensusSlot40"
+
+[[midasm_hook]]
+address = 0x82412DD8
+name = "PinyonShiftD3dCensusSlot41"
+
+[[midasm_hook]]
+address = 0x8246EF98
+name = "PinyonShiftD3dCensusSlot42"
+
+[[midasm_hook]]
+address = 0x82C27340
+name = "PinyonShiftD3dCensusSlot43"
+
+[[midasm_hook]]
+address = 0x82C273B0
+name = "PinyonShiftD3dCensusSlot44"
+
+[[midasm_hook]]
+address = 0x82C27568
+name = "PinyonShiftD3dCensusSlot48"
+
+[[midasm_hook]]
+address = 0x82C27440
+name = "PinyonShiftD3dCensusSlot65"
+
+[[midasm_hook]]
+address = 0x823F74B0
+name = "PinyonShiftD3dCensusSlot66"
+
+# Display list lifecycle: run, asynchronous run, D3D's own buffer, fixups,
+# load, buffered read, clone, segment submit and close.
+[[midasm_hook]]
+address = 0x82416A00
+name = "PinyonShiftD3dCensusRunCommandBuffer"
+registers = ["r1", "r3", "r4", "lr"]
+
+[[midasm_hook]]
+address = 0x829EC928
+name = "PinyonShiftD3dCensusRunAsync"
+registers = ["r3", "r4", "lr"]
+
+[[midasm_hook]]
+address = 0x8246FB98
+name = "PinyonShiftD3dCensusD3dIb"
+registers = ["r3", "lr"]
+
+[[midasm_hook]]
+address = 0x82C58DA8
+name = "PinyonShiftD3dCensusFixup"
+registers = ["r1", "r3", "r4", "lr"]
+
+[[midasm_hook]]
+address = 0x82C592F0
+name = "PinyonShiftD3dCensusStaticFixup"
+registers = ["r1", "r3", "lr"]
+
+[[midasm_hook]]
+address = 0x82C59E40
+name = "PinyonShiftD3dCensusListLoad"
+registers = ["r3", "r4", "lr"]
+
+[[midasm_hook]]
+address = 0x82C76A90
+name = "PinyonShiftD3dCensusStreamRead"
+registers = ["r4", "r5", "lr"]
+
+[[midasm_hook]]
+address = 0x829EB2B0
+name = "PinyonShiftD3dCensusCloneCall"
+registers = ["r3", "r4", "lr"]
+
+[[midasm_hook]]
+address = 0x829EB0B8
+name = "PinyonShiftD3dCensusCloneCopy"
+registers = ["r3", "r5", "r7", "lr"]
+
+[[midasm_hook]]
+address = 0x8240D070
+name = "PinyonShiftD3dCensusSegmentSubmit"
+registers = ["r3", "lr"]
+
+[[midasm_hook]]
+address = 0x8240CF68
+name = "PinyonShiftD3dCensusSegmentClose"
+registers = ["r3", "lr"]
+
+# DL-0.2 bracket candidates (begin/end command buffer, begin/end tiling),
+# the callback queue and the tiling step callback.
+[[midasm_hook]]
+address = 0x82468C40
+name = "PinyonShiftD3dCensusBracket0"
+registers = ["r3", "r4", "lr"]
+
+[[midasm_hook]]
+address = 0x823EA3E0
+name = "PinyonShiftD3dCensusBracket1"
+registers = ["r3", "r4", "lr"]
+
+[[midasm_hook]]
+address = 0x823EB3D0
+name = "PinyonShiftD3dCensusBracket2"
+registers = ["r3", "r4", "lr"]
+
+[[midasm_hook]]
+address = 0x82469290
+name = "PinyonShiftD3dCensusBracket3"
+registers = ["r3", "r4", "lr"]
+
+[[midasm_hook]]
+address = 0x823E67A8
+name = "PinyonShiftD3dCensusInsertCallback"
+registers = ["r3", "r4", "r5", "r6", "r7", "lr"]
+
+[[midasm_hook]]
+address = 0x829F5948
+name = "PinyonShiftD3dCensusTilingCallback"
+registers = ["r3", "lr"]

@@ -1,7 +1,7 @@
 # D3D-level renderer research
 
-Status: research done 2026-10-14; no item started. The first gate (DL-0.1)
-is a probe build with no rendering change.
+Status: research done 2026-10-14. DL-0.1 (census) passed, DL-0.2 found the
+recording brackets, DL-0.3 was rejected; DL-1.1 is next.
 
 The near-native plan ([NEAR_NATIVE_RESEARCH.md](NEAR_NATIVE_RESEARCH.md))
 ended with the GPU front end as the largest pool left on the Odin: the guest
@@ -46,7 +46,11 @@ gates). Reverse-engineering results are recorded in
   tiling and copies its own pre-built state packets into them, much as FH1
   does. It keeps a small non-executing packet reader at record time and
   doubled its frame rate in one scene.
-- **Recommendation: run DL-0.1, the source census, before any design work.**
+- **DL-0.1 passed (2026-10-14):** 9.5-16 % of drawn draws would need the
+  fallback on the Odin and 5-16 % on the desktop, and the visible draws
+  carry about 10 ms of decoder and submission time a frame. Next is DL-1.1,
+  the wrong-image ceiling.
+- **Original recommendation: run DL-0.1, the source census, before any design work.**
   It is a probe build of default-off hooks. Go only if the fallback share is
   30 % or less and the draws a hybrid can see carry at least 6 ms of
   decoder and submission time a frame.
@@ -243,6 +247,10 @@ As NEAR_NATIVE:
 
 - CPU results are judged in-run only: drawn draws swing 753-1,859 between
   runs, which moves raw instructions by 20 %.
+- In-run window means are adjusted for draw count: the toggles fall on the
+  same route frames in every run, so one side can carry a heavier scene
+  phase (DL-0.3 saw 170-590 more draws in every memo-on window). An A/A on
+  the same route shows the bias.
 - One in-run A/B resolves about ±0.9 ms.
 - Cross-build per-thread instructions spread 1.1-4.9 %.
 - p90 and p99 frame times are checked as well as means.
@@ -269,6 +277,9 @@ As NEAR_NATIVE:
 | Item | Outcome | Evidence |
 | --- | --- | --- |
 | Research | **Done 2026-10-14.** Four research notes, findings recorded ("engine graphics device class", "D3D command-buffer fixups", "command buffers from assets and run-time recording"; corrections to "D3D command buffers" and "display-list writers"). Recommendation: run DL-0.1 before any design work. | `.local/backlog-research/d3d-renderer-2026-10-14/`; `site/findings/rendering.toml` |
+| DL-0.1 | **Passed 2026-10-14.** Census probe (`pinyon_shift_d3d_census`, default off; with it off the probe build matched build X at 2.43 against 2.45 µs of decoder time per decoded draw). Odin race, untiled, 600-frame windows: drawn draws from display lists 64.5-77.5 %, immediate calls 20-30 %, one unattributed buffer 72 a frame; **fallback share 9.5-16 %** (the unattributed buffer, plus list draws whose list changed since its previous run). Desktop tiled race: lists 60-83 %, fallback 5-16 %. List runs byte-identical to their previous run: 83-100 %; every changed list was recorded at run time (the track), so it is re-recorded rather than patched in place, and no list run showed only fixup changes. Origins of list draws: loaded and streamed from assets 46-66 %, cloned 18-64 %, recorded 7-17 %. Writes into watched lists: fixups and stream loads only in the plain census; with the watches re-armed, 5-13 "other" writes into known lists per 600-frame window (about 0.01-0.02 a frame), so a list compiler must still invalidate on any write. Time behind the visible draws: 73-99 % of the decoder (census on), about 7-8 ms of the 9.8 ms census-off decoder plus about 2.7 ms of submission, above the 6 ms bar. | `.local/backlog-research/d3d-renderer-2026-10-14/dl01-probe.md`, `desk-cen.state/logs/runtime.log`; Odin runs `stage1/odin/dl01-{off,cen,rearm,brk}` under `.local/backlog-research/near-native-2026-10-13/` |
+| DL-0.2 | **Done 2026-10-14.** From the buffer-switch trace of one race frame: `82468C40` is BeginCommandBuffer (it redirects the device's write pointer into the buffer being recorded) and `823EA3E0` EndCommandBuffer, about 3 a frame; `823EB3D0` opens a tiling bracket and `82469290` closes it, once a frame. Recording runs on its own D3D device, and the indexed draw entry point `82416380` writes into the lists being recorded. | `stage1/odin/dl01-brk/runtime.log`; `site/findings/rendering.toml` |
+| DL-0.3 | **Rejected 2026-10-14.** `gpu_shader_load_memo` keyed the shader by (type, guest address, dword count), each entry held by a one-shot write watch on its microcode. Verify: 0 mismatches in 30.1 M and 27.0 M loads; hit rate 96.2 % (1,024 entries) and 99.77 % (4,096, two-way). Four in-run A/Bs on the Odin race: raw decoder differences were within noise because the memo-on windows decoded 170-590 more draws in every run (the toggles fall on the same route frames, so window means carry the scene phase); adjusted for draws, decoder -0.32 ± 0.09 ms pooled, process -0.05 ± 0.22 ms, frame unchanged, against the -0.5 ms gate. The 0.9 ms estimate was an inclusive profile share. Code reverted; patch kept. | `.local/backlog-research/d3d-renderer-2026-10-14/dl03.md`, `dl03-sdk.patch`; `site/pages/lessons.md` |
 
 ## Sources
 

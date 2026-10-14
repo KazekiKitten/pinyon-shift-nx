@@ -76,6 +76,7 @@ set(PINYON_SHIFT_HOST_SOURCES
     src/platform/host_platform.cpp
     src/platform/sha256.cpp
     ${REXSDK_DIR}/thirdparty/crypto/sha256.cpp
+    src/native_renderer/d3d_census.cpp
     src/native_renderer/graphics_hooks.cpp
     src/native_renderer/guest_output_renderer.cpp
     src/native_renderer/shader_capture.cpp

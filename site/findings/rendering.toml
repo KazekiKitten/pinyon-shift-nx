@@ -530,6 +530,16 @@ source = """docs/D3D_RENDERER_RESEARCH.md; .local/backlog-research/d3d-renderer-
 
 [[finding]]
 group = """D3D inside the game"""
+base = """82468C40, 8246F110, 823EA3E0, 823E984C, 823EB3D0, 8246B3E8, 82469290, 0x402C2880"""
+name = """command-buffer recording and tiling brackets"""
+what = """`82468C40` is BeginCommandBuffer: called from `8246F110`, it points the D3D device's write pointer into the buffer being recorded. `823EA3E0` (called from `823E984C`) is EndCommandBuffer and restores it; about three recordings a race frame. `823EB3D0` (called from `8246B3E8`) opens the predicated-tiling bracket and `82469290` closes it, once a frame. Recording uses its own D3D device (`0x402C2880` in the Odin run), and the indexed draw entry point `82416380` writes into the lists being recorded as well as into the ring."""
+how = """DL-0.2: the census probe's buffer-switch log for one race frame (`pinyon_shift_d3d_census_bracket_frame`), which records each change of the device write pointer with the guest return address; Odin run dl01-brk."""
+confidence = """confirmed"""
+note = """Census of the same race (DL-0.1): drawn draws come 64-78 % from display lists and 20-30 % from immediate calls on the Odin (untiled), 60-83 % and 12-29 % on the desktop (tiled); one buffer of about 72 (Odin) to 120 (desktop) draws a frame has no known owner. 83-100 % of list runs are byte-identical to their previous run, and every list that changed was recorded at run time (the track). With the write watches re-armed, 5-13 writes a 600-frame window into known lists came from neither the fixup setters nor stream loads. No v4 addresses yet."""
+source = """docs/D3D_RENDERER_RESEARCH.md DL-0.1, DL-0.2; .local/backlog-research/d3d-renderer-2026-10-14/dl01-probe.md"""
+
+[[finding]]
+group = """D3D inside the game"""
 base = """824167F8, 82417060, 82417BC0, 824365B0, 824168B0, 82411BD0"""
 v4 = """824467A8, 82447010, 82447B70, 82466560, 82446860, 82441B80"""
 name = """engine side of the display lists"""
@@ -568,7 +578,7 @@ name = """D3D draw entry points"""
 what = """Most draw calls the title makes do not go through the draw wrappers above. `sub_82416380` (3,543,451 calls in a desktop race, 272.7 a presented frame, 11 callers) and `sub_82415F68` (3,463,307, 266.6 a frame, 9 callers, among them `sub_82415CE0`, which an indirect call in `sub_82417418` reaches) store type-3 `DRAW_INDX` headers themselves. Like the list executor `82416A00` they call the dirty-constant flush `824168B0` twice, the shader and constant-load setup `82411C80` and the segment close `8240CF68`, which can wait on a fence. Together they are about 540 calls a presented frame, against 35 through the indexed draw wrapper `8240F4D8` and 542 list executions (route averages, menus included). Three smaller emitters run 17.3 (`sub_82460998`), 9.2 (`sub_82408B70`) and 8.5 (`sub_8240DC70`) times a frame. On the Odin they are sampled on the render thread and on the presentation worker `82589AE8`, where `sub_82416380` is 11.9 % of that thread's cycles, next to the segment closes `8240CF68` (4.4 %) and `8240D070` (4.8 %)."""
 how = """Packet-header constants, callees and callers in the generated code; call counts and indirect targets from the probe build (NL-2.3, 12,992 presents); the Odin call-graph profile cg2 (30 fps), split by thread."""
 confidence = """probable"""
-note = """Whether they write into the current ring segment or into a command buffer being recorded is not known. A display-list compiler at `82416A00` would have to cover them, the second producer thread and the second `INDIRECT_BUFFER` producer `8246FB98` (NN-2.3)."""
+note = """`sub_82416380` writes into both the ring and command buffers being recorded (DL-0.2, see "command-buffer recording and tiling brackets"). A display-list compiler at `82416A00` would have to cover them, the second producer thread and the second `INDIRECT_BUFFER` producer `8246FB98` (NN-2.3)."""
 source = """docs/NEAR_NATIVE_RESEARCH.md NN-2.3"""
 
 [[finding]]

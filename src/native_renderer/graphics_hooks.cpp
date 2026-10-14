@@ -1,5 +1,7 @@
 #include "native_renderer/graphics_hooks.h"
 
+#include "native_renderer/d3d_census.h"
+
 #include "fh1_guest_address.h"
 
 #include <atomic>
@@ -204,6 +206,7 @@ void PinyonShiftObserveGraphicsFrame() {
   title_emitter_calls = title_emitter_time_ns = title_packet_count = 0;
   title_first_packet_ns = title_last_packet_ns = 0;
   rex::perf::TraceCriticalPath("source_frame", int64_t(title_emitter_frame));
+  D3dCensusFrame();
 }
 
 void PinyonShiftObserveTitleDrawEmitterBegin() {
@@ -212,6 +215,14 @@ void PinyonShiftObserveTitleDrawEmitterBegin() {
                                   rex::perf::CounterId::kSourceFrameCount)),
                               Clock::now()});
   }
+}
+
+// The same hook with the registers the D3D census (DL-0.1) reads: this is its
+// draw entry 5. The registerless form above stays for builds whose generated
+// code predates the census.
+void PinyonShiftObserveTitleDrawEmitterBegin(PPCRegister& r1, PPCRegister& r3, uint64_t& lr) {
+  PinyonShiftObserveTitleDrawEmitterBegin();
+  D3dCensusDrawEntry(5, r1.u32, r3.u32, uint32_t(lr));
 }
 
 void PinyonShiftObserveTitleDrawEmitterEnd() {
