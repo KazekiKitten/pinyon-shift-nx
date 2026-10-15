@@ -1070,7 +1070,8 @@ namespace census_impl = pinyon_shift::native_renderer;
   void PinyonShiftD3dCensusDraw##n(PPCRegister& r1, PPCRegister& r3, uint64_t& lr) { \
     D3dCensusDrawEntry(n, r1.u32, r3.u32, uint32_t(lr));                             \
   }
-PINYON_D3D_CENSUS_DRAW(0)
+// Entry 0 (0x82416380) is PinyonShiftD3dCensusDraw0 in d3d_draw.cpp, with the
+// DL-1.2 D3D-level draw marker.
 PINYON_D3D_CENSUS_DRAW(1)
 PINYON_D3D_CENSUS_DRAW(2)
 PINYON_D3D_CENSUS_DRAW(3)

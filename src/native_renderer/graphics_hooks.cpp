@@ -1,6 +1,7 @@
 #include "native_renderer/graphics_hooks.h"
 
 #include "native_renderer/d3d_census.h"
+#include "native_renderer/d3d_draw.h"
 
 #include "fh1_guest_address.h"
 
@@ -207,6 +208,7 @@ void PinyonShiftObserveGraphicsFrame() {
   title_first_packet_ns = title_last_packet_ns = 0;
   rex::perf::TraceCriticalPath("source_frame", int64_t(title_emitter_frame));
   D3dCensusFrame();
+  D3dDrawFrame();
 }
 
 void PinyonShiftObserveTitleDrawEmitterBegin() {

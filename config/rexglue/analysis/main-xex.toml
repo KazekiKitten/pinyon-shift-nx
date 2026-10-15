@@ -1527,10 +1527,11 @@ registers = ["r3"]
 # disc only: not ported to analysis-v4 (the census stays off on v4).
 #
 # Draw entry points (entry 5, 0x8240F4D8, shares the PERF-11 begin hook).
+# Entry 0 also carries the DL-1.2 D3D-level draw marker (d3d_draw.cpp).
 [[midasm_hook]]
 address = 0x82416380
 name = "PinyonShiftD3dCensusDraw0"
-registers = ["r1", "r3", "lr"]
+registers = ["r1", "r3", "r4", "r5", "r6", "r7", "lr"]
 
 [[midasm_hook]]
 address = 0x82415F68
@@ -1754,3 +1755,38 @@ registers = ["r3", "r4", "r5", "r6", "r7", "lr"]
 address = 0x829F5948
 name = "PinyonShiftD3dCensusTilingCallback"
 registers = ["r3", "lr"]
+
+# DL-1.2 D3D-level draws (docs/D3D_RENDERER_RESEARCH.md,
+# src/native_renderer/d3d_draw.cpp): inside the indexed draw call
+# (0x82416380) and its shader bind (0x82411C80). Each returns at once unless
+# pinyon_shift_d3d_draw is on and the thread is inside a described call.
+# Base disc only.
+[[midasm_hook]]
+address = 0x82416438
+name = "PinyonShiftD3dDrawStateMask"
+registers = ["r30", "r31"]
+
+[[midasm_hook]]
+address = 0x82411BD0
+name = "PinyonShiftD3dDrawLiterals"
+registers = ["r3", "r4", "r5"]
+
+[[midasm_hook]]
+address = 0x82411EBC
+name = "PinyonShiftD3dDrawPixelShaderLoad"
+registers = ["r29", "r31"]
+
+[[midasm_hook]]
+address = 0x824125F0
+name = "PinyonShiftD3dDrawVertexShaderLoad"
+registers = ["r15", "r30", "r31"]
+
+[[midasm_hook]]
+address = 0x8240D348
+name = "PinyonShiftD3dDrawVertexShaderInline"
+registers = ["r26", "r27", "r30"]
+
+[[midasm_hook]]
+address = 0x824167EC
+name = "PinyonShiftD3dDrawExit"
+registers = ["r31"]
