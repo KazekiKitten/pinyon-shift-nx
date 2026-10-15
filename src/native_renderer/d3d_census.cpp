@@ -52,6 +52,12 @@ REXCVAR_DEFINE_UINT32(pinyon_shift_d3d_census_list_log, 16, "Pinyon Shift",
                       "Display lists logged per pinyon_shift_d3d_census window, most runs first")
     .range(0, 4096)
     .lifecycle(rex::cvar::Lifecycle::kHotReload);
+REXCVAR_DEFINE_BOOL(pinyon_shift_d3d_census_lean, false, "Pinyon Shift",
+                    "With pinyon_shift_d3d_census (DL-1.1), classify draws only: drop the "
+                    "DL-0.2 device snapshots here and, in the decoder, the mark lookups inside "
+                    "display lists and the per-class timing, so the census costs less while "
+                    "gpu_d3d_census_skip_visible is measured")
+    .lifecycle(rex::cvar::Lifecycle::kHotReload);
 REXCVAR_DEFINE_BOOL(pinyon_shift_d3d_census_hash_lists, true, "Pinyon Shift",
                     "With pinyon_shift_d3d_census, hash each display list's bytes at every run "
                     "to tell unchanged lists from lists changed by fixups or other writers")
@@ -250,6 +256,7 @@ uint64_t Take(Counter& counter) { return counter.exchange(0, std::memory_order_r
 
 std::atomic<bool> g_on{false};
 std::atomic<bool> g_armed{false};
+std::atomic<bool> g_lean{false};
 std::atomic<uint32_t> g_armed_logs{0};
 constexpr uint32_t kArmedLogLimit = 6000;
 
@@ -321,7 +328,7 @@ void LogArmed(const std::string& line) {
 }
 
 void Observe(uint32_t device, uint8_t site, uint32_t lr) {
-  if (!GuestPointer(device)) return;
+  if (g_lean.load(std::memory_order_relaxed) || !GuestPointer(device)) return;
   DeviceState now{Load32(device + kBufferEnd), Load32(device + kRecordingBuffer),
                   Load32(device + kTilingState), Load32(device + kTilingStreamHead), lr,
                   uint8_t((Load8(device + kRecordFlags) & 0x80) ? 1 : 0), site};
@@ -1027,6 +1034,12 @@ void D3dCensusFrame() {
   const uint32_t frame =
       uint32_t(rex::perf::GetTotalCounter(rex::perf::CounterId::kSourceFrameCount));
   census::SetFrame(frame);
+  const bool lean = REXCVAR_GET(pinyon_shift_d3d_census_lean);
+  if (lean != g_lean.load(std::memory_order_relaxed)) {
+    REXLOG_INFO("D3D census: lean {} at frame {}", lean ? "on" : "off", frame);
+    g_lean.store(lean, std::memory_order_relaxed);
+    census::SetLean(lean);
+  }
   const int32_t armed_frame = REXCVAR_GET(pinyon_shift_d3d_census_bracket_frame);
   const bool armed = armed_frame >= 0 && uint32_t(armed_frame) == frame;
   if (armed != g_armed.load(std::memory_order_relaxed)) {
