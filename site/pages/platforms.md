@@ -132,7 +132,7 @@ Both draw the scene's three bands in one pass (25.4 against 28.3 ms at 1x), upda
 
 **Tiled GPUs.** Adreno renders in tiles, so every rendering, clear and store has a cost a desktop GPU doesn't show. What paid off was fewer renderings (clears folded in, the scene drawn once) and specialized resolve and transfer passes; see [GPU optimizations](gpu-optimizations.md#renderings-and-clears). What didn't: forcing on-chip (GMEM) rendering for MSAA, 49.7 ms against 18.9 ms at 4x, so on-chip MSAA is no route to 4x at 60; store-op tuning; and trimming render areas, which the driver already does.
 
-**Stutters.** Hitches on Android came from the runtime's global lock, not the GPU; see [the global critical region](runtime.md#threads).
+**Stutters.** Hitches on Android came from the runtime's global lock, not the GPU; see [the global critical region](runtime.md#threads). A later periodic one, a 30–40 ms frame every 30 s of play on the Odin, was the driver pipeline cache being saved on the GPU commands thread; it is now saved on the storage write thread ([GPU optimizations](gpu-optimizations.md#shaders)). What remains in capture-free race and free-roam routes on the Odin, Windows and the Deck is the race's loading screen and a few frames where the game waits on GPU fences 60–100 times in one frame, each wait a full trip to the host GPU.
 
 ## What carried across
 

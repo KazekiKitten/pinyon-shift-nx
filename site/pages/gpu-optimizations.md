@@ -116,6 +116,7 @@ Fast math has a trap: Direct3D 9 shaders rely on 0 × ∞ = 0. Dropping that rul
 | --- | --- |
 | Shaders prepared during setup | first launch, frame time over budget 13.0 to 5.7 s |
 | `VkPipelineCache` saved between runs | NVIDIA: 387 stored pipelines created in about 21 ms at start; Odin 1.7 s to 86 ms |
+| The running save of that cache (every 30 s while new pipelines appear) moved from the GPU commands thread to the storage write thread | reading and writing the driver's cache held the thread 30–40 ms, a hitch every 30 s on the Odin 2 Portal; free-roam frames over 25 ms on the Odin went to 1, and the Deck LCD's 70 ms free-roam frame went away |
 | macOS: stored pipelines created behind the running title (`vulkan_pipeline_prewarm_background`) | MoltenVK still compiles each through Metal: 732 pipelines took 21.6 s on an M4 Pro, a black screen at every start; the title now starts at once, and a draw that needs a pipeline not yet built builds it or waits for that one |
 | No pipeline builds on the command threads | 8 Elite menus about 95 s to 10 s |
 | Specialized passes and translation moved to workers | cold worst frame 252–348 to 63–69 ms |
