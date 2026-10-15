@@ -912,6 +912,9 @@ std::unique_ptr<MenuScreen> SettingsPages::Gameplay() {
   rows.push_back(Toggle("AUTOMATIC CAR RESET", "pinyon_shift_no_auto_reset", true));
   // After about 55 s idle on the title screen the game replays its intro.
   rows.push_back(Toggle("REPLAY INTRO WHEN IDLE", "pinyon_shift_no_attract_video", true));
+  // The boot splash movies end through the title's own end-of-stream path
+  // (#617); read once at boot, so it applies at the next start.
+  rows.push_back(Toggle("SKIP INTRO MOVIES", "pinyon_shift_skip_opening_movies"));
   // How the AI race (#482): without the rubber band and catch-up, or also
   // one difficulty level up. The game reads it when it sets up the next
   // event's opponents.
