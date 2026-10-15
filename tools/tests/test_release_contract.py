@@ -404,7 +404,9 @@ catch { [Console]::Error.Write($_.Exception.Message); exit 2 }
         environment = os.environ.copy()
         environment["PINYON_TEST_PATH"] = (
             'C:\\Windows;"C:\\Program Files (x86)\\Steam\\ext\\bin";'
-            "C:\\Tools"
+            "C:\\Tools;"
+            # A stray quote in one entry broke VsDevCmd (#560).
+            'C:\\Program Files\\PowerToys\\DSCModules";C:\\Program Files\\PuTTY\\'
         )
         completed = subprocess.run(
             ["powershell", "-NoLogo", "-NoProfile", "-Command", command],
@@ -417,7 +419,8 @@ catch { [Console]::Error.Write($_.Exception.Message); exit 2 }
         self.assertEqual(completed.returncode, 0, completed.stderr)
         self.assertEqual(
             completed.stdout,
-            "C:\\Windows;C:\\Program Files (x86)\\Steam\\ext\\bin;C:\\Tools",
+            "C:\\Windows;C:\\Program Files (x86)\\Steam\\ext\\bin;C:\\Tools;"
+            "C:\\Program Files\\PowerToys\\DSCModules;C:\\Program Files\\PuTTY\\",
         )
 
     def test_launcher_payload_has_every_required_script(self):

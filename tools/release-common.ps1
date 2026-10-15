@@ -213,11 +213,11 @@ function Get-PinyonVisualStudioRoot {
 function ConvertTo-PinyonCommandPath {
     param([AllowEmptyString()] [string]$PathValue)
 
+    # A quote is never part of a Windows path, and a stray one anywhere in an
+    # entry (PowerToys left `...\DSCModules"`) unbalances VsDevCmd's quoting:
+    # "\Microsoft was unexpected at this time" (#560).
     $entries = @($PathValue -split ';' | ForEach-Object {
-        $entry = $_.Trim()
-        if ($entry.Length -ge 2 -and $entry.StartsWith('"') -and $entry.EndsWith('"')) {
-            $entry = $entry.Substring(1, $entry.Length - 2).Trim()
-        }
+        $entry = $_.Replace('"', '').Trim()
         if (-not [string]::IsNullOrWhiteSpace($entry)) { $entry }
     })
     $entries -join ';'
