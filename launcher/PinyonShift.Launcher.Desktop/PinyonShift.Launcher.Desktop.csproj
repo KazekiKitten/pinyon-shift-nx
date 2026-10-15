@@ -19,7 +19,12 @@
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
-    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <!-- Not on macOS: on Apple silicon the precompiled framework code of a
+         compressed bundle (inflated into memory) crashed the launcher with
+         AccessViolationException in about four of five starts, the first time
+         it read a child process's output. Uncompressed: none in 12 starts.
+         The release zip compresses the app anyway. -->
+    <EnableCompressionInSingleFile Condition="!$(RuntimeIdentifier.StartsWith('osx'))">true</EnableCompressionInSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <PublishReadyToRun>false</PublishReadyToRun>
     <InvariantGlobalization>true</InvariantGlobalization>
