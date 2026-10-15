@@ -150,6 +150,11 @@ is closed:
   game preset. It warns when the only Vulkan device is a software renderer
   (llvmpipe), which means the GPU driver is missing.
 
+On a Steam Deck (LCD, 15 W) the 21 packages imported and enabled with these
+commands load as on Windows: the same 84 DLC car rows, a DLC car bought from
+the Autoshow and driven. A v4 build boots with the update applied and
+reaches the offline 1000 Club and the native Rally intro.
+
 The launcher's **Android** panel builds the Android app (`android build`,
 the v4 app when v4 is on). Off Windows it needs the Android SDK's
 command-line tools and a JDK 17 that you install (Android Studio, or
@@ -197,7 +202,7 @@ included, stays in the `data` folder next to it.
 
 | System | Status |
 | --- | --- |
-| Steam Deck LCD, SteamOS 3.7 | Builds and plays; 60 fps at 1x |
+| Steam Deck LCD, SteamOS 3.7 | Builds and plays; 60 fps at 1x; the DLC and v4 load and play |
 | Ubuntu 24.04 (WSL) | Release archive to a built game in 20 minutes; Add to Steam writes the shortcut and art; runs with a null GPU |
 | Arch Linux (container, libxml2 2.15) | The pinned toolchain configures and links with setup's `ld.lld` wrapper (#472); a full build not run |
 | Other distributions, NVIDIA, Intel | Not tested yet |
