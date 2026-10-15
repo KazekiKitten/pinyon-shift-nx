@@ -209,7 +209,7 @@ feature = "DLC import"
 link = "dlc.md"
 cells = [
   "yes",
-  "partly: in the launcher; not played with DLC on Linux yet",
+  "yes: in the launcher; on the Steam Deck a DLC car bought from the Autoshow and driven",
   "partly: in the launcher; on a Mac the DLC cars load and drive in a scripted route",
   "partly: imported on the PC, copied with the game",
 ]
@@ -219,7 +219,7 @@ feature = "Title update v4"
 link = "dlc.md#title-update-v4"
 cells = [
   "yes",
-  "partly: in the launcher; the v4 build compiles, not played yet ([Linux backlog](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/LINUX_PORT_BACKLOG.md))",
+  "partly: in the launcher; on the Steam Deck 1000 Club runs and the Rally reaches its stage intro",
   "partly: in the launcher; 1000 Club and the Rally entry reached in scripted routes",
   "partly: built on the PC",
 ]
