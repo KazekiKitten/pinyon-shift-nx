@@ -179,16 +179,24 @@ def stage_inputs(source: Path, temporary: Path, manifest: dict) -> list[tuple[Pa
             with path.open("rb") as stream:
                 accept(stream, path.stat().st_size)
         elif zipfile.is_zipfile(path):
-            with zipfile.ZipFile(path) as archive:
-                for member in archive.infolist():
-                    safe_archive_path(member.filename)
-                    if member.is_dir():
-                        continue
-                    with archive.open(member) as stream:
-                        prefix = stream.read(4)
-                    if prefix in MAGIC:
+            try:
+                with zipfile.ZipFile(path) as archive:
+                    for member in archive.infolist():
+                        safe_archive_path(member.filename)
+                        if member.is_dir():
+                            continue
                         with archive.open(member) as stream:
-                            accept(stream, member.file_size)
+                            prefix = stream.read(4)
+                        if prefix in MAGIC:
+                            with archive.open(member) as stream:
+                                accept(stream, member.file_size)
+            except (NotImplementedError, zipfile.BadZipFile):
+                # A folder can hold game ZIPs that are not DLC wrappers, such
+                # as an installed package's Media/DLCZips (an unsupported
+                # compression method): skip them. A chosen ZIP must be read.
+                if not source.is_dir():
+                    raise ValueError("the ZIP cannot be read (damaged, or an unsupported "
+                                     "compression method)") from None
         elif not source.is_dir():
             raise ValueError("choose a raw DLC package, DLC folder or ZIP")
     if not found:
