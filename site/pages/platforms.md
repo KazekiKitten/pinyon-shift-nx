@@ -93,7 +93,9 @@ One trap: with Manual GPU Clock on in the Quick Access menu, Steam can pin the G
 
 **MoltenVK limits.** No geometry shaders and no wireframe fill, so the vertex-shader expansion paths are used. No fragment shading rate, so SCENE SHADING does nothing. The portability subset lacks separate stencil reference masks, and SPIRV-Cross rejects some decorations on function-local arrays, which the translator avoids.
 
-**Results.** Free roam at 1x runs at a median of about 105 fps on an M4 Pro Mac mini. The M4 Pro is shading-bound, so two switches pay off there that don't on the RTX 4080: texture gamma through sRGB views (−8 % at 1x, offered as TEXTURE GAMMA FAST) and quads as triangle lists (−5 % at 2x, now the default everywhere).
+**Results.** Free roam at 1x holds a 120 Hz display on an M4 Pro Mac mini: a median of 8.35 ms a frame, with the GPU busy about 67 % of the time. The M4 Pro is shading-bound, as the Adreno GPUs are, so macOS takes their defaults: fast pixel math, texture signs as specialization constants and untiled predicated tiling. It also turns off MoltenVK's Metal argument buffers. Together these took the free-roam GPU frame from 12.3–12.7 to 5.6–5.7 ms ([measurements](gpu-optimizations.md#apple-silicon)). Two more switches pay off there that don't on the RTX 4080: texture gamma through sRGB views (−8 % at 1x, offered as TEXTURE GAMMA FAST) and quads as triangle lists (−5 % at 2x, now the default everywhere).
+
+**Waits.** The GPU commands thread yields for up to 2 ms in WAIT_REG_MEM before it sleeps, as on Windows. macOS short sleeps overshoot under load: with 100 µs sleeps a free-roam drive had 187 frames over 25 ms and a p99 of 41.8 ms, against 23 frames and 19.8 ms with the yield. The slow frames that remain follow CPU load from other apps. When the guest audio thread falls behind, it kicks the XMA decoder up to 20 times as often, so a busy Mac shows bursts of slow frames that an idle one doesn't.
 
 **Distribution.** The launcher bundle is ad-hoc signed and not notarized, so players approve its first start in System Settings.
 

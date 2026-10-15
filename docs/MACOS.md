@@ -31,8 +31,9 @@ verifies it, builds the game on your Mac and starts it.
    awake until the build is done: about 20 minutes on an M4 Pro.
 5. Choose **Play**. Press **F6** in game for settings.
 
-On an M4 Pro, free roam runs at a median of about 105 fps at the default 1x
-resolution.
+On an M4 Pro, free roam holds 120 fps on a 120 Hz display at the default 1x
+resolution (median 8.35 ms a frame). Other busy apps on the Mac cause most of
+the slow frames that remain.
 
 ## From a terminal
 
