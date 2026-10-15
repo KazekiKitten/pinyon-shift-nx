@@ -752,6 +752,19 @@ void PinyonShiftApp::OnPreSetup(rex::RuntimeConfig& config) {
       return input;
     };
   }
+  // FH1 has no split screen and only user 0 is signed in, so every pad plays
+  // as user 0. With slot assignment a pad in XInput slot 2+ (behind a virtual
+  // Steam Input or ViGEm pad, or a wheel) pressed Start as user 1 and hit NO
+  // GAMER PROFILES (#553). Routes keep their own slot assignment.
+  if (!pinyon_shift::fh1_render_test::Enabled() && config.input_factory) {
+    config.input_factory = [base = config.input_factory](bool tool_mode) {
+      auto input = base(tool_mode);
+      if (auto* system = dynamic_cast<rex::input::InputSystem*>(input.get())) {
+        system->SetDeviceAssignment(std::make_unique<rex::input::SharedAssignment>());
+      }
+      return input;
+    };
+  }
   pinyon_shift::diagnostics::RecordEvent(
       "runtime.setup.begin",
       {{"graphics_requested", (config.graphics || !config.gpu_plugin.empty()) ? "1" : "0"},
