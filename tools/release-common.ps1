@@ -828,15 +828,29 @@ function Reset-PinyonRelocatedCMakeCache {
     return $true
 }
 
-function Set-PinyonGitSafeDirectory {
-    param([Parameter(Mandatory)] [string]$Root)
+function Set-PinyonGitEnvironment {
+    param(
+        [Parameter(Mandatory)] [string]$Root,
+        [Parameter(Mandatory)] [string]$Git
+    )
 
-    # Git refuses repositories owned by another account ("detected dubious
-    # ownership", #599), which happens on drives formatted on another PC or
-    # copied as administrator. The checkout and its nested SDK repositories
-    # are the player's own files, so trust them for this process and every
-    # git it starts, without touching the player's global Git config.
+    # Settings for this process and every git it starts, passed as command
+    # scope so they win over the player's global Git config without
+    # changing it:
+    # - Git refuses repositories owned by another account ("detected
+    #   dubious ownership", #599), as on drives formatted on another PC.
+    #   The checkout and its nested SDK repositories are the player's own.
+    # - A global http.sslCAInfo left by a removed or broken Git for Windows
+    #   failed every clone with "error adding trust anchors" (#604); the
+    #   pinned MinGit uses its own certificate bundle.
     $trusted = $Root.Replace('\', '/').TrimEnd('/')
+    $settings = [Collections.Generic.List[string[]]]::new()
+    $settings.Add(@('safe.directory', $trusted))
+    $settings.Add(@('safe.directory', "$trusted/*"))
+    $bundle = Join-Path (Split-Path (Split-Path $Git -Parent) -Parent) 'mingw64\etc\ssl\certs\ca-bundle.crt'
+    if (Test-Path -LiteralPath $bundle -PathType Leaf) {
+        $settings.Add(@('http.sslCAInfo', $bundle.Replace('\', '/')))
+    }
     $count = 0
     $existing = [Environment]::GetEnvironmentVariable('GIT_CONFIG_COUNT')
     if ($existing -match '^\d+$') { $count = [int]$existing }
@@ -846,9 +860,9 @@ function Set-PinyonGitSafeDirectory {
             return
         }
     }
-    foreach ($value in @($trusted, "$trusted/*")) {
-        [Environment]::SetEnvironmentVariable("GIT_CONFIG_KEY_$count", 'safe.directory')
-        [Environment]::SetEnvironmentVariable("GIT_CONFIG_VALUE_$count", $value)
+    foreach ($setting in $settings) {
+        [Environment]::SetEnvironmentVariable("GIT_CONFIG_KEY_$count", $setting[0])
+        [Environment]::SetEnvironmentVariable("GIT_CONFIG_VALUE_$count", $setting[1])
         $count++
     }
     [Environment]::SetEnvironmentVariable('GIT_CONFIG_COUNT', [string]$count)
@@ -861,7 +875,7 @@ function Get-PinyonGit {
     if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
         throw 'Git is not available. Run provision-toolchain.ps1 first.'
     }
-    Set-PinyonGitSafeDirectory -Root $root
+    Set-PinyonGitEnvironment -Root $root -Git $candidate
     $candidate
 }
 

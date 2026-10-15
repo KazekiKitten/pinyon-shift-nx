@@ -336,11 +336,14 @@ catch { [Console]::Error.Write($_.Exception.Message); exit 2 }
         # "detected dubious ownership" (#599).
         common = (ROOT / "tools/release-common.ps1").read_text(encoding="utf-8")
         get_git = common.split("function Get-PinyonGit", 1)[1][:600]
-        self.assertIn("Set-PinyonGitSafeDirectory -Root $root", get_git)
-        trust = common.split("function Set-PinyonGitSafeDirectory", 1)[1]
+        self.assertIn("Set-PinyonGitEnvironment -Root $root -Git $candidate", get_git)
+        trust = common.split("function Set-PinyonGitEnvironment", 1)[1]
         self.assertIn("'safe.directory'", trust)
         self.assertIn('"$trusted/*"', trust)
         self.assertIn("GIT_CONFIG_COUNT", trust)
+        # A broken global http.sslCAInfo failed every clone (#604).
+        self.assertIn("'http.sslCAInfo'", trust)
+        self.assertIn(r"mingw64\etc\ssl\certs\ca-bundle.crt", trust)
 
     def test_powershell_is_started_by_full_path(self):
         # A PATH without the WindowsPowerShell folder failed setup with "The
