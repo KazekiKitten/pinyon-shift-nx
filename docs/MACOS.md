@@ -69,6 +69,9 @@ external drive.
 - **The window turns black or one colour after a resize.** Fixed in ShiftGlue
   f4131ff (2026-10-15): the presenter now recreates the Vulkan surface on
   each resize. Rebuild if your build is older.
+- **Free roam is too bright and flashes.** Fixed in ShiftGlue 6e3f434
+  (2026-10-15): GPU memory tracking used 16 KB host pages, so CPU writes
+  next to the 4 KB exposure resolve discarded it. It now tracks 4 KB pages.
 - **The build cannot find a compiler.** Run `xcode-select --install` in
   Terminal, or reinstall the Command Line Tools from Apple's developer site.
 
