@@ -25,4 +25,6 @@ A native build for Apple silicon. The game's Vulkan renderer runs on Metal throu
 
 On an M4 Pro, free roam runs at a median of about 105 fps at the default 1x resolution.
 
+The launcher's **DLC** panel imports your own DLC packages ([DLC and title update](dlc.md)), and **Import a save** brings a save from another install or from Xenia. No v4 build has run on a Mac yet.
+
 More detail is in [docs/MACOS.md](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/MACOS.md).
