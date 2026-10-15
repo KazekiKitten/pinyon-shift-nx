@@ -72,14 +72,46 @@ function Invoke-PinyonDownload {
     }
     $partial = "$Destination.partial"
     if (Test-Path -LiteralPath $partial) { Remove-Item -LiteralPath $partial -Force }
+    $curlLog = "$Destination.curl.log"
     try {
+        # A browser can fetch what curl can't (#597): curl ignores the system
+        # proxy, and Windows' schannel fails when it can't reach the
+        # certificate revocation server, as behind HTTPS-inspecting antivirus.
+        # Try curl, then curl without a hard revocation check, then
+        # PowerShell's downloader, which uses the system proxy.
+        $failures = [Collections.Generic.List[string]]::new()
         $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
+        $downloaded = $false
         if ($null -ne $curl) {
-            & $curl.Source --fail --location --retry 3 --output $partial $Uri
-            if ($LASTEXITCODE -ne 0) { throw "Download failed: $Uri" }
+            foreach ($extra in @(@(), @('--ssl-revoke-best-effort'))) {
+                if (Test-Path -LiteralPath $partial) { Remove-Item -LiteralPath $partial -Force }
+                & $curl.Source --fail --location --retry 3 --silent --show-error --stderr $curlLog @extra --output $partial $Uri
+                if ($LASTEXITCODE -eq 0) { $downloaded = $true; break }
+                $detail = @(if (Test-Path -LiteralPath $curlLog) {
+                    Get-Content -LiteralPath $curlLog | Where-Object { $_ -match '\S' } | Select-Object -Last 1
+                })
+                $failures.Add("curl exit $LASTEXITCODE$(if ($detail.Count) { ': ' + $detail[0] })")
+            }
         }
-        else {
-            Invoke-WebRequest -Uri $Uri -OutFile $partial -UseBasicParsing
+        if (-not $downloaded) {
+            if (Test-Path -LiteralPath $partial) { Remove-Item -LiteralPath $partial -Force }
+            try {
+                [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor
+                    [Net.SecurityProtocolType]::Tls12
+                $progress = $ProgressPreference
+                $ProgressPreference = 'SilentlyContinue'
+                try { Invoke-WebRequest -Uri $Uri -OutFile $partial -UseBasicParsing }
+                finally { $ProgressPreference = $progress }
+                $downloaded = $true
+            }
+            catch {
+                $failures.Add("PowerShell: $($_.Exception.Message)")
+            }
+        }
+        if (-not $downloaded) {
+            throw ("Download failed: $Uri ($($failures -join '; ')). Check the connection, a proxy, " +
+                "or antivirus web filtering. Or download the file in a browser and save it as " +
+                "$Destination, then run setup again; it is checked by SHA-256 before use.")
         }
         $actual = (Get-FileHash -LiteralPath $partial -Algorithm SHA256).Hash
         if ($actual -ne $Sha256) {
@@ -89,6 +121,7 @@ function Invoke-PinyonDownload {
     }
     finally {
         if (Test-Path -LiteralPath $partial) { Remove-Item -LiteralPath $partial -Force }
+        if (Test-Path -LiteralPath $curlLog) { Remove-Item -LiteralPath $curlLog -Force }
     }
 }
 
