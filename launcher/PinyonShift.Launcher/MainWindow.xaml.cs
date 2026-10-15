@@ -60,6 +60,23 @@ public partial class MainWindow : Window
     private static readonly Brush CompleteBrush = new SolidColorBrush(Color.FromRgb(92, 208, 138));
     private static readonly Brush FailedBrush = new SolidColorBrush(Color.FromRgb(225, 110, 95));
 
+    // At 300 % scaling on a 4K screen the work area is about 1280 x 680 DIPs,
+    // smaller than the designed size and minimum: the window went off screen
+    // and could not be resized (#594). Keep both within the screen; the body
+    // scrolls when it no longer fits.
+    private void FitToWorkArea()
+    {
+        var area = SystemParameters.WorkArea;
+        if (area.Width <= 0 || area.Height <= 0) return;
+        MinWidth = Math.Min(MinWidth, area.Width);
+        MinHeight = Math.Min(MinHeight, area.Height);
+        if (WindowState != WindowState.Normal) return;
+        Width = Math.Min(Width, area.Width);
+        Height = Math.Min(Height, area.Height);
+        Left = Math.Max(area.Left, Math.Min(Left, area.Right - Width));
+        Top = Math.Max(area.Top, Math.Min(Top, area.Bottom - Height));
+    }
+
     public MainWindow()
     {
         InitializeComponent();
@@ -74,6 +91,8 @@ public partial class MainWindow : Window
         }
         VersionRun.Text = $"Pinyon Shift {typeof(MainWindow).Assembly.GetName().Version?.ToString(3) ?? "dev"}";
         Loaded += MainWindow_Loaded;
+        SourceInitialized += (_, _) => FitToWorkArea();
+        DpiChanged += (_, _) => FitToWorkArea();
         StateChanged += (_, _) =>
         {
             // A maximized borderless window reaches past the screen edge by the

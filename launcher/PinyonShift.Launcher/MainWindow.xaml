@@ -76,7 +76,12 @@
 
             <!-- Body: the state in one headline, one line of detail, the action,
                  and a panel when there is something to do here. -->
-            <StackPanel Grid.Row="1" VerticalAlignment="Center" Margin="56,0,56,36">
+            <!-- Scrolls when the window is shorter than the body, as at 300 % scaling
+                 on a 4K TV (#594); centred otherwise. -->
+            <ScrollViewer x:Name="BodyScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled" Focusable="False">
+            <Grid MinHeight="{Binding ViewportHeight, ElementName=BodyScroll}">
+            <StackPanel VerticalAlignment="Center" Margin="56,0,56,36">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
@@ -514,6 +519,8 @@
                 </Border>
             </Grid>
             </StackPanel>
+            </Grid>
+            </ScrollViewer>
 
             <!-- Footer. -->
             <DockPanel Grid.Row="2" Margin="46,0,46,0" LastChildFill="False">
