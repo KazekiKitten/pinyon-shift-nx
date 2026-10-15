@@ -116,9 +116,13 @@ both.
 
 ## DLC, the title update and saves
 
-These work as they do on Windows. Each command prints one JSON object with
-`--json`, which is what the launcher reads. Run them from the install's
-source folder while the game is closed:
+These work as they do on Windows. The launcher's **DLC and v4**,
+**Settings** and **Import a save** panels do all of this, with the same
+wording and checks as the Windows launcher, and Play builds and starts v4
+when it is on (the XE mod wins over v4, as on Windows). Underneath, each
+command prints one JSON object with `--json`, which is what the launcher
+reads. To run them yourself, use the install's source folder while the game
+is closed:
 
 - **DLC.** `python3 tools/pinyon.py dlc import <package, folder or ZIP>`,
   then `dlc enable <package id>`. Enabling the Rally Expansion Pack prepares
@@ -146,6 +150,17 @@ source folder while the game is closed:
   game preset. It warns when the only Vulkan device is a software renderer
   (llvmpipe), which means the GPU driver is missing.
 
+The launcher's **Android** panel builds the Android app (`android build`,
+the v4 app when v4 is on). Off Windows it needs the Android SDK's
+command-line tools and a JDK 17 that you install (Android Studio, or
+`ANDROID_HOME` and `JAVA_HOME` set); the launcher then adds the NDK and
+build tools with `sdkmanager`. Only the Windows launcher downloads the SDK
+and Java itself. **Share on Wi-Fi** shows a QR code and a pairing
+code: the device installs the app and copies the game files, DLC, Rally
+data, the v4 update and your mods from this computer. It listens on TCP
+47615 and UDP 47616, so allow those on the local network if a firewall is
+on. **Install over USB** uses `adb` for a device with USB debugging.
+
 ## Where things live
 
 ```text
@@ -156,7 +171,10 @@ source folder while the game is closed:
 ```
 
 `PINYON_SHIFT_INSTALL_ROOT` moves the install elsewhere, for example to a
-microSD card under `/run/media/`.
+microSD card under `/run/media/`. In the launcher, **Change** on the setup
+screen picks the folder and remembers it. An empty `portable.txt` beside
+`PinyonShiftLauncher` makes a portable install: everything, temporary files
+included, stays in the `data` folder next to it.
 
 ## Troubleshooting
 
