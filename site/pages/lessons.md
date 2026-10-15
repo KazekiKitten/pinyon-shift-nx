@@ -54,7 +54,7 @@ The largest instruction class in the hottest generated functions was not game wo
 ARM found bugs x86 hid:
 
 - **Memory ordering.** x86 is strongly ordered, so dropping the guest's barriers was harmless there. On AArch64 they had to be emitted as fences.
-- **Page size.** 16 KB pages broke the `0xE0000000` view offset and the write-watch protection, which assumed one guest page per host page.
+- **Page size.** 16 KB pages broke the `0xE0000000` view offset and the write-watch protection, which assumed one guest page per host page. The offset stays on Apple silicon, so every hand-written import that turns a guest address into a host pointer must go through the translation, not `base + address`: when the critical-section entry hooks added the address directly while the leave path translated it, a lock in physical memory was entered and left at different host addresses and the game hung at boot on the Mac only. Bisecting dev commits on the Mac found it in one afternoon.
 - **Drivers.** Each mobile driver needed its own workaround, and frame replay on two devices was the fastest way to bisect them.
 - **One variable, two copies.** A mutable `static inline` member defined in a header is a weak symbol in every shared library that uses it. Android's linker resolves each library within its own group, so the generated code (`libmain.so`) and the runtime (`librexruntime.so`) each had a copy of the global lock's switches, and a setting the runtime changed never reached the generated code. An in-run A/B that toggled such a switch measured nothing; `llvm-nm -D --defined-only` listing `V` symbols in both libraries shows the problem. Define mutable state once in a source file.
 

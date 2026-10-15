@@ -210,7 +210,7 @@ link = "dlc.md"
 cells = [
   "yes",
   "partly: in the launcher; not played with DLC on Linux yet",
-  "partly: in the launcher; imported on a Mac, not played with DLC yet",
+  "partly: in the launcher; on a Mac the DLC cars load and drive in a scripted route",
   "partly: imported on the PC, copied with the game",
 ]
 
@@ -220,7 +220,7 @@ link = "dlc.md#title-update-v4"
 cells = [
   "yes",
   "partly: in the launcher; the v4 build compiles, not played yet ([Linux backlog](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/LINUX_PORT_BACKLOG.md))",
-  "not yet: in the launcher, but no v4 build has run on a Mac",
+  "partly: in the launcher; 1000 Club and the Rally entry reached in scripted routes",
   "partly: built on the PC",
 ]
 
