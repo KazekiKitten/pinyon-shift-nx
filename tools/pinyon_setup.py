@@ -736,6 +736,25 @@ def discard_unfinished_configure(directory: Path) -> None:
         shutil.rmtree(directory / "CMakeFiles", ignore_errors=True)
 
 
+def run_game_build(command: list, log: Path, progress: Progress, start: float, message: str,
+                   environment: dict, directory: Path, generated: Path) -> None:
+    """The game build. Its dependency-tracked translation step can rewrite a
+    tree's sources.cmake partway through, as when a ShiftGlue update adds a
+    generated file (pinyon_shift_folds.cpp). The graph Ninja started with
+    then misses that file and the link fails; one more build reconfigures
+    from the new lists and finishes. Any other failure stands."""
+    ninja = directory / "build.ninja"
+    configured = ninja.stat().st_mtime if ninja.is_file() else 0.0
+    try:
+        run_logged(command, log, progress, "build", start, 100, message, environment)
+    except SetupError:
+        lists = [generated / tree / "sources.cmake" for tree in ("default", "speech", "xmedia")]
+        if not any(path.is_file() and path.stat().st_mtime > configured for path in lists):
+            raise
+        run_logged(command, log.with_name(log.stem + "-retry" + log.suffix), progress, "build",
+                   start, 100, message, environment)
+
+
 def build(progress: Progress, tools: dict, sdk: Path, python: Path, name: str,
           jobs: int, configuration: str = "Release") -> Path:
     presets = PRESETS[name]
@@ -790,10 +809,10 @@ def build(progress: Progress, tools: dict, sdk: Path, python: Path, name: str,
                 "-DREXGLUE_ENABLE_TRACY=OFF", "-DSDL_HIDAPI_LIBUSB=OFF"] + flags,
                LOGS / "preview-configure.log", progress, "build", 28, 30,
                "Configuring the game", environment)
-    run_logged([cmake, "--build", "--preset", preset, "--parallel", str(jobs)],
-               LOGS / "preview-build.log", progress, "build", 30, 100,
-               "Building the game", environment)
     directory = ROOT / "out" / "build" / preset
+    run_game_build([cmake, "--build", "--preset", preset, "--parallel", str(jobs)],
+                   LOGS / "preview-build.log", progress, 30, "Building the game", environment,
+                   directory, generated)
     executable = directory / "pinyon_shift"
     if not executable.is_file():
         raise SetupError(f"the build finished without {executable}", "build")
@@ -843,6 +862,8 @@ def write_provenance(directory: Path, executable: Path, sdk: Path, configuration
 
 V4_MODULES = ("default", "SpeechFacade_default", "XMediaFacade_default")
 V4_TREES = ("default", "speech", "xmedia")
+V4_BUILD_TARGETS = ("pinyon_shift", "pinyon_shift_fh1_archive_extract",
+                    "pinyon_shift_stage_rexruntime")
 
 
 def shiftglue_root(config: dict) -> Path:
@@ -922,13 +943,19 @@ def build_v4(progress: Progress, tools: dict, sdk: Path, python: Path, name: str
                 "-DREXGLUE_ENABLE_TRACY=OFF", "-DSDL_HIDAPI_LIBUSB=OFF"] + flags,
                LOGS / "v4-configure.log", progress, "build", 10, 12, "Configuring the v4 build",
                environment)
-    run_logged([cmake, "--build", str(directory), "--parallel", str(jobs), "--target",
-                "pinyon_shift", "pinyon_shift_fh1_archive_extract"],
-               LOGS / "v4-build.log", progress, "build", 12, 100, "Building the v4 executable",
-               environment)
+    # The staging target copies librexruntime beside the game. Building only
+    # pinyon_shift skips it (it is an ALL target), and off Windows nothing
+    # else copies the library, so the v4 game would not start.
+    run_game_build([cmake, "--build", str(directory), "--parallel", str(jobs), "--target",
+                    *V4_BUILD_TARGETS],
+                   LOGS / "v4-build.log", progress, 12, "Building the v4 executable",
+                   environment, directory, generated)
     executable = directory / "pinyon_shift"
     if not executable.is_file():
         raise SetupError(f"the v4 build finished without {executable}", "build")
+    runtime = directory / ("librexruntime.dylib" if sys.platform == "darwin" else "librexruntime.so")
+    if not runtime.is_file():
+        raise SetupError(f"the v4 build finished without {runtime}", "build")
     if log.is_file():
         check = subprocess.run([str(python), str(ROOT / "tools" / "verify-codegen-log.py"),
                                 str(log), "--allowlist",
