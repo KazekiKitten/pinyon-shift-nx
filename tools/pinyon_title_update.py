@@ -114,6 +114,11 @@ def profile_status(state: Path) -> dict:
     return _module("title_update_profile", "title-update-profile.py").status(state)
 
 
+def base_build_refusal(state: Path) -> str | None:
+    """A message when the profile the base build would load is a v4 save."""
+    return _module("title_update_profile", "title-update-profile.py").base_build_refusal(state)
+
+
 def status(state: Path) -> dict:
     build = v4_build()
     saved = read_choice(state)

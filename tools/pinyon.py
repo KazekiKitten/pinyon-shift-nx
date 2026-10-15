@@ -276,6 +276,8 @@ def launch(args: argparse.Namespace) -> dict:
     arguments = list(args.game_arguments)
     if v4:
         arguments += prepare_title_update(args, state, game, build)
+    elif not args.render_test_script and (refusal := pinyon_title_update.base_build_refusal(state)):
+        raise LaunchError(refusal, "v4-save")
     prepare_state(state)
     if not args.skip_shader_preparation and not args.render_test_script:
         prepare_shaders(state, game, build, args.json)

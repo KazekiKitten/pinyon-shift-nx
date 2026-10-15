@@ -123,8 +123,14 @@ def import_xenia(state: Path, source: Path, xuid: str | None) -> dict:
                         "it was left unchanged.")
     copy_into_place(title, destination)
     backup = select_xuid(state, xuid)
-    return {"xuid": xuid, "save": str(destination), "config_backup": backup,
-            "previous_save_kept": True}
+    result = {"xuid": xuid, "save": str(destination), "config_backup": backup,
+              "previous_save_kept": True}
+    # A save from Xenia running title update v4 needs the v4 build (#555).
+    import pinyon_title_update
+    if (refusal := pinyon_title_update.base_build_refusal(state)):
+        result["title_update"] = "v4"
+        result["note"] = refusal.replace(" and play again.", " to play it.")
+    return result
 
 
 def default_profile(state: Path) -> dict:

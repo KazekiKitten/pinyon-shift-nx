@@ -36,6 +36,8 @@ public partial class MainWindow
             if (result.String("previous_save_kept") is { Length: > 0 } kept) lines.Add($"The previous save is kept in {kept}.");
             if (result.String("config_backup") is { Length: > 0 } config)
                 lines.Add($"The game now loads profile {result.String("xuid")}; the settings file before that is in {config}.");
+            // A v4 save from Xenia needs the v4 build (#555).
+            if (result.String("note") is { Length: > 0 } note) lines.Add(note);
             SavesStatusText.Text = string.Join(" ", lines);
             AppendLog($"Save import: {SavesStatusText.Text}");
         }

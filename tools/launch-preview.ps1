@@ -92,6 +92,13 @@ if ($TitleUpdateV4) {
         }
     }
 }
+if (-not $TitleUpdateV4 -and -not $RenderTestScript) {
+    # A v4 save (from Xenia, or an earlier v4 start) makes the base game ask
+    # for an update from Xbox Live (#555); say what to do instead.
+    $check = & (Get-PinyonPython) (Join-Path $PSScriptRoot 'title-update-profile.py') check-base `
+        --state-root $resolvedStateRoot
+    if ($LASTEXITCODE -eq 3) { throw (($check | Select-Object -Last 1) | ConvertFrom-Json).refusal }
+}
 if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
     throw 'The preview has not been built. Run tools/setup-preview.ps1 first.'
 }

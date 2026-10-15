@@ -142,6 +142,8 @@ Saves are in the install's state folder, `%LOCALAPPDATA%\PinyonShift\source\<ver
 
 The previous Pinyon Shift save is kept; `-Restore` switches back to it.
 
+A save from Xenia running title update v4 needs the [v4 build](dlc.md#title-update-v4): the base build can't load it, and the game would ask for an update from Xbox Live. The import says so, and so does **Play** while the base build is chosen.
+
 ## Trainer
 
 Turn cheats on in **SETTINGS > CHEATS** and restart. The game then plays a separate copy of your profile (`user-modded` in the state folder), so cheated progress never reaches your own save. <kbd>F10</kbd> opens the trainer:

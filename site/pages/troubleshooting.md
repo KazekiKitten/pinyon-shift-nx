@@ -66,6 +66,10 @@ The Xbox menus don't use pointer targeting. Use A, <kbd>Space</kbd> or a left cl
 
 Xenia saves are signed with the Xenia profile's XUID. Import them with `tools/import-xenia-save.ps1` instead of copying; see [Saves](playing.md#saves).
 
+## A Xenia save says the title update is too low
+
+The save was made with title update v4, which the base build can't load. Import your own title update v4 in the launcher's DLC panel (**Import update**), turn on **Use v4**, and play again. The launcher stops before starting the base build with such a save and says the same. See [Title update v4](dlc.md#title-update-v4).
+
 ## The game crashes
 
 Leave the launcher open while playing. After a crash it prepares a sanitized ZIP under `.local/preview/reports`, selects it in Explorer and opens a prefilled GitHub issue. Attach the ZIP and describe what you did last. Reports never include the game, your saves or local paths.

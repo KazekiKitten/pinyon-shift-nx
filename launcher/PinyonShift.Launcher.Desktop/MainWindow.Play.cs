@@ -187,6 +187,9 @@ public partial class MainWindow
             case "build-failed":
                 ShowFailure("The v4 build stopped", error + " Logs has the details.");
                 break;
+            case "v4-save":
+                ShowFailure("This save needs title update v4", error);
+                break;
             case "profile-backup-failed":
                 ShowFailure("Your profile could not be backed up",
                     error + " v4 did not start, so your save is unchanged.");
