@@ -331,6 +331,17 @@ catch { [Console]::Error.Write($_.Exception.Message); exit 2 }
         self.assertIn("ConvertTo-PinyonCommandPath", common)
         self.assertIn("$inheritedPath = $env:PATH", common)
 
+    def test_pinned_git_trusts_the_checkout_whoever_owns_it(self):
+        # A checkout on a drive owned by another account failed setup with
+        # "detected dubious ownership" (#599).
+        common = (ROOT / "tools/release-common.ps1").read_text(encoding="utf-8")
+        get_git = common.split("function Get-PinyonGit", 1)[1][:600]
+        self.assertIn("Set-PinyonGitSafeDirectory -Root $root", get_git)
+        trust = common.split("function Set-PinyonGitSafeDirectory", 1)[1]
+        self.assertIn("'safe.directory'", trust)
+        self.assertIn('"$trusted/*"', trust)
+        self.assertIn("GIT_CONFIG_COUNT", trust)
+
     def test_powershell_is_started_by_full_path(self):
         # A PATH without the WindowsPowerShell folder failed setup with "The
         # specified file cannot be found" (#317).

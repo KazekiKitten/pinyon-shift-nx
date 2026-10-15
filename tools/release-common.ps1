@@ -764,6 +764,32 @@ function Reset-PinyonRelocatedCMakeCache {
     return $true
 }
 
+function Set-PinyonGitSafeDirectory {
+    param([Parameter(Mandatory)] [string]$Root)
+
+    # Git refuses repositories owned by another account ("detected dubious
+    # ownership", #599), which happens on drives formatted on another PC or
+    # copied as administrator. The checkout and its nested SDK repositories
+    # are the player's own files, so trust them for this process and every
+    # git it starts, without touching the player's global Git config.
+    $trusted = $Root.Replace('\', '/').TrimEnd('/')
+    $count = 0
+    $existing = [Environment]::GetEnvironmentVariable('GIT_CONFIG_COUNT')
+    if ($existing -match '^\d+$') { $count = [int]$existing }
+    for ($index = 0; $index -lt $count; $index++) {
+        if ([Environment]::GetEnvironmentVariable("GIT_CONFIG_KEY_$index") -eq 'safe.directory' -and
+            [Environment]::GetEnvironmentVariable("GIT_CONFIG_VALUE_$index") -eq "$trusted/*") {
+            return
+        }
+    }
+    foreach ($value in @($trusted, "$trusted/*")) {
+        [Environment]::SetEnvironmentVariable("GIT_CONFIG_KEY_$count", 'safe.directory')
+        [Environment]::SetEnvironmentVariable("GIT_CONFIG_VALUE_$count", $value)
+        $count++
+    }
+    [Environment]::SetEnvironmentVariable('GIT_CONFIG_COUNT', [string]$count)
+}
+
 function Get-PinyonGit {
     $root = Get-PinyonRepoRoot
     $config = Get-PinyonReleaseToolchain
@@ -771,6 +797,7 @@ function Get-PinyonGit {
     if (-not (Test-Path -LiteralPath $candidate -PathType Leaf)) {
         throw 'Git is not available. Run provision-toolchain.ps1 first.'
     }
+    Set-PinyonGitSafeDirectory -Root $root
     $candidate
 }
 
