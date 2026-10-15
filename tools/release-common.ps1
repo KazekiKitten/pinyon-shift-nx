@@ -92,6 +92,37 @@ function Invoke-PinyonDownload {
     }
 }
 
+function Expand-PinyonZip {
+    param(
+        [Parameter(Mandatory)] [string]$Archive,
+        [Parameter(Mandatory)] [string]$Destination
+    )
+    # .NET's extractor rather than Expand-Archive: Windows PowerShell 5.1's
+    # Expand-Archive stopped partway through the Android command-line tools
+    # with "cannot find path ...\cmdline-tools\bin\" (#574).
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [void](New-Item -ItemType Directory -Force -Path $Destination)
+    $zip = [IO.Compression.ZipFile]::OpenRead([IO.Path]::GetFullPath($Archive))
+    try {
+        $root = [IO.Path]::GetFullPath($Destination).TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
+        foreach ($entry in $zip.Entries) {
+            $target = [IO.Path]::GetFullPath((Join-Path $root $entry.FullName))
+            if (-not $target.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)) {
+                throw "The archive entry $($entry.FullName) is outside the destination."
+            }
+            if ($entry.FullName.EndsWith('/') -or $entry.FullName.EndsWith('\')) {
+                [void](New-Item -ItemType Directory -Force -Path $target)
+                continue
+            }
+            [void](New-Item -ItemType Directory -Force -Path (Split-Path $target -Parent))
+            [IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $target, $true)
+        }
+    }
+    finally {
+        $zip.Dispose()
+    }
+}
+
 function Expand-PinyonTarXz {
     param(
         [Parameter(Mandatory)] [string]$Archive,

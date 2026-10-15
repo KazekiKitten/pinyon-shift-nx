@@ -145,7 +145,12 @@ class Tools:
         self.d8 = self.build_tools / _script("d8")
         self.zipalign = self.build_tools / _exe("zipalign")
         self.apksigner = self.build_tools / _script("apksigner")
-        self.sdkmanager = self.sdk / "cmdline-tools" / "latest" / "bin" / _script("sdkmanager")
+        # The pinned command-line tools when build-android.ps1 unpacked them:
+        # newer ones replace sdkmanager with a shim that split "ndk;<version>"
+        # into two unknown packages (#567).
+        pinned = LOCAL_SDK / "cmdline-tools" / "latest" / "bin" / _script("sdkmanager")
+        self.sdkmanager = pinned if pinned.is_file() else \
+            self.sdk / "cmdline-tools" / "latest" / "bin" / _script("sdkmanager")
         self.java_home = java_home()
         java_bin = self.java_home / "bin" if self.java_home else None
         self.javac = self._find(java_bin, "javac")
