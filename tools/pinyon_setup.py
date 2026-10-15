@@ -631,7 +631,9 @@ def prepare_shiftglue(progress: Progress, config: dict) -> Path:
     head = subprocess.run(["git", "-C", str(sdk), "rev-parse", "HEAD"],
                           capture_output=True, text=True)
     if head.returncode == 0 and head.stdout.strip() == rexglue["revision"]:
-        git("submodule", "update", "--init", "--recursive", "--jobs", "8", cwd=sdk)
+        # --force restores a dependency that lost its files while its commit
+        # still matches, which a plain update skips (#580).
+        git("submodule", "update", "--init", "--recursive", "--force", "--jobs", "8", cwd=sdk)
         return sdk
     if sdk.exists():
         shutil.rmtree(sdk)

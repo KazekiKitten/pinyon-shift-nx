@@ -131,9 +131,13 @@ else {
     }
     & $git -C $sdkRoot submodule sync --recursive
     if ($LASTEXITCODE -ne 0) { throw 'Unable to synchronize ShiftGlue dependency URLs.' }
+    # --force checks every dependency out again even when its commit already
+    # matches: an interrupted first setup (or a scanner) left o1heap's files
+    # missing, update skipped it, and CMake could not find o1heap.c (#580).
+    # Nothing here is edited by hand; local changes were refused above.
     Invoke-PinyonGitWithRetry -Activity 'Downloading ShiftGlue dependencies' -Arguments @(
         '-c', 'http.version=HTTP/1.1', '-C', $sdkRoot,
-        'submodule', 'update', '--init', '--recursive', '--jobs', '8'
+        'submodule', 'update', '--init', '--recursive', '--force', '--jobs', '8'
     )
 }
 
