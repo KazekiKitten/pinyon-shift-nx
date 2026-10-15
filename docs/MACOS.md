@@ -81,5 +81,9 @@ delete the app and `~/Library/Application Support/PinyonShift`.
 | Mac mini, M4 Pro, macOS 26 | Release app to a built game in 18 minutes, installed on an external drive; free roam route passes |
 | Other Apple silicon Macs | Not tested yet |
 
-DLC import, the title update build and crash bundles are not available on
-macOS yet.
+DLC, the title update, saves from another PC or from Xenia, crash reports
+and the hardware check use the same commands as on Linux; see
+[DLC, the title update and saves](LINUX.md#dlc-the-title-update-and-saves).
+DLC import and the hardware check (through the MoltenVK the build ships)
+were checked on the Mac mini. The v4 build (`macos-arm64-v4`) has not been
+built on a Mac yet.

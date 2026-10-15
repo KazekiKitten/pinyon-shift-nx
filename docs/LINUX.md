@@ -114,6 +114,38 @@ both.
   `linux-amd64-release` build with a note; `--build-directory` picks any
   other.
 
+## DLC, the title update and saves
+
+These work as they do on Windows. Each command prints one JSON object with
+`--json`, which is what the launcher reads. Run them from the install's
+source folder while the game is closed:
+
+- **DLC.** `python3 tools/pinyon.py dlc import <package, folder or ZIP>`,
+  then `dlc enable <package id>`. Enabling the Rally Expansion Pack prepares
+  its assets. `dlc status` lists the packages.
+- **Title update v4.** `title-update import <package, folder or ZIP>`
+  verifies the update against your disc and installs it. `title-update
+  enable` makes Play start v4, and `club-on` turns on the offline 1000 Club.
+  The first v4 start builds `out/build/linux-amd64-v4` from your disc and
+  update, for the same CPU baseline as the base build, and backs up your
+  profile first: a profile saved by v4 cannot go back to the base game.
+  `title-update restore` puts the pre-v4 backup back.
+- **A save from another PC.** `import-save <folder or ZIP>` takes another
+  install's `.local/preview` folder (from Windows,
+  `%LOCALAPPDATA%\PinyonShift\source\<version>\.local\preview`) and copies
+  its profiles here. It backs up your current ones to
+  `.local/preview/backups/before-import-<time>` first. A save from Xenia is
+  `import-save --xenia <content/XUID/4D5309C9 folder>`.
+- **Crash reports.** After a crash, `launch` writes a ZIP to
+  `.local/preview/reports` and prefills a GitHub issue link. Paths and your
+  user name are removed, and no game files, saves or memory dumps go in.
+- **Shader preparation.** Before the first start, Play runs the opening once,
+  hidden, so the first race does not stutter while Vulkan builds pipelines.
+  It runs once per build. If it fails, the game still plays.
+- **Hardware check.** `hardware --json` names the Vulkan GPU and suggests a
+  game preset. It warns when the only Vulkan device is a software renderer
+  (llvmpipe), which means the GPU driver is missing.
+
 ## Where things live
 
 ```text
@@ -152,5 +184,5 @@ microSD card under `/run/media/`.
 | Arch Linux (container, libxml2 2.15) | The pinned toolchain configures and links with setup's `ld.lld` wrapper (#472); a full build not run |
 | Other distributions, NVIDIA, Intel | Not tested yet |
 
-Work still open, such as DLC import and the title update build on Linux, is
-tracked in the [Linux and Steam Deck backlog](LINUX_PORT_BACKLOG.md).
+Work still open is tracked in the
+[Linux and Steam Deck backlog](LINUX_PORT_BACKLOG.md).

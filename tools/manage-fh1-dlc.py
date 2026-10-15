@@ -218,6 +218,11 @@ def mutation_lock(state: Path):
                     creationflags=subprocess.CREATE_NO_WINDOW)
                 if b'"pinyon_shift.exe"' in running.lower():
                     raise ValueError("close the game before changing DLC")
+            elif shutil.which("pgrep") and not os.environ.get("PINYON_SHIFT_TEST_ALLOW_RUNNING_GAME"):
+                # Linux and macOS: the game reads the content tree while it runs.
+                if subprocess.call(["pgrep", "-x", "pinyon_shift"], stdout=subprocess.DEVNULL,
+                                   stderr=subprocess.DEVNULL) == 0:
+                    raise ValueError("close the game before changing DLC")
             yield
         finally:
             if os.name == "nt":
