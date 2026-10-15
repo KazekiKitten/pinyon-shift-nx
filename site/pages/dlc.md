@@ -21,6 +21,11 @@ DLC comes from your own Xbox 360 packages. The launcher (on Windows, Linux and m
 
 Import every copy of a package you own: verified variants of the same package combine their licences. The full November pack, for example, needs its full-licence copy.
 
+## What to import
+
+- The original package files: no file extension, beginning with `LIVE`, `CON` or `PIRS`. A folder or ZIP holding them works too. ZIPs that can't be read (Deflate64, which Windows uses for large ZIPs, or encrypted ones) are skipped and named; extract them first.
+- DLC already installed in Xenia: choose Xenia's content folder for the game, `4D5309C9`, which holds `00000002` and `Headers` (on Windows usually `Documents\Xenia\content\<profile>\4D5309C9`, or `content\0000000000000000\4D5309C9` in older builds). Each unpacked package is verified by its files and by the licence in its header; Xenia's copy isn't changed. A package folder without its `Headers` entry can't be verified: import the original package instead.
+
 ## Title update v4
 
 The base disc build is the default. The optional v4 build applies title update v4 to the USA disc and runs the original Rally and 1000 Club code. It's built from your disc and your own copy of the update, which is verified page by page before it's installed.
