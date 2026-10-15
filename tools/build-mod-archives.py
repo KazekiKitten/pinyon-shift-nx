@@ -493,7 +493,7 @@ def build(state: Path, game_root: Path, extractor: Path | None = None) -> dict:
     target = state / "mods" / GENERATED
     if not archives:
         if target.exists():
-            shutil.rmtree(target)
+            patches.remove_written_directory(target)
         patches.set_enabled_mods(config, mods)
         return {"patched": False, "mods": mods}
     # A mod that replaces whole archives or the manifest (a total conversion
@@ -501,7 +501,7 @@ def build(state: Path, game_root: Path, extractor: Path | None = None) -> dict:
     manifest = patches.effective_game_file(state, mods, game_root, MANIFEST.as_posix())         .read_bytes().decode("utf-8-sig")
     staging = state / "mods" / (GENERATED + ".building")
     if staging.exists():
-        shutil.rmtree(staging)
+        patches.remove_written_directory(staging)
     results = []
     for archive, members in sorted(archives.items()):
         disc = find_case_insensitive(game_root, archive)
@@ -572,9 +572,7 @@ def build(state: Path, game_root: Path, extractor: Path | None = None) -> dict:
         f'name = "{GENERATED}"\nversion = "1"\nabi = 1\n'
         + ("shares_save = true\n" if shares else ""), encoding="utf-8", newline="\n")
     (staging / "archives.json").write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
-    if target.exists():
-        shutil.rmtree(target)
-    patches.rename_written_directory(staging, target)
+    patches.replace_written_directory(staging, target)
     patches.set_enabled_mods(config, [GENERATED] + mods)
     return {"patched": True, "archives": results}
 

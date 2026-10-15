@@ -6,6 +6,7 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest import mock
 
 
 MODULE_PATH = Path(__file__).parents[1] / "build-mod-archives.py"
@@ -86,6 +87,31 @@ class BuildModArchivesTests(unittest.TestCase):
             # The player's archive is untouched.
             with zipfile.ZipFile(game / "media" / "StringTables" / "EN.zip") as zipped:
                 self.assertEqual(b"pause menu", zipped.read("PauseMenu.str"))
+
+    def test_rebuilding_unchanged_mods_keeps_files_the_game_holds_open(self):
+        # A relaunch with the same mods failed with "access denied" deleting
+        # the old camera.zip while a game process still had it open (#616).
+        with tempfile.TemporaryDirectory() as directory:
+            game, state = self.make(Path(directory))
+            MODULE.build(state, game)
+            rebuilt = (state / "mods" / MODULE.GENERATED / "game" / "media" / "StringTables"
+                       / "EN.zip")
+            with rebuilt.open("rb"):
+                self.assertTrue(MODULE.build(state, game)["patched"])
+            self.assertFalse((state / "mods" / (MODULE.GENERATED + ".building")).exists())
+
+    @unittest.skipUnless(sys.platform == "win32", "Windows refuses to delete open files")
+    def test_a_changed_archive_still_open_names_the_file_and_the_fix(self):
+        with tempfile.TemporaryDirectory() as directory:
+            game, state = self.make(Path(directory))
+            MODULE.build(state, game)
+            rebuilt = (state / "mods" / MODULE.GENERATED / "game" / "media" / "StringTables"
+                       / "EN.zip")
+            (state / "mods" / "first" / "members" / "media" / "StringTables" / "EN.zip"
+             / "PauseMenu.str").write_bytes(b"CHANGED")
+            with rebuilt.open("rb"), mock.patch("time.sleep"):
+                with self.assertRaisesRegex(PermissionError, "EN.zip is in use by another program"):
+                    MODULE.build(state, game)
 
     def test_patches_the_manifest_and_archive_a_mod_replaces(self):
         # A total conversion (the XE mod) ships its own zipmanifest.xml, with
