@@ -453,6 +453,23 @@ class ShaderPreparationTests(unittest.TestCase):
         self.assertEqual(existing.read_bytes(), b"player's")
         self.assertTrue((self.state / "cache/shaders/shareable/a.vk.xpso").is_file())
 
+    def test_the_route_state_carries_the_title_update_for_v4(self):
+        update = self.state / "title-update-v4"
+        update.mkdir(parents=True)
+        (update / "default.xexp").write_bytes(b"patch")
+        seen = []
+
+        def route(command, **_):
+            route_state = Path(command[command.index("--state-root") + 1])
+            seen.append((route_state / "title-update-v4/default.xexp").read_bytes())
+            return subprocess.CompletedProcess(command, 0, stdout='{"result":"normal-exit"}\n',
+                                               stderr="")
+
+        with mock.patch.object(common, "ROOT", self.root), \
+                mock.patch.object(subprocess, "run", side_effect=route):
+            pinyon_shaders.prepare(self.state, self.root, self.build, True)
+        self.assertEqual(seen, [b"patch"])
+
 
 if __name__ == "__main__":
     unittest.main()

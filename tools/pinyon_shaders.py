@@ -131,6 +131,13 @@ def prepare(state: Path, game: Path, build: Path, as_json: bool) -> dict:
         config = state / "config" / "pinyon_shift.toml"
         if config.is_file():
             shutil.copyfile(config, route_state / "config" / "pinyon_shift.toml")
+        # The v4 build loads the player's title update from the state it
+        # runs in. Without it the v4 executable starts the base disc's code,
+        # finds none of its functions and quits at once, so v4 would never
+        # be prepared. The base build never mounts this folder.
+        update = state / "title-update-v4"
+        if update.is_dir():
+            shutil.copytree(update, route_state / "title-update-v4")
 
         def skip(reason: str) -> dict:
             message = (f"Vulkan shader preparation was skipped: {reason} The first race may "
