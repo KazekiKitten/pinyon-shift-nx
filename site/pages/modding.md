@@ -108,6 +108,8 @@ Pinyon Shift never downloads XE itself: ModDB doesn't allow automated downloads,
 
 The archives are checked against ModDB's sizes and MD5s, and only the files that differ from your game are kept (2.4 GB; 7 GB free is needed while installing). XE runs on the base disc build, hides Horizon Rally and plays its own new save in `<state>/user-xe`, as its readme asks. Your own save isn't touched. `xe disable` turns it off and `xe remove` deletes its files but keeps its save.
 
+The archives are extracted with [7-Zip](https://www.7-zip.org) when it is installed, otherwise with the system `tar`. Some Windows `tar.exe` builds can't read XE's LZMA archives; the install then stops before extracting and asks you to install 7-Zip and choose **Install XE** again.
+
 ## Native mods
 
 A native mod is a DLL built against [`include/pinyon_mod.h`](https://github.com/arcanite24/pinyon-shift/blob/dev/include/pinyon_mod.h). It exports two functions:
