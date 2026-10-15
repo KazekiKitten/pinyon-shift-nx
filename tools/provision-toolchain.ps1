@@ -122,7 +122,7 @@ if (-not (Test-Path -LiteralPath $gitExe -PathType Leaf)) {
     $archive = Join-Path $downloads "mingit-$($config.git.version).zip"
     Invoke-PinyonDownload -Uri $config.git.url -Destination $archive -Sha256 $config.git.sha256
     [void](New-Item -ItemType Directory -Force -Path $gitRoot)
-    Expand-Archive -LiteralPath $archive -DestinationPath $gitRoot -Force
+    Expand-PinyonZip -Archive $archive -Destination $gitRoot
 }
 
 Write-PinyonEvent tools 26 'Preparing the pinned LLVM compiler.' -JsonEvents:$JsonEvents
@@ -133,7 +133,7 @@ if (-not (Test-Path -LiteralPath $xzExe -PathType Leaf)) {
     Invoke-PinyonDownload -Uri $config.xz.url -Destination $archive -Sha256 $config.xz.sha256
     if (Test-Path -LiteralPath $xzRoot) { Remove-Item -LiteralPath $xzRoot -Recurse -Force }
     [void](New-Item -ItemType Directory -Force -Path $xzRoot)
-    Expand-Archive -LiteralPath $archive -DestinationPath $xzRoot -Force
+    Expand-PinyonZip -Archive $archive -Destination $xzRoot
 }
 
 $llvmRoot = [IO.Path]::GetFullPath((Join-Path $root $config.llvm.install_path))
@@ -160,7 +160,7 @@ if (-not (Test-Path -LiteralPath $extractExe -PathType Leaf)) {
     Invoke-PinyonDownload -Uri $config.extract_xiso.url -Destination $archive `
         -Sha256 $config.extract_xiso.sha256
     [void](New-Item -ItemType Directory -Force -Path $extractRoot)
-    Expand-Archive -LiteralPath $archive -DestinationPath $extractRoot -Force
+    Expand-PinyonZip -Archive $archive -Destination $extractRoot
 }
 
 Write-PinyonEvent tools 30 'Preparing the local shader tooling runtime.' -JsonEvents:$JsonEvents
@@ -176,7 +176,7 @@ if (-not $pythonReady) {
     $archive = Join-Path $downloads "python-$($config.python.version)-embed-amd64.zip"
     Invoke-PinyonDownload -Uri $config.python.url -Destination $archive -Sha256 $config.python.sha256
     [void](New-Item -ItemType Directory -Force -Path $pythonRoot)
-    Expand-Archive -LiteralPath $archive -DestinationPath $pythonRoot -Force
+    Expand-PinyonZip -Archive $archive -Destination $pythonRoot
 }
 & $pythonExe -I -c $pythonCheck
 if ($LASTEXITCODE -ne 0) { throw 'The local Python runtime failed its shader tooling check.' }
@@ -186,7 +186,7 @@ $cmakeRoot = Resolve-PinyonLocalPath -RelativePath $config.cmake.install_path
 if (-not (Test-Path -LiteralPath (Join-Path $cmakeRoot $config.cmake.executable) -PathType Leaf)) {
     $archive = Join-Path $downloads "cmake-$($config.cmake.version).zip"
     Invoke-PinyonDownload -Uri $config.cmake.url -Destination $archive -Sha256 $config.cmake.sha256
-    Expand-Archive -LiteralPath $archive -DestinationPath (Split-Path $cmakeRoot -Parent) -Force
+    Expand-PinyonZip -Archive $archive -Destination (Split-Path $cmakeRoot -Parent)
 }
 # Ninja is pinned like CMake, so the build does not depend on the Visual
 # Studio CMake component being installed.
@@ -195,7 +195,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $ninjaRoot $config.ninja.executable)
     $archive = Join-Path $downloads "ninja-$($config.ninja.version)-win.zip"
     Invoke-PinyonDownload -Uri $config.ninja.url -Destination $archive -Sha256 $config.ninja.sha256
     [void](New-Item -ItemType Directory -Force -Path $ninjaRoot)
-    Expand-Archive -LiteralPath $archive -DestinationPath $ninjaRoot -Force
+    Expand-PinyonZip -Archive $archive -Destination $ninjaRoot
 }
 # A Visual Studio without a usable Windows SDK or with an old C++ library is
 # updated and completed with the installer (one administrator prompt), then

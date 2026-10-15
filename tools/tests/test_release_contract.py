@@ -394,6 +394,14 @@ catch { [Console]::Error.Write($_.Exception.Message); exit 2 }
         self.assertIn("-Filter 'dd_*.log'", provision)
         self.assertIn("'.local/logs/build-tools-installer'", provision)
 
+    def test_toolchain_zips_unpack_without_expand_archive(self):
+        # Windows PowerShell 5.1's Expand-Archive stopped partway through a
+        # zip on some PCs (#574); every tool archive uses .NET instead.
+        provision = (ROOT / "tools/provision-toolchain.ps1").read_text(encoding="utf-8")
+
+        self.assertNotIn("Expand-Archive", provision)
+        self.assertEqual(provision.count("Expand-PinyonZip -Archive $archive"), 6)
+
     @unittest.skipUnless(shutil.which("powershell"), "Windows PowerShell is required")
     def test_command_path_removes_entry_quotes_without_losing_parentheses(self):
         command = (
