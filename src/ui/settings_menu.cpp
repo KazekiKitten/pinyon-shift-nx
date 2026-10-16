@@ -664,7 +664,7 @@ std::unique_ptr<MenuScreen> SettingsPages::Graphics() {
       std::error_code error;
       for (auto it = std::filesystem::directory_iterator(root, error);
            !error && it != std::filesystem::directory_iterator(); it.increment(error)) {
-        const std::string name = it->path().filename().string();
+        const std::string name = rex::path_to_utf8(it->path().filename());
         if (it->is_directory(error) && !name.empty() && name[0] != '.') names.push_back(name);
       }
       std::sort(names.begin(), names.end());
@@ -845,15 +845,19 @@ std::unique_ptr<MenuScreen> SettingsPages::Graphics() {
     const std::filesystem::path root = services_.mods_root.parent_path() / "luts";
     for (auto it = std::filesystem::directory_iterator(root, error);
          !error && it != std::filesystem::directory_iterator(); it.increment(error)) {
-      std::string extension = it->path().extension().string();
+      std::string extension = rex::path_to_utf8(it->path().extension());
       std::transform(extension.begin(), extension.end(), extension.begin(),
                      [](unsigned char c) { return char(std::tolower(c)); });
       if (it->is_regular_file(error) && extension == ".cube") files.push_back(it->path());
     }
     std::sort(files.begin(), files.end());
     for (const auto& file : files) {
-      luts.push_back({Upper(file.stem().string()),
-                      {{"scene_lut_path", config::Quote(file.generic_string())}}});
+      // UTF-8 throughout: path::string() throws on Windows for a name the
+      // ANSI code page can't hold (#552).
+      std::string path = rex::path_to_utf8(file);
+      std::replace(path.begin(), path.end(), '\\', '/');
+      luts.push_back({Upper(rex::path_to_utf8(file.stem())),
+                      {{"scene_lut_path", config::Quote(path)}}});
     }
     rows.push_back(Setting("COLOUR LUT", std::move(luts)));
     std::vector<Choice> strengths;
@@ -1418,7 +1422,7 @@ std::unique_ptr<MenuScreen> SettingsPages::Mods() {
     // A built-in mod that always loads (the immersive camera) has its own
     // settings instead of a row here.
     if (it->is_directory(error) && !AlwaysEnabledBuiltin(it->path())) {
-      names.push_back(it->path().filename().string());
+      names.push_back(rex::path_to_utf8(it->path().filename()));
     }
   }
   std::sort(names.begin(), names.end());

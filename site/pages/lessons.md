@@ -61,6 +61,10 @@ ARM found bugs x86 hid:
 - **Drivers.** Each mobile driver needed its own workaround, and frame replay on two devices was the fastest way to bisect them.
 - **One variable, two copies.** A mutable `static inline` member defined in a header is a weak symbol in every shared library that uses it. Android's linker resolves each library within its own group, so the generated code (`libmain.so`) and the runtime (`librexruntime.so`) each had a copy of the global lock's switches, and a setting the runtime changed never reached the generated code. An in-run A/B that toggled such a switch measured nothing; `llvm-nm -D --defined-only` listing `V` symbols in both libraries shows the problem. Define mutable state once in a source file.
 
+## Keep host file names in UTF-8
+
+On Windows, `std::filesystem::path::string()` converts through the ANSI code page and throws when a character has no mapping there. A player's song with a Cyrillic file name crashed the game as soon as the music status line read its title ([#552](https://github.com/arcanite24/pinyon-shift/issues/552)), and the same call sat on mod, LUT and save-backup names. Convert paths to UTF-8 with `u16string()` (`rex::path_to_utf8`), build them from UTF-8 with `rex::to_path`, and test with a file name the test machine's code page can't hold.
+
 ## Fix frame rate with the game's own clock
 
 Running above 30 fps needed no engine changes beyond faster vblanks: the game already integrates a real time delta. What remained were systems that add a constant per update. They were found by comparing guest memory snapshots at 30 and 120 fps and trapping writes to the values that drifted. Gate every such change on simulation time against real time, pose drift and the save's hash.
