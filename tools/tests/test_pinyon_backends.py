@@ -261,6 +261,19 @@ class CrashReportTests(unittest.TestCase):
         self.assertEqual(pinyon_crash.graphics_driver("pinyon_shift.exe"), "")
         self.assertEqual(pinyon_crash.graphics_driver(None), "")
 
+    def test_out_of_graphics_memory_is_recognized(self):
+        # #558: at resolution scale 3x the scaled resolve buffer and then the
+        # upload buffers failed to allocate before the game stopped.
+        self.assertTrue(pinyon_crash.graphics_memory_exhausted([
+            "[info] [gpu] Creating graphics pipeline state",
+            "[error] [gpu] VulkanTextureCache: Failed to allocate sparse memory for the scaled "
+            "resolve buffer"]))
+        self.assertTrue(pinyon_crash.graphics_memory_exhausted([
+            "[error] [core] Failed to allocate 2097152 bytes of Vulkan upload buffer memory"]))
+        self.assertFalse(pinyon_crash.graphics_memory_exhausted([
+            "[error] [gpu] XELOG_GPU PRESENT: swap_texture_view=NULL",
+            "[warning] [krnl] attmpted allocation to devkit memory area"]))
+
     def test_no_pending_report(self):
         with tempfile.TemporaryDirectory() as directory:
             code, result = run_json(["crash-report", "pending", "--state-root", directory,

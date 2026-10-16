@@ -14,8 +14,9 @@ placeholders, refuses to bundle anything that is a game file, a binary, a
 save or a memory dump, writes <state>/reports/PinyonShift-<id>-<time>.zip
 and <state>/reports/pending-report.json, and prints that pending record:
 {"schema", "created_utc", "crash_id", "bundle", "issue_url", "exit_code_hex",
-"graphics_driver"}; graphics_driver names the GPU driver the crash was in, or is
-empty.
+"graphics_driver", "graphics_memory"}; graphics_driver names the GPU driver the
+crash was in, or is empty; graphics_memory is true when the run's log shows the
+GPU running out of memory.
 
 `pending` prints the pending record (or {"pending": false}); `pinyon.py
 launch` removes it at the next start.
@@ -116,6 +117,23 @@ def graphics_driver(module: str | None) -> str:
     name = (module or "").lower()
     return next((vendor for driver, vendor in GRAPHICS_DRIVERS.items()
                  if name == driver or name.startswith(driver + ".")), "")
+
+
+# Allocations the renderer logs as failed when the GPU has no memory left.
+# #558 ran at resolution scale 3x: the scaled resolve buffer, then every
+# upload buffer, failed within 30 s and the game stopped. The fix the player
+# has is a lower scale.
+GRAPHICS_MEMORY_FAILURES = (
+    "Failed to allocate sparse memory for the scaled resolve buffer",
+    "Failed to create a scaled resolve buffer",
+    "of Vulkan upload buffer memory",
+    "VK_ERROR_OUT_OF_DEVICE_MEMORY",
+)
+
+
+def graphics_memory_exhausted(lines: list[str]) -> bool:
+    """Whether the runtime log lines show the GPU out of memory."""
+    return any(marker in line for line in lines for marker in GRAPHICS_MEMORY_FAILURES)
 
 
 def iso_utc(moment: datetime) -> str:
@@ -438,10 +456,14 @@ def create(state: Path, executable: Path, started: datetime, process_id: int, ex
         selected = next((e for e in reversed(events)
                          if e.get("event") == "graphics.device.selected"), None)
         runtime_log = state / "logs" / "runtime.log"
+        out_of_graphics_memory = False
         if logging_ready is not None and runtime_log.is_file() and \
                 runtime_log.stat().st_mtime >= started.timestamp():
             write_sanitized_tail(runtime_log, staging / "runtime-tail.log", 2500, replacements,
                                  started)
+            out_of_graphics_memory = graphics_memory_exhausted(
+                read_text(staging / "runtime-tail.log").splitlines()
+                if (staging / "runtime-tail.log").is_file() else [])
         if event_log is not None:
             write_sanitized_tail(event_log, staging / "session-events.jsonl", 1000, replacements)
 
@@ -578,7 +600,8 @@ def create(state: Path, executable: Path, started: datetime, process_id: int, ex
         pending = {"schema": 1, "created_utc": iso_utc(datetime.now(timezone.utc)),
                    "crash_id": fingerprint, "bundle": str(archive), "issue_url": issue_url,
                    "exit_code_hex": exit_hex,
-                   "graphics_driver": graphics_driver(details["fault_module"])}
+                   "graphics_driver": graphics_driver(details["fault_module"]),
+                   "graphics_memory": out_of_graphics_memory}
         (reports / "pending-report.json").write_bytes(
             (json.dumps(pending, indent=2) + os.linesep).encode("utf-8"))
         return pending

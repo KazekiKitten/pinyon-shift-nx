@@ -76,6 +76,8 @@ Leave the launcher open while playing. After a crash it prepares a sanitized ZIP
 
 When the crash was inside the graphics card's Vulkan driver, as most reported crashes on Intel graphics are, the launcher says so: install the newest driver from the GPU maker's site, and on integrated graphics choose **Low-spec 60** in Settings.
 
+When the game's log shows the graphics card running out of memory, the launcher says that instead. Higher resolution scales need much more graphics memory: a report at 3x ran out within 30 seconds ([#558](https://github.com/arcanite24/pinyon-shift/issues/558)). Choose 1x or 2x, or **Low-spec 60**, in Settings.
+
 Memory dumps in `.local/preview/crashes` can hold fragments of process memory, so they never go into the public report. Keep them local.
 
 ## Start over

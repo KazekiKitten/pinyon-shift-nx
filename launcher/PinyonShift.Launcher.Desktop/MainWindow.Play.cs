@@ -12,7 +12,7 @@ namespace PinyonShift.Launcher.Desktop;
 public partial class MainWindow
 {
     private sealed record CrashReport(string CrashId, string Bundle, string IssueUrl, long ExitCode,
-        string GraphicsDriver = "");
+        string GraphicsDriver = "", bool GraphicsMemory = false);
 
     private CrashReport? _pendingReport;
 
@@ -155,7 +155,8 @@ public partial class MainWindow
                 var report = launch.String("crash_id") is { Length: > 0 } id &&
                              launch.String("bundle") is { Length: > 0 } bundle &&
                              launch.String("issue_url") is { Length: > 0 } issue
-                    ? new CrashReport(id, bundle, issue, exitCode, launch.String("graphics_driver")) : null;
+                    ? new CrashReport(id, bundle, issue, exitCode, launch.String("graphics_driver"),
+                        Bool(launch.Json, "graphics_memory")) : null;
                 if (report is not null && ValidReport(report) is { } valid)
                 {
                     ShowCrash(valid);
@@ -240,7 +241,8 @@ public partial class MainWindow
         if (hex.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
             long.TryParse(hex[2..], System.Globalization.NumberStyles.HexNumber, null, out exitCode);
         if (ValidReport(new CrashReport(pending.String("crash_id"), pending.String("bundle"),
-                pending.String("issue_url"), exitCode, pending.String("graphics_driver"))) is { } report)
+                pending.String("issue_url"), exitCode, pending.String("graphics_driver"),
+                Bool(pending.Json, "graphics_memory"))) is { } report)
             ShowCrash(report);
     }
 
@@ -259,6 +261,14 @@ public partial class MainWindow
                     : "Install the newest graphics driver. ") +
                 "On integrated or older graphics, choose Low-spec 60 or a lower resolution scale in Settings, " +
                 "then play again.";
+        }
+        // The log shows the GPU out of memory (#558, resolution scale 3x):
+        // a lower scale is the fix the player has.
+        else if (report.GraphicsMemory)
+        {
+            Headline.Text = "The graphics card ran out of memory";
+            Subhead.Text = "Choose a lower resolution scale in Settings (1x or 2x), or the Low-spec 60 " +
+                "preset, then play again. Report the crash if it happens at 1x.";
         }
         // The crash was inside the GPU's Vulkan driver: most reports from
         // Intel graphics are, and a newer driver is the fix the player has.
