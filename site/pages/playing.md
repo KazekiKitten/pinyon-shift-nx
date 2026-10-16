@@ -115,7 +115,7 @@ Linux, the Steam Deck, macOS, Android and the DualSense Edge have not been tried
 
 ## Gameplay switches
 
-**F6 > GAMEPLAY** turns on three switches the game kept from its development builds. All are off by default and apply at once. **SKIP VOICE-OVERS WITH A** lets A close a dialog before its voice-over ends. **AUTOMATIC CAR RESET** off stops the game from putting the car back on the road when it strays too far. **REPLAY INTRO WHEN IDLE** off keeps the title screen from replaying the intro movie after about a minute without input. **SKIP INTRO MOVIES** on ends the splash movies at boot and goes straight to Press Start; it applies at the next start. The HUD is hidden with <kbd>F2</kbd>.
+**F6 > GAMEPLAY** turns on four switches the game kept from its development builds. All are off by default and apply at once. **SKIP VOICE-OVERS WITH A** lets A close a dialog before its voice-over ends. **AUTOMATIC CAR RESET** off stops the game from putting the car back on the road when it strays too far. **REPLAY INTRO WHEN IDLE** off keeps the title screen from replaying the intro movie after about a minute without input. **PHOTO CAMERA THROUGH WALLS** lets the photo mode camera pass through walls and terrain, at once. **SKIP INTRO MOVIES** on ends the splash movies at boot and goes straight to Press Start; it applies at the next start. The HUD is hidden with <kbd>F2</kbd>.
 
 ### AI opponents
 

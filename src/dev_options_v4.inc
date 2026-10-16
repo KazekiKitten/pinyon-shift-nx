@@ -3,3 +3,4 @@
     {"pinyon_shift_skip_voiceover", "allowskipvoiceover", 4952},
     {"pinyon_shift_no_attract_video", "noattractvideo", 4238},
     {"pinyon_shift_no_auto_reset", "NoHandOfGodReset", 4965},
+    {"pinyon_shift_photo_camera_through_walls", "disablephotomodecollisiondetection", 4949},

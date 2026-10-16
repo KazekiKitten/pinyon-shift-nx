@@ -23,6 +23,9 @@ REXCVAR_DEFINE_BOOL(pinyon_shift_no_attract_video, false, "Pinyon Shift",
 REXCVAR_DEFINE_BOOL(pinyon_shift_no_auto_reset, false, "Pinyon Shift",
                     "Do not reset the car to the road automatically when it leaves it (the "
                     "NoHandOfGodReset developer option)");
+REXCVAR_DEFINE_BOOL(pinyon_shift_photo_camera_through_walls, false, "Pinyon Shift",
+                    "Let the photo mode camera pass through walls and terrain (the "
+                    "disablephotomodecollisiondetection developer option)");
 
 namespace pinyon_shift::dev_options {
 
@@ -38,16 +41,18 @@ struct Option {
 // Base-disc offsets, from the option visitor sub_824F8150 (each name's
 // matcher call receives this + offset). nocameravibration and hidepoipins
 // are parsed but no guest code reads them, and skiptutorials gates only the
-// Kinect showroom tutorial, so they are not offered.
+// Kinect showroom tutorial, so they are not offered; neither is
+// allowhighzoomaperture (+4920), which no guest code reads (#488).
 #if defined(PINYON_SHIFT_TITLE_UPDATE_V4) && PINYON_SHIFT_TITLE_UPDATE_V4
-constexpr std::array<Option, 3> kOptionList = {{
+constexpr std::array<Option, 4> kOptionList = {{
 #include "dev_options_v4.inc"
 }};
 #else
-constexpr std::array<Option, 3> kOptionList = {{
+constexpr std::array<Option, 4> kOptionList = {{
     {"pinyon_shift_skip_voiceover", "allowskipvoiceover", 4924},
     {"pinyon_shift_no_attract_video", "noattractvideo", 4222},
     {"pinyon_shift_no_auto_reset", "NoHandOfGodReset", 4937},
+    {"pinyon_shift_photo_camera_through_walls", "disablephotomodecollisiondetection", 4921},
 }};
 #endif
 
@@ -63,7 +68,8 @@ std::array<State, kOptionList.size()> g_state;
 // In kOptionList's order.
 std::array<bool, kOptionList.size()> Wanted() {
   return {REXCVAR_GET(pinyon_shift_skip_voiceover), REXCVAR_GET(pinyon_shift_no_attract_video),
-          REXCVAR_GET(pinyon_shift_no_auto_reset)};
+          REXCVAR_GET(pinyon_shift_no_auto_reset),
+          REXCVAR_GET(pinyon_shift_photo_camera_through_walls)};
 }
 
 uint8_t* Guest(uint32_t address) {

@@ -89,6 +89,7 @@ sha256 = "DB40DF605ADE49A6"  # prefix of the supported default.xex SHA-256
 "launch_options.allowskipvoiceover" = 4924  # u8: 1 lets A close a dialog while its voice-over plays (sub_8269BF60)
 "launch_options.noattractvideo" = 4222  # u8: 1 stops the intro replay after ~53 s idle on the title screen (sub_827A27E0)
 "launch_options.nohandofgodreset" = 4937  # u8: 1 skips the automatic off-track reset (sub_824BA660)
+"launch_options.disablephotomodecollisiondetection" = 4921  # u8: 1 lets the photo camera pass through terrain and walls (sub_8285BFE0, sub_8266F8A0)
 "profile.loaded" = 40                    # u8, set once the values are loaded; the generic accessors skip a profile without it
 "car.dynamics" = 11664                   # the car's ICarDynamics (vtable 0x8223759C); the dynamics.* offsets are from it
 "dynamics.engine_angvel" = 324           # f32 engine speed in rad/s (x 9.5493 = RPM)

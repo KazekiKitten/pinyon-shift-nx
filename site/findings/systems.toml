@@ -49,6 +49,29 @@ source = """src/dev_options.cpp; docs/REVERSE_ENGINEERING.md@fc1751fe2a38 Develo
 
 [[finding]]
 group = """Launch options"""
+base = """options object +4921"""
+v4 = """+4949"""
+name = """photo camera collision switch"""
+what = """`disablephotomodecollisiondetection` (+4921) is read after `launch_options.get` in `sub_8285BFE0`, which skips its collision step right after clamping the photo camera's position, and in `sub_8266F8A0`. With the byte set, lowering the photo camera with the left trigger takes it into the road surface (the view fills with the terrain's flat colour); without it the camera stops just above the asphalt. The setting is F6 > GAMEPLAY > PHOTO CAMERA THROUGH WALLS (`pinyon_shift_photo_camera_through_walls`)."""
+how = """Option visitor `sub_824F8150` paired with the name strings in the image (each call's r4 and r5 at its `bl`); v4 offset from the same call order in `sub_82563570`; byte-load scan for readers; `fh1-photo-camera-walls` route with and without the flag."""
+confidence = """confirmed"""
+issue = """#488"""
+source = """src/dev_options.cpp; config/render-tests/fh1-photo-camera-walls.fh1test"""
+
+[[finding]]
+group = """Launch options"""
+base = """options object +4920"""
+v4 = """+4948"""
+name = """allowhighzoomaperture does nothing"""
+what = """`allowhighzoomaperture` (+4920) is parsed by the option visitor, but no guest code loads that byte, so it can't widen photo mode's zoom or aperture."""
+how = """Byte-load scan of the generated code for offset 4920 after `launch_options.get`."""
+confidence = """probable"""
+negative = true
+issue = """#488"""
+source = """src/dev_options.cpp"""
+
+[[finding]]
+group = """Launch options"""
 base = """options object +3809, +4976, +8362"""
 v4 = """+3817, +5012, +8399"""
 name = """options that do nothing in retail"""

@@ -919,6 +919,9 @@ std::unique_ptr<MenuScreen> SettingsPages::Gameplay() {
   // The boot splash movies end through the title's own end-of-stream path
   // (#617); read once at boot, so it applies at the next start.
   rows.push_back(Toggle("SKIP INTRO MOVIES", "pinyon_shift_skip_opening_movies"));
+  // The photo mode camera stops at walls and terrain unless the
+  // disablephotomodecollisiondetection developer flag is set (#488).
+  rows.push_back(Toggle("PHOTO CAMERA THROUGH WALLS", "pinyon_shift_photo_camera_through_walls"));
   // How the AI race (#482): without the rubber band and catch-up, or also
   // one difficulty level up. The game reads it when it sets up the next
   // event's opponents.

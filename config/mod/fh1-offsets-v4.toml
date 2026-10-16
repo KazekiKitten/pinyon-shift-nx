@@ -39,6 +39,7 @@
 "launch_options.allowskipvoiceover" = 4952  # option visitor sub_824F8150 -> 82563570
 "launch_options.noattractvideo" = 4238  # option visitor sub_824F8150 -> 82563570
 "launch_options.nohandofgodreset" = 4965  # option visitor sub_824F8150 -> 82563570
+"launch_options.disablephotomodecollisiondetection" = 4949  # option visitor sub_824F8150 -> 82563570
 "launch_options.nohud" = 3217  # HUD reader sub_826BEC10 -> 8276ADD8: lbz after launch_options.get 82479E88 -> 824A94B8
 "main_loop.delta" = 448  # hook 823EDB84
 "map_entity.on_map" = 52  # map_marker.show 828E3580 -> 82995330
