@@ -470,6 +470,8 @@ terrain or materials apart stay expensive. Draw distance is a guest problem
 (the game culls before it submits), and ray tracing, screen-space
 reflections and new materials have no inputs (no G-buffer or material ids).
 Frame generation is planned since this round, opt-in (FB-14.6 to FB-14.9).
+FB-14.6 to FB-14.9 are planned in detail in
+[UPSCALING_BACKLOG.md](UPSCALING_BACKLOG.md) (UP) since 2026-10-16.
 
 | ID | Feature | Effort | Confidence |
 | --- | --- | --- | --- |

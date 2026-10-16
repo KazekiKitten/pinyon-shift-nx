@@ -85,6 +85,10 @@ Next, in priority order:
   effects pack: clouds, fog, particles and backfire (#422)
 - [ ] Expose FSR 1 quality presets and sharpening controls in settings,
   with the rendered and output resolutions shown clearly
+- [ ] Temporal upscalers and frame generation, opt-in: FSR 3.1 from source,
+  DLSS and XeSS fetched at setup or dropped in by the player, mobile and
+  macOS options, and Lossless Scaling from the player's own `Lossless.dll`
+  (#523-#526, [upscaling backlog](UPSCALING_BACKLOG.md))
 - [ ] Validate Steam Deck and SteamOS: controls, Steam Input, suspend and
   resume, and performance presets
 - [ ] Improve sustained Android frame pacing and thermals on supported
