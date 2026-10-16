@@ -127,6 +127,10 @@ Linux, the Steam Deck, macOS, Android and the DualSense Edge have not been tried
 
 The setting changes how the AI drives, not the game's files, so it plays your own profile. Two smaller boosts are kept by every choice: by our reading of the code, cars at the back of the grid get extra power for the first few hundred metres, and your rival can get extra power and skill. Neither has been measured yet.
 
+## Traffic and showcase cars
+
+Turn on **F6 > MODS > HIDDEN_CARS** and restart to buy 22 cars the game drives but never sells: traffic cars such as the tour bus, the Kenworth T440 truck, the Nissan Leaf and the Toyota Prius, and the showcase Mini Cooper S, 500 Abarth and Peugeot 205 T16. They are in the Autoshow under their make. Most of them have no Autoshow picture, so their tile stays black; the garage shows the car once you own it. Like any mod it plays a separate profile, so your own save is not changed. The tour bus and the Kenworth were bought and driven on the base game; not every car has been tried.
+
 ## Saves
 
 Saves are in the install's state folder, `%LOCALAPPDATA%\PinyonShift\source\<version>\.local\preview\user` (under `data` for a portable install).

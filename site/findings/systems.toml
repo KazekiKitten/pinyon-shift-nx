@@ -343,11 +343,11 @@ group = """Leftover modes and hardware"""
 base = """Data_Car IsSelectable=0, IsDrivable=1 (23 rows)"""
 v4 = """same"""
 name = """hidden drivable cars"""
-what = """23 cars are marked drivable but not selectable: traffic cars (tour bus, trucks, Leaf, Prius) and showcase variants, each with its media archive."""
-how = """`gamedb` query."""
-confidence = """probable"""
-note = """Probable that they drive."""
-source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Developer options and leftover systems"""
+what = """23 cars are marked drivable but not selectable: traffic cars (tour bus, Kenworth T440, Leaf, Prius and others) and the showcase Mini, 500 Abarth and 205 T16, each with its media archive, upgrade rows and name; id 1215 is the placeholder `NUL_Car_00`. With `IsSelectable = 1` the Autoshow lists them under their make, and they are bought, saved and driven like any car. Seven have `BaseCost = 0`. Only the three showcase cars have an Autoshow thumbnail (another car's), so the others show a black tile; the garage thumbnail the game renders after a purchase works. The game rates a bought car from its physics: the tour bus arrives as E 198."""
+how = """`gamedb` query; the hidden_cars mod with fh1-buy-car and fh1-hidden-car-drive on a seed: the tour bus bought, saved and driven about 1 km in free roam, the Kenworth T440 bought and raced in the Gauntlet. With the mod off, a modded profile that owns the bus still loads and drives it."""
+confidence = """confirmed"""
+note = """Tested on the base build. Not every one of the 22 was driven."""
+source = """mods_src/builtin/hidden_cars; config/render-tests/fh1-hidden-car-drive.fh1test; docs/MODDING.md Built-in mods"""
 
 # -------------------------------------------------------------- Gameplay systems
 

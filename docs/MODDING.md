@@ -119,6 +119,16 @@ set each one (CUSTOM). On the v4 build the title update's own
 `media.zip` carries `camera/cameraphysics.xml`, which the game reads instead,
 so the layers do not load there yet.
 
+`hidden_cars` (#484) is listed on F6 > MODS, off by default. Its
+`db/10-hidden-cars.sql` lists the 22 cars the database marks drivable but
+not selectable (traffic cars such as the tour bus, the Kenworth T440, the
+Leaf and the Prius, and the showcase Mini, 500 Abarth and 205 T16) and
+prices the seven that cost nothing. They are sold in the Autoshow under
+their make and play the modded profile. Most have no Autoshow thumbnail, so
+their tile is black until bought. The tour bus was bought, saved and driven,
+and the Kenworth raced, on the base build
+(`config/render-tests/fh1-hidden-car-drive.fh1test`).
+
 ## Asset mods
 
 Files under `game/` replace the game's files with the same path
