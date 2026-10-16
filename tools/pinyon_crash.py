@@ -13,7 +13,9 @@ settings and system facts, replaces every local path and the user name with
 placeholders, refuses to bundle anything that is a game file, a binary, a
 save or a memory dump, writes <state>/reports/PinyonShift-<id>-<time>.zip
 and <state>/reports/pending-report.json, and prints that pending record:
-{"schema", "created_utc", "crash_id", "bundle", "issue_url", "exit_code_hex"}.
+{"schema", "created_utc", "crash_id", "bundle", "issue_url", "exit_code_hex",
+"graphics_driver"}; graphics_driver names the GPU driver the crash was in, or is
+empty.
 
 `pending` prints the pending record (or {"pending": false}); `pinyon.py
 launch` removes it at the next start.
@@ -96,6 +98,25 @@ class CrashError(common.CommandError):
 
 
 # --- Text --------------------------------------------------------------------------
+
+# Vulkan drivers by file name. Most crash reports (#550, #565, #575, #590,
+# #612, #615, #625) faulted inside Intel's, so the launcher names the driver
+# instead of a bare crash, and the player can update it.
+GRAPHICS_DRIVERS = {
+    "igvk64.dll": "Intel", "igvk32.dll": "Intel",
+    "amdvlk64.dll": "AMD", "amdvlk32.dll": "AMD",
+    "nvoglv64.dll": "NVIDIA", "nvoglv32.dll": "NVIDIA",
+    "libvulkan_intel.so": "Intel", "libvulkan_radeon.so": "AMD",
+    "libnvidia-glcore.so": "NVIDIA", "libnvidia-eglcore.so": "NVIDIA",
+}
+
+
+def graphics_driver(module: str | None) -> str:
+    """The vendor whose Vulkan driver the fault module is, or ""."""
+    name = (module or "").lower()
+    return next((vendor for driver, vendor in GRAPHICS_DRIVERS.items()
+                 if name == driver or name.startswith(driver + ".")), "")
+
 
 def iso_utc(moment: datetime) -> str:
     """.NET's round-trip ("o") form for a UTC time: seven fractional digits."""
@@ -556,7 +577,8 @@ def create(state: Path, executable: Path, started: datetime, process_id: int, ex
                      f"&body={urllib.parse.quote(body, safe='')}&labels=crash")
         pending = {"schema": 1, "created_utc": iso_utc(datetime.now(timezone.utc)),
                    "crash_id": fingerprint, "bundle": str(archive), "issue_url": issue_url,
-                   "exit_code_hex": exit_hex}
+                   "exit_code_hex": exit_hex,
+                   "graphics_driver": graphics_driver(details["fault_module"])}
         (reports / "pending-report.json").write_bytes(
             (json.dumps(pending, indent=2) + os.linesep).encode("utf-8"))
         return pending

@@ -11,7 +11,8 @@ namespace PinyonShift.Launcher.Desktop;
 // error with a reason.
 public partial class MainWindow
 {
-    private sealed record CrashReport(string CrashId, string Bundle, string IssueUrl, long ExitCode);
+    private sealed record CrashReport(string CrashId, string Bundle, string IssueUrl, long ExitCode,
+        string GraphicsDriver = "");
 
     private CrashReport? _pendingReport;
 
@@ -154,7 +155,7 @@ public partial class MainWindow
                 var report = launch.String("crash_id") is { Length: > 0 } id &&
                              launch.String("bundle") is { Length: > 0 } bundle &&
                              launch.String("issue_url") is { Length: > 0 } issue
-                    ? new CrashReport(id, bundle, issue, exitCode) : null;
+                    ? new CrashReport(id, bundle, issue, exitCode, launch.String("graphics_driver")) : null;
                 if (report is not null && ValidReport(report) is { } valid)
                 {
                     ShowCrash(valid);
@@ -239,7 +240,7 @@ public partial class MainWindow
         if (hex.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
             long.TryParse(hex[2..], System.Globalization.NumberStyles.HexNumber, null, out exitCode);
         if (ValidReport(new CrashReport(pending.String("crash_id"), pending.String("bundle"),
-                pending.String("issue_url"), exitCode)) is { } report)
+                pending.String("issue_url"), exitCode, pending.String("graphics_driver"))) is { } report)
             ShowCrash(report);
     }
 
@@ -258,6 +259,17 @@ public partial class MainWindow
                     : "Install the newest graphics driver. ") +
                 "On integrated or older graphics, choose Low-spec 60 or a lower resolution scale in Settings, " +
                 "then play again.";
+        }
+        // The crash was inside the GPU's Vulkan driver: most reports from
+        // Intel graphics are, and a newer driver is the fix the player has.
+        else if (report.GraphicsDriver.Length > 0)
+        {
+            Headline.Text = $"The {report.GraphicsDriver} graphics driver crashed";
+            Subhead.Text = $"The game stopped inside the {report.GraphicsDriver} Vulkan driver. " +
+                (Installation.IsWindows
+                    ? "Install the newest driver from the GPU maker's site (Windows Update's is often older). "
+                    : "Update the graphics driver (Mesa or the GPU maker's package). ") +
+                "On integrated graphics, also choose Low-spec 60 in Settings. Report the crash if it happens again.";
         }
         CrashIdText.Text = report.CrashId;
         AppendLog($"Crash report {report.CrashId}: {report.Bundle}");

@@ -74,6 +74,8 @@ The save was made with title update v4, which the base build can't load. Import 
 
 Leave the launcher open while playing. After a crash it prepares a sanitized ZIP under `.local/preview/reports`, selects it in Explorer and opens a prefilled GitHub issue. Attach the ZIP and describe what you did last. Reports never include the game, your saves or local paths.
 
+When the crash was inside the graphics card's Vulkan driver, as most reported crashes on Intel graphics are, the launcher says so: install the newest driver from the GPU maker's site, and on integrated graphics choose **Low-spec 60** in Settings.
+
 Memory dumps in `.local/preview/crashes` can hold fragments of process memory, so they never go into the public report. Keep them local.
 
 ## Start over

@@ -249,6 +249,18 @@ class CrashReportTests(unittest.TestCase):
         self.assertEqual(posix["fault_offset"], "0xabc123")
         self.assertEqual(posix["operation"], "unspecified")
 
+    def test_crash_in_a_vulkan_driver_names_its_vendor(self):
+        # Most reports faulted in Intel's igvk64.dll (#625 and others).
+        intel = pinyon_crash.crash_details(
+            "code=0xc0000005 address=0x7ff8 operation=Read\n"
+            "fault_module=igvk64.dll fault_offset=0x5ca146\n")
+        self.assertEqual(pinyon_crash.graphics_driver(intel["fault_module"]), "Intel")
+        self.assertEqual(pinyon_crash.graphics_driver("amdvlk64.dll"), "AMD")
+        self.assertEqual(pinyon_crash.graphics_driver("libvulkan_radeon.so"), "AMD")
+        self.assertEqual(pinyon_crash.graphics_driver("libnvidia-glcore.so.580.95"), "NVIDIA")
+        self.assertEqual(pinyon_crash.graphics_driver("pinyon_shift.exe"), "")
+        self.assertEqual(pinyon_crash.graphics_driver(None), "")
+
     def test_no_pending_report(self):
         with tempfile.TemporaryDirectory() as directory:
             code, result = run_json(["crash-report", "pending", "--state-root", directory,

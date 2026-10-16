@@ -755,7 +755,7 @@ public partial class MainWindow : Window
                 !string.IsNullOrWhiteSpace(result.IssueUrl))
             {
                 SetPendingReport(new CrashReport(result.CrashId, result.Bundle, result.IssueUrl,
-                    $"0x{unchecked((uint)result.ExitCode):X8}"));
+                    $"0x{unchecked((uint)result.ExitCode):X8}", result.GraphicsDriver));
             }
             if (_pendingReport is null)
                 throw new InvalidOperationException(string.IsNullOrWhiteSpace(error)
@@ -856,6 +856,15 @@ public partial class MainWindow : Window
             HeadlineText.Text = "The graphics driver stopped responding";
             SetSubhead("Install the newest graphics driver. On integrated or older graphics, choose " +
                 "Low-spec 60 or a lower resolution scale in Settings, then play again.");
+        }
+        // The crash was inside the GPU's Vulkan driver: most reports from
+        // Intel graphics are, and a newer driver is the fix the player has.
+        else if (!string.IsNullOrWhiteSpace(report.GraphicsDriver))
+        {
+            HeadlineText.Text = $"The {report.GraphicsDriver} graphics driver crashed";
+            SetSubhead($"The game stopped inside the {report.GraphicsDriver} Vulkan driver. Install the " +
+                "newest driver from the GPU maker's site (Windows Update's is often older). On integrated " +
+                "graphics, also choose Low-spec 60 in Settings. Report the crash if it happens again.");
         }
         CrashIdRun.Text = report.CrashId;
         ShowPanel(View.Crash);
@@ -2622,12 +2631,14 @@ public partial class MainWindow : Window
         [property: JsonPropertyName("bundle")] string? Bundle,
         [property: JsonPropertyName("issue_url")] string? IssueUrl,
         [property: JsonPropertyName("exit_code")] long ExitCode,
-        [property: JsonPropertyName("config")] string? Config = null);
+        [property: JsonPropertyName("config")] string? Config = null,
+        [property: JsonPropertyName("graphics_driver")] string? GraphicsDriver = null);
     private sealed record CrashReport(
         [property: JsonPropertyName("crash_id")] string CrashId,
         [property: JsonPropertyName("bundle")] string Bundle,
         [property: JsonPropertyName("issue_url")] string IssueUrl,
-        [property: JsonPropertyName("exit_code_hex")] string? ExitCodeHex);
+        [property: JsonPropertyName("exit_code_hex")] string? ExitCodeHex,
+        [property: JsonPropertyName("graphics_driver")] string? GraphicsDriver = null);
     private sealed record GraphicsResult(
         [property: JsonPropertyName("backup_path")] string? BackupPath,
         [property: JsonPropertyName("settings")] GraphicsSettings Settings,
