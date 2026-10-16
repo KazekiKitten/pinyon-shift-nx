@@ -736,6 +736,15 @@ void PinyonShiftApp::OnPreSetup(rex::RuntimeConfig& config) {
       pinyon_shift::platform::EnvironmentVariable("PINYON_SHIFT_FH1_DISC_SHADER_CORPUS_DIR")
           ? "fh1-producer"
           : "fh1";
+  // A config without a gpu_backend line (rewritten by something that keeps
+  // only the settings it knows) leaves the SDK default "any", which is
+  // Direct3D 12 on Windows. Players have no Direct3D 12 shader catalog, so
+  // every draw failed and the window stayed white (#613, #627, #382).
+  if (config.gpu_plugin == "fh1" && rex::cvar::GetFlagByName("gpu_backend") == "any") {
+    rex::cvar::SetFlagByName("gpu_backend", "vulkan");
+    pinyon_shift::diagnostics::RecordEvent("config.gpu_backend_defaulted",
+                                           {{"from", "any"}, {"to", "vulkan"}});
+  }
   pinyon_shift::fh1_render_test::Configure(config);
   pinyon_shift::rally::ConfigureAudioProbe(config);
   // The on-screen controls feed user 0 beside any controller (AP-4.2);

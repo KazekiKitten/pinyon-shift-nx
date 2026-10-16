@@ -30,6 +30,10 @@ When the Visual Studio Installer stops, the error gives its exit code and, for t
 
 Update the GPU driver and check that the GPU supports Vulkan 1.3. To reset the runtime settings, delete `.local/preview/config/pinyon_shift.toml`. Security software may quarantine the newly compiled, unsigned executable. Restore it only if it was built by your own install.
 
+## A white window after the first screen
+
+Up to 0.5.1, a `pinyon_shift.toml` without a `gpu_backend` line started the game on Direct3D 12, which has no prepared shaders on a player's install: the first warning screen showed, then the window stayed white while the game and its audio ran ([#627](https://github.com/arcanite24/pinyon-shift/issues/627)). The game now uses Vulkan when the line is missing. On an older build, add `gpu_backend = "vulkan"` to `.local/preview/config/pinyon_shift.toml`, or delete the file to reset the settings.
+
 ## "Could not build the mods' archive members"
 
 Before each start the launcher rebuilds the enabled mods' archives in `.local/preview/mods/zz-archive-patches`. When the mods haven't changed it keeps the previous copy; otherwise it replaces it, and a file still open elsewhere stops it with "is in use by another program". Wait for a game that is still closing, or for antivirus to finish scanning the folder, and start again. If it keeps happening, add the install folder to the antivirus exclusions.
