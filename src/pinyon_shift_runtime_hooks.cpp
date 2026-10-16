@@ -8976,6 +8976,43 @@ bool PinyonShiftTraceRetainVtable(PPCRegister& r4, PPCRegister& r11,
   return true;
 }
 
+// sub_824E81A8 (v4 sub_82E180E0) is the other intrusive-pointer assignment:
+// AddRef the new object through vtable+8, store it, then Release the old one
+// through vtable+12. #584 reached the Release with the same freed object
+// (vtable 0x07E0487C, heap data) that PinyonShiftTraceRetainVtable had just
+// refused, still stored in another slot, and faulted. Both hooks run with
+// the vtable already loaded in r11; a live object's vtable is in the title
+// image, so the common case is one range test.
+static void RecordStaleAssign(const char* call, const char* address, uint32_t slot,
+                              uint32_t object, uint32_t vtable) {
+  static std::atomic<uint32_t> recorded{};
+  if (recorded.fetch_add(1, std::memory_order_relaxed) >= 16) return;
+  pinyon_shift::diagnostics::RecordEvent("object.assign.stale_" + std::string(call),
+                                         {{"address", address},
+                                          {"destination", Hex32(slot)},
+                                          {"object", Hex32(object)},
+                                          {"vtable", Hex32(vtable)}});
+}
+
+bool PinyonShiftGuardAssignAddRef(PPCRegister& r11, PPCRegister& r30, PPCRegister& r31) {
+  const uint32_t vtable = r11.u32;
+  if (vtable >= kGuestImageBegin && vtable < kGuestImageEnd) return false;
+  RecordStaleAssign("addref", pinyon_shift::fh1::kTitleUpdateV4 ? "82E1810C" : "824E81D4",
+                    r30.u32, r31.u32, vtable);
+  // Store null in place of the dangling object (the store follows the call).
+  r31.u64 = 0;
+  return true;
+}
+
+bool PinyonShiftGuardAssignRelease(PPCRegister& r3, PPCRegister& r11, PPCRegister& r30) {
+  const uint32_t vtable = r11.u32;
+  if (vtable >= kGuestImageBegin && vtable < kGuestImageEnd) return false;
+  // The new value is already stored; leave the freed old object alone.
+  RecordStaleAssign("release", pinyon_shift::fh1::kTitleUpdateV4 ? "82E1812C" : "824E81F4",
+                    r30.u32, r3.u32, vtable);
+  return true;
+}
+
 void PinyonShiftTraceRetainSourceSlot(PPCRegister& r3, PPCRegister& r4,
                                       PPCRegister& r26, PPCRegister& r27,
                                       PPCRegister& r29, PPCRegister& r31) {

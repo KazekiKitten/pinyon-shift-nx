@@ -44,6 +44,8 @@ PINYON_SYMBOL("hook.PinyonShiftGammaRampPwlBegin", 0x82CE8990)
 PINYON_SYMBOL("hook.PinyonShiftGammaRampPwlBuilt", 0x82CE8B68)
 PINYON_SYMBOL("hook.PinyonShiftGammaRampPwlDeviceSet", 0x82CE8B6C)
 PINYON_SYMBOL("hook.PinyonShiftGpuFenceWait", 0x82AAD418)
+PINYON_SYMBOL("hook.PinyonShiftGuardAssignAddRef", 0x82E1810C)
+PINYON_SYMBOL("hook.PinyonShiftGuardAssignRelease", 0x82E1812C)
 PINYON_SYMBOL("hook.PinyonShiftGuardChildDispatch", 0x82CE2A78)
 PINYON_SYMBOL("hook.PinyonShiftGuardNullOutputHandle", 0x830605E0)
 PINYON_SYMBOL("hook.PinyonShiftGuardQueueAppend", 0x82F0A3B0)
@@ -211,6 +213,7 @@ PINYON_OFFSET("flyer.state", 148)  // verified on v4
 PINYON_OFFSET("game.components", 76)  // verified on v4
 PINYON_OFFSET("game.user", 108)  // verified on v4
 PINYON_OFFSET("launch_options.allowskipvoiceover", 4952)  // verified on v4; base 4924
+PINYON_OFFSET("launch_options.disablephotomodecollisiondetection", 4949)  // verified on v4; base 4921
 PINYON_OFFSET("launch_options.noattractvideo", 4238)  // verified on v4; base 4222
 PINYON_OFFSET("launch_options.nohandofgodreset", 4965)  // verified on v4; base 4937
 PINYON_OFFSET("launch_options.nohud", 3217)  // verified on v4; base 3213

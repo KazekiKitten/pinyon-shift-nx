@@ -285,6 +285,28 @@ source = """src/pinyon_shift_runtime_hooks.cpp PinyonShiftTraceRetainVtable; con
 
 [[finding]]
 group = """Lifetime and containers"""
+base = """sub_824E81A8, 0x824E81D4, 0x824E81F4"""
+v4 = """sub_82E180E0, 0x82E1810C, 0x82E1812C"""
+name = """second intrusive pointer assignment"""
+what = """A second assignment helper with the same contract as `sub_826E1B10`: AddRef the new object through vtable `+8` (loaded at `0x824E81D4`), store it, then Release the old one through vtable `+12` (loaded at `0x824E81F4`). #584 reached its Release with the freed object the `sub_826E1B10` guard had refused a moment earlier, still held in another slot, and faulted reading the heap word `0x07E0487C + 12`. A midasm hook at each load skips the call when the vtable is outside the title image: a dangling new object is stored as null, and a dangling old one is not released. Either case is logged once as `object.assign.stale_addref` or `object.assign.stale_release` (16 at most)."""
+how = """Crash report #584 (guest lr `0x824E81E0`, the event `object.retain.stale_source` for the same object just before); the only function in either build with this instruction pattern, found by a scan of the generated code."""
+confidence = """confirmed"""
+issue = """#584"""
+source = """src/pinyon_shift_runtime_hooks.cpp PinyonShiftGuardAssignAddRef, PinyonShiftGuardAssignRelease; config/rexglue/analysis/main-xex.toml"""
+
+[[finding]]
+group = """Lifetime and containers"""
+base = """sub_823F3048, 0x823F3108, 0x823F3110"""
+name = """allocator out-of-space stop"""
+what = """`sub_823F3048` asks each heap in a chain for a block (virtual `+80`, then `sub_823F2ED8`). When none can serve it and the heap's flag at `+372` is set, it stops the game on purpose with a store to guest address 4 (when the request is larger than the heap's remaining space, `+340` minus `+68`) or 5 (otherwise). A crash report with a write to guest `0x00000004` and lr `0x823F30B4` is this stop: a game heap ran out, not an emulation fault. #602 hit it after 31 minutes with the Forza Horizon XE mod at 2x resolution."""
+how = """Crash report #602 (write of guest `0x00000004`, lr `0x823F30B4`); reading the generated code of `sub_823F3048`."""
+confidence = """probable"""
+note = """Which heap ran out in #602, and whether XE's extra cars cause it, is not known."""
+issue = """#602"""
+source = """site/findings/executable.toml (sub_823F3048 and r6)"""
+
+[[finding]]
+group = """Lifetime and containers"""
 base = """0x82C222EC, 0x82C222F0, 0x82C22308, 0x82C22318, 0x82C2231C"""
 v4 = """0x82CE2A5C, 0x82CE2A60, 0x82CE2A78, 0x82CE2A88"""
 name = """child release through parent+64"""

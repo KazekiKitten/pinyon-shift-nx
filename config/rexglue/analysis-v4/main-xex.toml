@@ -764,6 +764,24 @@ name = "PinyonShiftTraceRetainVtable"
 registers = ["r4", "r11", "r30", "r31"]
 jump_address_on_true = 0x82471858
 
+# sub_82E180E0 is the other intrusive-pointer assignment: AddRef the new object
+# (vtable+8), store it, Release the old one (vtable+12). #584 reached its
+# Release with the freed object the guard above had just refused (vtable
+# 0x07E0487C, heap data) and faulted at vtable+12. Skip either call when
+# the vtable is not in the title image: a dangling new object is stored
+# as null, and a dangling old one is not released.
+[[midasm_hook]]
+address = 0x82E1810C
+name = "PinyonShiftGuardAssignAddRef"
+registers = ["r11", "r30", "r31"]
+jump_address_on_true = 0x82E18118
+
+[[midasm_hook]]
+address = 0x82E1812C
+name = "PinyonShiftGuardAssignRelease"
+registers = ["r3", "r11", "r30"]
+jump_address_on_true = 0x82E18138
+
 # Default-off read-only #359/#368/#373 ownership comparison. Pair the live
 # child slot/vtable around the parent virtual call, before the wrapper clears
 # parent+64 and dispatches the child. No guest register or memory is changed.
