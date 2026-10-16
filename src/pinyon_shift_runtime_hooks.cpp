@@ -6450,6 +6450,30 @@ void PinyonShiftTraceFrameTelemetry(PPCRegister& r28, PPCRegister& r31) {
 // than that from what was written (an event, a fast travel or a script set
 // it), the new time is taken as the base. The local clock writes this PC's
 // time of day.
+double PinyonShiftGameSecondsOfDay() {
+  constexpr uint32_t kWorldHolder = FH1_ADDR(0x832DF024u);
+  const uint32_t holder = LoadGuestU32(kWorldHolder);
+  if (holder == 0 || !PinyonShiftGuestRangeReadable(holder + 4u, 4)) {
+    return -1.0;
+  }
+  const uint32_t handle = LoadGuestU32(holder + 4u);
+  if (handle == 0 || !PinyonShiftGuestRangeReadable(handle + 4u, 4)) {
+    return -1.0;
+  }
+  const uint32_t world = LoadGuestU32(handle + 4u);
+  if (world == 0 || !PinyonShiftGuestRangeReadable(world + 232u, 4)) {
+    return -1.0;
+  }
+  const uint32_t time_of_day = LoadGuestU32(world + 232u);
+  if (time_of_day == 0 || !PinyonShiftGuestRangeReadable(time_of_day + 10488u, 4)) {
+    return -1.0;
+  }
+  const uint32_t bits = LoadGuestU32(time_of_day + 10488u);
+  float seconds;
+  std::memcpy(&seconds, &bits, sizeof(seconds));
+  return std::isfinite(seconds) && seconds >= 0.0f && seconds <= 86400.0f ? seconds : -1.0;
+}
+
 static void PinyonShiftHoldTimeOfDay(double delta_seconds) {
   static double written = -1.0;
   static double last_logged = -1.0;

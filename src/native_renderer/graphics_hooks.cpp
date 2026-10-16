@@ -4,6 +4,7 @@
 #include "native_renderer/d3d_draw.h"
 
 #include "fh1_guest_address.h"
+#include "pinyon_shift_runtime_hooks.h"
 
 #include <atomic>
 #include <chrono>
@@ -40,7 +41,9 @@ REXCVAR_DEFINE_BOOL(pinyon_shift_fh1_shadows, !REX_PLATFORM_ANDROID, "Pinyon Shi
                     "Draw the sun's shadows. Off sets the render scenarios' "
                     "SkipShadowMapUnlessCockpit (no shadow maps, depth pre-pass or shadow "
                     "mask: about 6.4 ms a frame on the Odin 2 Portal) and keeps the "
-                    "screen's shadow mask lit; needs the Vulkan FH1 executor")
+                    "screen's shadow mask lit; needs the Vulkan FH1 executor. Off applies only "
+                    "while the cars' lights are off (08:02 to 18:50), since it also "
+                    "removes the headlights' light on the road")
     .lifecycle(rex::cvar::Lifecycle::kHotReload);
 REXCVAR_DEFINE_BOOL(pinyon_shift_reuse_gamma_ramp, true, "Pinyon Shift",
                     "Reuse the title's gamma ramp when it is rebuilt from the same settings. "
@@ -130,6 +133,14 @@ void SetEnvMapRate(rex::memory::Memory* memory, const RenderScenario& scenario, 
   memory->TranslateVirtual<uint32_t*>(scenario.env_control)[1] = rex::byte_swap(bits);
 }
 
+// SkipShadowMapUnlessCockpit also drops the headlights' projected pool on
+// the road (#532), so shadows off only applies while the cars' lights are
+// off: the track's SwitchOnLights curve is zero from 08:02 to 18:50.
+bool CarLightsOn() {
+  const double seconds = PinyonShiftGameSecondsOfDay();
+  return seconds >= 0.0 && (seconds < 482.0 * 60.0 || seconds > 1130.0 * 60.0);
+}
+
 // Called with render_scenarios_mutex held.
 void KeepShadowsOff(rex::memory::Memory* memory) {
   auto* graphics = rex::system::kernel_state()->emulator()->graphics_system();
@@ -170,7 +181,7 @@ void ApplyRenderSettings() {
     for (const RenderScenario& scenario : render_scenarios) SetEnvMapRate(memory, scenario, rate);
     applied_env_rate = rate;
   }
-  if (!REXCVAR_GET(pinyon_shift_fh1_shadows)) {
+  if (!REXCVAR_GET(pinyon_shift_fh1_shadows) && !CarLightsOn()) {
     KeepShadowsOff(memory);
   } else if (shadows_skipped) {
     for (const RenderScenario& scenario : render_scenarios) {

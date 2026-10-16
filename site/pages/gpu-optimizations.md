@@ -175,7 +175,7 @@ The window is hidden in these runs, but Core Animation still hands out drawables
 
 | Cut | Measured |
 | --- | --- |
-| Sun shadows off, through the game's own unused `SkipShadowMapUnlessCockpit` setting | about 6.4 ms of a 23 ms Odin frame; at the 60 limit 58.3 fps with 4.4 % slow frames, against 58.1 fps and 8–11 % with shadows; desktop 3x about 3.5 ms (kept on) |
+| Sun shadows off, through the game's own unused `SkipShadowMapUnlessCockpit` setting | about 6.4 ms of a 23 ms Odin frame; at the 60 limit 58.3 fps with 4.4 % slow frames, against 58.1 fps and 8–11 % with shadows; desktop 3x about 3.5 ms (kept on). Applies only while the cars' lights are off (08:02 to 18:50 game time), since the setting also removes the headlights' light on the road ([#532](https://github.com/arcanite24/pinyon-shift/issues/532)) |
 | Reflection cube map at a quarter rate | Odin 25.4 to 23.2 ms, same look |
 | Bilinear output instead of FSR 1 | 1.4 ms on the 8 Elite |
 | The game's anisotropy instead of forced 4x | 0.43 ms on the 8 Elite |

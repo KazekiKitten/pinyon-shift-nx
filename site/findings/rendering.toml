@@ -314,6 +314,15 @@ source = """docs/ANDROID_ODIN_BACKLOG.md The fix: pushed pixel textures, Render 
 
 [[finding]]
 group = """Shadows"""
+name = """headlights need the shadow passes"""
+what = """With `SkipShadowMapUnlessCockpit` set, the player car's headlights no longer light the road at night: the light sprites and tail lights still draw, but the pool of light on the road and roadside is gone, in the chase view at 23:00. So the headlights' projected light runs through the passes that setting skips. The track's `SwitchOnLights` curve (`TimeOfDayA.xml`, minutes since midnight) is above zero before 08:02 and after 18:50, so the setting is only safe in between; shadows off now applies only then (#532)."""
+how = """`cheat_time_of_day` 23 with `pinyon_shift_fh1_shadows` true and false, parked at the Gauntlet start, chase captures; then the fix at 23:00 and 13:00 (shadows skipped by day)."""
+confidence = """confirmed"""
+issue = """#532"""
+source = """src/native_renderer/graphics_hooks.cpp CarLightsOn"""
+
+[[finding]]
+group = """Shadows"""
 name = """shadow atlases"""
 what = """Two 1024x1024 depth shadow atlases are only partly refreshed: each frame a 1280x720 8888 resolve overwrites part of their memory, then the atlas itself is resolved only 520x520."""
 how = """Texture reload probe with the sampled textures' keys."""

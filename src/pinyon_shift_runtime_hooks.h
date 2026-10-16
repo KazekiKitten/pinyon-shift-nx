@@ -22,6 +22,10 @@ bool PinyonShiftCanStartRallySeries(uint32_t series_id);
 uint32_t PinyonShiftRallyResumeStage(uint32_t series_id);
 bool PinyonShiftRetireRallySeries();
 
+// The world's time of day in seconds since midnight, or -1 outside the
+// world (menus, loading) or when it can't be read.
+double PinyonShiftGameSecondsOfDay();
+
 // Kernel file-open observer: tracks whether the movie being played is a boot
 // splash intro, which the opt-in opening-movie skip may complete early.
 void PinyonShiftObserveGuestFileOpen(std::string_view guest_path);
