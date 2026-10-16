@@ -7039,9 +7039,18 @@ void PinyonShiftNoteTitleSwap() {
   if (g_step_raise_held.load(std::memory_order_acquire)) {
     // A raise is held for this swap: raise it now rather than at the next
     // vblank, so a frame that missed its vblank pair still gets its step.
-    std::lock_guard lock(g_step_gate_mutex);
-    if (g_step_raise_held.load(std::memory_order_relaxed) && StepLead() < 2) {
-      g_step_raise_held.store(false, std::memory_order_release);
+    bool raise = false;
+    {
+      std::lock_guard lock(g_step_gate_mutex);
+      if (g_step_raise_held.load(std::memory_order_relaxed) && StepLead() < 2) {
+        g_step_raise_held.store(false, std::memory_order_release);
+        raise = true;
+      }
+    }
+    // Raise after unlocking: the vblank callback takes g_step_gate_mutex
+    // while it holds the global critical region, and the object lookup takes
+    // that region, so raising under the gate mutex deadlocks the two threads.
+    if (raise) {
       RaiseStepEvent();
     }
   }
