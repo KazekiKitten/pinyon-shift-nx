@@ -18,7 +18,7 @@ Most settings live in the game, on <kbd>F6</kbd>, and apply at once. MSAA and th
 | <kbd>F7</kbd> | Achievements |
 | <kbd>F2</kbd> | Hide or show the HUD (minimap, speedometer, banners), for screenshots. Menus and photo mode still draw |
 | <kbd>F8</kbd> | Save the current frame as a PNG photo |
-| <kbd>F10</kbd> | [Trainer](#trainer): credits, game speed, time of day, free camera, any car in any event. Needs cheats on |
+| <kbd>F10</kbd> | [Trainer](#trainer): credits, game speed, time of day and day length, free camera, any car in any event. Needs cheats on |
 | <kbd>F11</kbd> | Fullscreen. Also <kbd>Alt</kbd>+<kbd>Enter</kbd> |
 
 On a Mac, where the F-keys are media keys, use <kbd>Cmd</kbd>+<kbd>,</kbd> for the settings, <kbd>Ctrl</kbd>+<kbd>Cmd</kbd>+<kbd>F</kbd> for fullscreen, <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> for a photo, <kbd>Cmd</kbd>+<kbd>T</kbd> for the trainer and <kbd>Cmd</kbd>+<kbd>Q</kbd> to quit.
@@ -149,7 +149,7 @@ A save from Xenia running title update v4 needs the [v4 build](dlc.md#title-upda
 Turn cheats on in **SETTINGS > CHEATS** and restart. The game then plays a separate copy of your profile (`user-modded` in the state folder), so cheated progress never reaches your own save. <kbd>F10</kbd> opens the trainer:
 
 - **PLAYER**: set or add credits, set the wristband level.
-- **WORLD**: game speed, time of day, free camera, collectibles on the map, and **ANY CAR IN ANY EVENT**. With it on, events drop their class, make, year and other car limits, so the car you drive is eligible as it is. Turn it on before you drive up to the event.
+- **WORLD**: game speed, time of day, **DAY LENGTH** (how many real minutes 24 game hours take, from 12 minutes to 24 hours, or this PC's clock; events that set their own time still do), free camera, collectibles on the map, and **ANY CAR IN ANY EVENT**. With it on, events drop their class, make, year and other car limits, so the car you drive is eligible as it is. Turn it on before you drive up to the event.
 - **GRAPHICS** and **DEBUG**: bloom, motion blur, depth of field, filtering, a file-open log.
 
 ## Treasure Map

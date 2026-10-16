@@ -28,6 +28,12 @@ REXCVAR_DEFINE_DOUBLE(cheat_time_of_day, -1.0, "Cheats",
                       "the title's clock run")
     .range(-1.0, 24.0)
     .lifecycle(rex::cvar::Lifecycle::kHotReload);
+REXCVAR_DEFINE_DOUBLE(cheat_day_length_minutes, 0.0, "Cheats",
+                      "How many real minutes 24 game hours last (1 to 1440); 0 keeps the "
+                      "title's rate, -1 follows this PC's clock. Scripted times of day "
+                      "still apply, and cheat_time_of_day wins over it")
+    .range(-1.0, 1440.0)
+    .lifecycle(rex::cvar::Lifecycle::kHotReload);
 REXCVAR_DEFINE_BOOL(cheat_free_camera, false, "Cheats",
                     "Switch the cameras to the title's free camera (moved with the pad); off "
                     "returns them to the player")
@@ -99,6 +105,14 @@ double TimeOfDaySeconds() {
   return std::isfinite(hours) && hours >= 0.0 ? std::min(hours, 24.0) * 3600.0 : -1.0;
 }
 
+double DayLengthMinutes() {
+  if (!Enabled()) return 0.0;
+  const double minutes = REXCVAR_GET(cheat_day_length_minutes);
+  if (!std::isfinite(minutes)) return 0.0;
+  if (minutes < 0.0) return kLocalClock;
+  return minutes >= 1.0 ? std::min(minutes, 1440.0) : 0.0;
+}
+
 bool FreeCamera() { return Enabled() && REXCVAR_GET(cheat_free_camera); }
 
 bool AnyCarInEvents() { return Enabled() && REXCVAR_GET(cheat_any_car_events); }
@@ -116,6 +130,9 @@ std::string Active() {
   }
   if (const double seconds = TimeOfDaySeconds(); seconds >= 0.0) {
     active += fmt::format("{}time_of_day={:.2f}", active.empty() ? "" : ",", seconds / 3600.0);
+  } else if (const double minutes = DayLengthMinutes(); minutes != 0.0) {
+    active += fmt::format("{}day_length={}", active.empty() ? "" : ",",
+                          minutes < 0.0 ? std::string("local") : fmt::format("{:g}", minutes));
   }
   if (const int32_t credits = g_set_credits_value.load(std::memory_order_acquire);
       credits >= 0) {
@@ -310,7 +327,8 @@ void SetAppliedCallback(std::function<void(std::string_view setting)> callback) 
 void InstallChangeLog() {
   // Every setting the trainer changes, including the graphics and debug ones
   // it shares with SETTINGS.
-  for (const char* name : {"cheat_time_scale", "cheat_time_of_day", "cheat_free_camera",
+  for (const char* name : {"cheat_time_scale", "cheat_time_of_day", "cheat_day_length_minutes",
+                           "cheat_free_camera",
                            "cheat_any_car_events", "cheat_show_collectibles",
                            "disable_motion_blur", "disable_depth_of_field",
                            "force_trilinear_filtering", "fh1_render_test_log_file_opens"}) {

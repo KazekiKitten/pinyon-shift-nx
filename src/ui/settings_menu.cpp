@@ -1577,6 +1577,16 @@ std::unique_ptr<MenuScreen> SettingsPages::TrainerWorld() {
     times.push_back({label, {{"cheat_time_of_day", hour}}});
   }
   rows.push_back(Setting("TIME OF DAY", std::move(times)));
+  // How long 24 game hours last while the time of day runs (#483); events
+  // and scripts that set the time still do.
+  rows.push_back(Setting("DAY LENGTH", {{"GAME", {{"cheat_day_length_minutes", "0"}}},
+                                        {"12 MIN", {{"cheat_day_length_minutes", "12"}}},
+                                        {"24 MIN", {{"cheat_day_length_minutes", "24"}}},
+                                        {"48 MIN", {{"cheat_day_length_minutes", "48"}}},
+                                        {"2 H", {{"cheat_day_length_minutes", "120"}}},
+                                        {"6 H", {{"cheat_day_length_minutes", "360"}}},
+                                        {"24 H", {{"cheat_day_length_minutes", "1440"}}},
+                                        {"PC CLOCK", {{"cheat_day_length_minutes", "-1"}}}}));
   rows.push_back(Toggle("FREE CAMERA", "cheat_free_camera"));
   // The discount signs and barn finds not yet found, on the map and minimap
   // (NP-8.6).

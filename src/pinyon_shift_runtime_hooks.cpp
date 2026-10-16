@@ -5,6 +5,7 @@
 #include <cctype>
 #include <chrono>
 #include <cmath>
+#include <ctime>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -6427,9 +6428,20 @@ void PinyonShiftTraceFrameTelemetry(PPCRegister& r28, PPCRegister& r31) {
 // +10505 means a script holds the time; the title's setters then leave it
 // alone, and so does this. Written once per frame from the delta hook, the
 // clock holds at the chosen hour.
-static void PinyonShiftHoldTimeOfDay() {
-  const double seconds = pinyon_shift::cheats::TimeOfDaySeconds();
-  if (seconds < 0.0) {
+//
+// The day length (#483) drives the same float: each frame it advances the
+// value it wrote last by the frame's game delta at the chosen rate, so the
+// title's own advance in between is replaced. When the clock moved further
+// than that from what was written (an event, a fast travel or a script set
+// it), the new time is taken as the base. The local clock writes this PC's
+// time of day.
+static void PinyonShiftHoldTimeOfDay(double delta_seconds) {
+  static double written = -1.0;
+  static double last_logged = -1.0;
+  const double held = pinyon_shift::cheats::TimeOfDaySeconds();
+  const double day_minutes = pinyon_shift::cheats::DayLengthMinutes();
+  if (held < 0.0 && day_minutes == 0.0) {
+    written = -1.0;
     return;
   }
   constexpr uint32_t kWorldHolder = FH1_ADDR(0x832DF024u);
@@ -6452,8 +6464,48 @@ static void PinyonShiftHoldTimeOfDay() {
   if (time_of_day == 0 ||
       !PinyonShiftGuestRangeReadable(time_of_day + kTimeOfDaySeconds, 20) ||
       LoadGuestU8(time_of_day + kTimeOfDayScriptHold) != 0) {
+    written = -1.0;
     return;
   }
+  constexpr double kDay = 86400.0;
+  double seconds = held;
+  if (held < 0.0) {
+    if (day_minutes < 0.0) {
+      const auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+      std::tm local{};
+#if defined(_WIN32)
+      localtime_s(&local, &now);
+#else
+      localtime_r(&now, &local);
+#endif
+      seconds = local.tm_hour * 3600.0 + local.tm_min * 60.0 + local.tm_sec;
+    } else {
+      uint32_t current_bits = LoadGuestU32(time_of_day + kTimeOfDaySeconds);
+      float current;
+      std::memcpy(&current, &current_bits, sizeof(current));
+      // Further than a quarter hour from what was written: the title set the
+      // time itself.
+      double drift = std::fabs(double(current) - written);
+      drift = std::min(drift, kDay - drift);
+      if (written < 0.0 || !std::isfinite(current) || drift > 900.0) {
+        written = std::isfinite(current) ? std::clamp(double(current), 0.0, kDay) : 0.0;
+      }
+      const double rate = kDay / (day_minutes * 60.0);
+      seconds = std::fmod(written + std::max(delta_seconds, 0.0) * rate, kDay);
+    }
+    // One event per game hour, so a route can time the day.
+    if (last_logged < 0.0 || std::floor(seconds / 3600.0) != std::floor(last_logged / 3600.0)) {
+      pinyon_shift::diagnostics::RecordEvent(
+          "cheat.day_clock",
+          {{"seconds", fmt::format("{:.1f}", seconds)},
+           {"day_minutes", fmt::format("{:g}", day_minutes)},
+           {"host_ms", fmt::format("{}", std::chrono::duration_cast<std::chrono::milliseconds>(
+                                             std::chrono::steady_clock::now().time_since_epoch())
+                                             .count())}});
+      last_logged = seconds;
+    }
+  }
+  written = seconds;
   const float value = static_cast<float>(seconds);
   uint32_t bits;
   std::memcpy(&bits, &value, sizeof(bits));
@@ -6912,7 +6964,7 @@ void PinyonShiftObserveSimulationDelta(PPCRegister& f31) {
     seconds *= scale;
     f31.f64 = seconds;
   }
-  PinyonShiftHoldTimeOfDay();
+  PinyonShiftHoldTimeOfDay(seconds);
   PinyonShiftApplyFreeCamera();
   PinyonShiftApplyCredits();
   PROFILE_SIMULATION_TIME_NS(

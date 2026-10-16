@@ -25,6 +25,12 @@ double TimeScale();
 // value when it leaves the title's clock alone (cheat_time_of_day).
 double TimeOfDaySeconds();
 
+// How long a day lasts (cheat_day_length_minutes, #483): minutes per
+// 24 game hours, kLocalClock to follow this PC's clock, or 0 to leave the
+// title's own rate. A held time of day wins over it.
+constexpr double kLocalClock = -1.0;
+double DayLengthMinutes();
+
 // Whether the cameras should be the title's free camera (cheat_free_camera).
 bool FreeCamera();
 
