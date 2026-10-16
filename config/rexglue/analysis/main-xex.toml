@@ -808,6 +808,16 @@ registers = ["r10"]
 # storing it at +448 on the main-loop owner and dispatching update systems.
 # Accumulate that title-authored delta for wall-time validation without
 # changing the register, store, or update cadence.
+# The guest vblank callback sub_8247C678 has decided whether to raise the
+# simulation's step event (r11, low byte non-zero to raise; it then resets its
+# vblank count). The step gate (#381, pinyon_shift_step_backpressure) holds
+# the raise while the render thread is two steps behind; the render thread's
+# next swap raises it.
+[[midasm_hook]]
+address = 0x8247C6F0
+name = "PinyonShiftGateSimulationStep"
+registers = ["r11"]
+
 [[midasm_hook]]
 address = 0x823EDB84
 name = "PinyonShiftObserveSimulationDelta"

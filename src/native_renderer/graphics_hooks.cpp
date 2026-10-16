@@ -212,6 +212,7 @@ void PinyonShiftObserveGraphicsFrame() {
                                  title_last_packet_ns);
   }
   ApplyRenderSettings();
+  PinyonShiftNoteTitleSwap();
   PROFILE_SOURCE_FRAME();
   title_emitter_frame = uint64_t(rex::perf::GetTotalCounter(
       rex::perf::CounterId::kSourceFrameCount));

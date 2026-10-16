@@ -39,6 +39,7 @@
 #include <rex/system/flags.h>
 #include <rex/system/function_dispatcher.h>
 #include <rex/system/thread_state.h>
+#include <rex/system/xevent.h>
 #include <rex/system/xmemory.h>
 
 #include "pinyon_shift_diagnostics.h"
@@ -140,6 +141,20 @@ REXCVAR_DEFINE_DOUBLE(pinyon_shift_max_simulation_step_ms, 33.4, "Pinyon Shift",
                       "With pinyon_shift_host_simulation_delta, the longest simulation step "
                       "(ms); longer gaps between ticks are dropped")
     .range(4.0, 250.0);
+REXCVAR_DEFINE_BOOL(pinyon_shift_step_backpressure, true, "Pinyon Shift",
+                    "Start a simulation step only when the title's render thread has taken "
+                    "all but the latest one, so every frame shown advances the game by one "
+                    "step instead of 0 or 2 (#381)")
+    .lifecycle(rex::cvar::Lifecycle::kHotReload);
+REXCVAR_DEFINE_DOUBLE(pinyon_shift_step_backpressure_max_hold_ms, 50.0, "Pinyon Shift",
+                      "With pinyon_shift_step_backpressure, the longest a step waits for the "
+                      "render thread before it runs anyway (ms)")
+    .range(5.0, 250.0)
+    .lifecycle(rex::cvar::Lifecycle::kHotReload);
+REXCVAR_DEFINE_BOOL(pinyon_shift_step_pacing_log, false, "Pinyon Shift",
+                    "Log each second how many simulation steps ran between the title's "
+                    "frames and how far their game time strays from wall time (#381)")
+    .lifecycle(rex::cvar::Lifecycle::kHotReload);
 REXCVAR_DEFINE_BOOL(pinyon_shift_fixed_steps_real_time, true, "Pinyon Shift",
                     "Scale FH1's constant per-update steps, written for 30 updates a second, by "
                     "the real time between updates, so they keep their speed at high frame "
@@ -6977,7 +6992,187 @@ void PinyonShiftReleaseLateSwap(PPCRegister& r7, PPCRegister& r8, PPCRegister& r
   }
 }
 
+namespace {
+// Steps the title's main loop has started (the delta hook runs once a step)
+// and the game time they covered, and the frames its render thread finished.
+std::atomic<uint64_t> g_simulation_steps{0};
+std::atomic<int64_t> g_simulation_step_ns{0};
+std::atomic<uint64_t> g_title_swaps{0};
+// The step gate holds a raise of the step event (the vblank thread sets it,
+// the render thread's swap or the next vblank clears it).
+std::atomic<bool> g_step_raise_held{false};
+// Steps minus swaps when they last lined up (the vblank thread and the swap,
+// under g_step_gate_mutex).
+std::mutex g_step_gate_mutex;
+int64_t g_step_gate_base = 0;
+// The title's step event handle and its vblank count since the last raise
+// (sub_8247C678, decision at 0x8247C6F0).
+constexpr uint32_t kStepEventHandle = FH1_ADDR(0x832E1260u);
+constexpr uint32_t kStepVblankCount = FH1_ADDR(0x832E126Cu);
+
+int64_t StepLead() {
+  return int64_t(g_simulation_steps.load(std::memory_order_acquire)) -
+         int64_t(g_title_swaps.load(std::memory_order_acquire)) - g_step_gate_base;
+}
+
+// Raises the title's step event as its vblank callback does: restart the
+// vblank count and set the event.
+void RaiseStepEvent() {
+  auto* kernel = rex::system::kernel_state();
+  if (!kernel) {
+    return;
+  }
+  StoreGuestU32(kStepVblankCount, 0);
+  if (auto event = kernel->object_table()->LookupObject<rex::system::XEvent>(
+          LoadGuestU32(kStepEventHandle))) {
+    event->Set(0, false);
+  }
+}
+}  // namespace
+
+// Pacing diagnostic (pinyon_shift_step_pacing_log): how many steps started
+// between consecutive title swaps (0 shows a frame again, 2 or more skip
+// steps) and how far the game time they cover strays from the wall time
+// between the swaps. Logged every second as simulation.step_pacing.
+void PinyonShiftNoteTitleSwap() {
+  g_title_swaps.fetch_add(1, std::memory_order_release);
+  if (g_step_raise_held.load(std::memory_order_acquire)) {
+    // A raise is held for this swap: raise it now rather than at the next
+    // vblank, so a frame that missed its vblank pair still gets its step.
+    std::lock_guard lock(g_step_gate_mutex);
+    if (g_step_raise_held.load(std::memory_order_relaxed) && StepLead() < 2) {
+      g_step_raise_held.store(false, std::memory_order_release);
+      RaiseStepEvent();
+    }
+  }
+  if (!REXCVAR_GET(pinyon_shift_step_pacing_log)) {
+    return;
+  }
+  using Clock = std::chrono::steady_clock;
+  // Runs on the title's render thread only.
+  static Clock::time_point last{}, report{};
+  static uint64_t last_steps = 0;
+  static int64_t last_step_ns = 0;
+  static std::array<uint32_t, 4> steps_per_swap{};
+  static uint32_t swaps = 0, strays = 0;
+  static double stray_ms = 0.0;
+  const Clock::time_point now = Clock::now();
+  const uint64_t steps = g_simulation_steps.load(std::memory_order_acquire);
+  const int64_t step_ns = g_simulation_step_ns.load(std::memory_order_acquire);
+  if (last != Clock::time_point{} && steps >= last_steps) {
+    const uint64_t n = steps - last_steps;
+    const double game_ms = double(step_ns - last_step_ns) / 1e6;
+    const double wall_ms = std::chrono::duration<double, std::milli>(now - last).count();
+    if (wall_ms < 100.0 && (n > 0 || swaps > 0)) {
+      ++steps_per_swap[std::min<uint64_t>(n, 3)];
+      ++swaps;
+      stray_ms += std::abs(game_ms - wall_ms);
+      strays += std::abs(game_ms - wall_ms) > 4.0;
+    }
+  }
+  last = now;
+  last_steps = steps;
+  last_step_ns = step_ns;
+  if (now - report >= std::chrono::seconds(1)) {
+    if (swaps) {
+      pinyon_shift::diagnostics::RecordEvent(
+          "simulation.step_pacing",
+          {{"swaps", fmt::format("{}", swaps)},
+           {"steps0", fmt::format("{}", steps_per_swap[0])},
+           {"steps1", fmt::format("{}", steps_per_swap[1])},
+           {"steps2", fmt::format("{}", steps_per_swap[2])},
+           {"steps3", fmt::format("{}", steps_per_swap[3])},
+           {"strays", fmt::format("{}", strays)},
+           {"stray_ms", fmt::format("{:.2f}", stray_ms / swaps)},
+           {"gate", REXCVAR_GET(pinyon_shift_step_backpressure) ? "on" : "off"}});
+    }
+    report = now;
+    steps_per_swap = {};
+    swaps = strays = 0;
+    stray_ms = 0.0;
+  }
+}
+
+// The title steps its simulation once per raise of the step event, which its
+// vblank callback (sub_8247C678) raises every second guest vblank whatever the
+// main and render threads are doing; the render thread draws the newest
+// finished step. When the render thread runs slower than the vblank pairs (a
+// frame over two guest vblanks), it skips steps, and a frame that falls
+// between two raises gets none: frames show 0 or 2 steps of motion at a flat
+// frame rate (#381). With pinyon_shift_step_backpressure the raise (r11) is
+// held while the main loop is two steps ahead of the render thread's swaps;
+// the next swap raises the event itself (PinyonShiftNoteTitleSwap). Steps
+// that keep up stay on the vblank, so each step's time matches the vblank its
+// frame is shown on.
+void PinyonShiftGateSimulationStep(PPCRegister& r11) {
+  using Clock = std::chrono::steady_clock;
+  // Runs on the vblank thread only.
+  static Clock::time_point held_since{};
+  static uint64_t raises = 0, holds = 0, swap_raises = 0, timeouts = 0;
+  static double held_ms = 0.0;
+  static Clock::time_point report{};
+  const Clock::time_point now = Clock::now();
+  if (held_since != Clock::time_point{} &&
+      !g_step_raise_held.load(std::memory_order_acquire)) {
+    // The swap raised the held step.
+    held_ms += std::chrono::duration<double, std::milli>(now - held_since).count();
+    held_since = {};
+    ++swap_raises;
+  }
+  if ((r11.u32 & 0xFF) != 0) {
+    std::lock_guard lock(g_step_gate_mutex);
+    bool hold = false;
+    if (REXCVAR_GET(pinyon_shift_step_backpressure)) {
+      int64_t lead = StepLead();
+      if (lead < 0) {
+        // Frames swapped without a step (loading, paused): start level.
+        g_step_gate_base += lead;
+        lead = 0;
+      }
+      if (lead >= 2) {
+        if (held_since == Clock::time_point{}) {
+          held_since = now;
+          ++holds;
+        }
+        const double max_hold = REXCVAR_GET(pinyon_shift_step_backpressure_max_hold_ms);
+        if (std::chrono::duration<double, std::milli>(now - held_since).count() < max_hold) {
+          hold = true;
+        } else {
+          // The render thread is not taking steps: run this one and count
+          // from the usual one step ahead.
+          g_step_gate_base += lead - 1;
+          ++timeouts;
+        }
+      }
+    }
+    g_step_raise_held.store(hold, std::memory_order_release);
+    if (hold) {
+      r11.u64 = 0;
+    } else {
+      if (held_since != Clock::time_point{}) {
+        held_ms += std::chrono::duration<double, std::milli>(now - held_since).count();
+        held_since = {};
+      }
+      ++raises;
+    }
+  }
+  if (now - report >= std::chrono::seconds(10)) {
+    if (report != Clock::time_point{} && REXCVAR_GET(pinyon_shift_step_backpressure)) {
+      pinyon_shift::diagnostics::RecordEvent("simulation.step_gate",
+                                             {{"raises", fmt::format("{}", raises)},
+                                              {"holds", fmt::format("{}", holds)},
+                                              {"swap_raises", fmt::format("{}", swap_raises)},
+                                              {"timeouts", fmt::format("{}", timeouts)},
+                                              {"held_ms", fmt::format("{:.1f}", held_ms)}});
+    }
+    report = now;
+    raises = holds = swap_raises = timeouts = 0;
+    held_ms = 0.0;
+  }
+}
+
 void PinyonShiftObserveSimulationDelta(PPCRegister& f31) {
+  g_simulation_steps.fetch_add(1, std::memory_order_release);
   double seconds = f31.f64;
   if (!std::isfinite(seconds) || seconds < 0.0 || seconds > 0.25) {
     PROFILE_SIMULATION_DELTA_INVALID();
@@ -7003,6 +7198,7 @@ void PinyonShiftObserveSimulationDelta(PPCRegister& f31) {
     seconds *= scale;
     f31.f64 = seconds;
   }
+  g_simulation_step_ns.fetch_add(int64_t(std::llround(seconds * 1e9)), std::memory_order_release);
   PinyonShiftHoldTimeOfDay(seconds);
   PinyonShiftApplyFreeCamera();
   PinyonShiftApplyCredits();

@@ -77,6 +77,8 @@
     {0x832BE9ECu, 0x833AA4DCu},  // data: data
     {0x832DF00Cu, 0x833CAACCu},  // data: data
     {0x832DF024u, 0x833CAAE4u},  // data: data
+    {0x832E1260u, 0x833CCD20u},  // data: data-ref
+    {0x832E126Cu, 0x833CCD2Cu},  // data: data-ref
     {0x832E29A0u, 0x833D02E0u},  // data: data
     {0x832E4A80u, 0x833D23E0u},  // data: data
     {0x832E4A9Cu, 0x833D23F4u},  // data: data

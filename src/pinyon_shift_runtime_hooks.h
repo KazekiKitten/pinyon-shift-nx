@@ -30,6 +30,10 @@ double PinyonShiftGameSecondsOfDay();
 // splash intro, which the opt-in opening-movie skip may complete early.
 void PinyonShiftObserveGuestFileOpen(std::string_view guest_path);
 
+// The title's render thread has finished a frame (its VdSwap call): the
+// simulation step gate (#381) counts steps against these.
+void PinyonShiftNoteTitleSwap();
+
 // Called on the guest thread when the player picks SETTINGS in the pause menu;
 // the handler must hand the work to the UI thread and return at once.
 // NP-4.4 Hor+: the factor the title's 16:9 main-view aspect is multiplied by
