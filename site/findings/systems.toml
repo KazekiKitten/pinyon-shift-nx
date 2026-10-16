@@ -72,6 +72,16 @@ source = """src/dev_options.cpp"""
 
 [[finding]]
 group = """Launch options"""
+base = """camera.zip CameraSettings.ini [PhotoModeCam]"""
+name = """photo camera height, bounds and zoom keys"""
+what = """`MaxHeight` (stock 2) caps how far above the car the photo camera rises, and the HUD height readout follows it; `BoundaryCeilingHeight` (6) and `BoundaryCylinderRadius` (100) bound the camera's free movement; `MinFOVPhotoMode` (4.5) is the narrowest field of view, so the deepest zoom. Raising them to 30, 50, 300 and 1 through an INI merge lets the camera climb to 30 m and roam further, with no code change."""
+how = """`photo_mode_limits` built-in mod with `fh1-photo-mode-limits` on a seed, stock against modded: the raise capture reads 2.0 m stock and 30.0 m modded, and the far and bumper captures differ (mean absolute difference 51-76 against 5.6 before the inputs)."""
+confidence = """confirmed"""
+issue = """#488"""
+source = """mods_src/builtin/photo_mode_limits; config/render-tests/fh1-photo-mode-limits.fh1test; docs/MODDING.md Built-in mods"""
+
+[[finding]]
+group = """Launch options"""
 base = """options object +3809, +4976, +8362"""
 v4 = """+3817, +5012, +8399"""
 name = """options that do nothing in retail"""

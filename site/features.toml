@@ -205,6 +205,11 @@ link = "playing.md#traffic-and-showcase-cars"
 cells = ["yes", "partly: the same database mod; tried on Windows only", "partly: the same database mod; tried on Windows only", "partly: shared from the PC with its mods; not tried"]
 
 [[platform]]
+feature = "Wider photo camera limits"
+link = "playing.md#gameplay-switches"
+cells = ["yes", "partly: the same INI mod; tried on Windows only", "partly: the same INI mod; tried on Windows only", "partly: shared from the PC with its mods; not tried"]
+
+[[platform]]
 feature = "Forza Horizon XE"
 link = "modding.md#the-xe-mod"
 cells = ["yes", "yes", "yes", "partly: shared from the PC to the base app; loads, not played through yet"]

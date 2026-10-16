@@ -129,6 +129,16 @@ their tile is black until bought. The tour bus was bought, saved and driven,
 and the Kenworth raced, on the base build
 (`config/render-tests/fh1-hidden-car-drive.fh1test`).
 
+`photo_mode_limits` (#488) is listed on F6 > MODS, off by default, and
+keeps the player's own save (`shares_save`). It merges four
+`PhotoModeCam` keys into `camera.zip/CameraSettings.ini`: `MaxHeight` 2 to
+30 m, `BoundaryCeilingHeight` 6 to 50, `BoundaryCylinderRadius` 100 to 300
+and `MinFOVPhotoMode` 4.5 to 1 (more zoom). On the base build the photo
+camera climbed to the 30 m readout where stock stops at 2 m
+(`config/render-tests/fh1-photo-mode-limits.fh1test`). v4's `media.zip`
+has no `CameraSettings.ini`, so the merge should apply there too; not yet
+tried on v4.
+
 ## Asset mods
 
 Files under `game/` replace the game's files with the same path
