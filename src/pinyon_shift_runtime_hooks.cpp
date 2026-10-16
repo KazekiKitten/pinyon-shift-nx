@@ -45,6 +45,7 @@
 #include "fh1_guest_address.h"
 #include "platform/host_platform.h"
 #include "fh1_render_test.h"
+#include "auto_start.h"
 #include "pinyon_shift_runtime_hooks.h"
 #include "cheats.h"
 #include "cheats_map.h"
@@ -868,6 +869,7 @@ void PinyonShiftObserveGuestFileOpen(std::string_view guest_path) {
     }
   }
   pinyon_shift::fh1_render_test::ObserveFileOpened(path);
+  pinyon_shift::auto_start::ObserveFileOpened(path);
   // Before the title's first frame: the options object is read during
   // boot (#477).
   pinyon_shift::dev_options::Update();

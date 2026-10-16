@@ -1,4 +1,5 @@
 #include "pinyon_shift_app.h"
+#include "auto_start.h"
 #include "pinyon_shift_init.h"
 #include "fh1_render_test.h"
 #include "audio_mix.h"
@@ -138,6 +139,9 @@ std::filesystem::path LongHostPath(std::filesystem::path path) {
 // Schema 29 writes every keyboard bind into the file: new files get the
 // driving-first keys (#432), older ones the keys they already had.
 constexpr uint32_t kConfigSchema = 29;
+
+// For START IN SINGLE PLAYER, armed once the settings are loaded.
+std::filesystem::path g_user_data_root;
 
 bool EnsureSupportedConfig(const std::filesystem::path& path, bool& created,
                            bool& migrated) {
@@ -613,6 +617,7 @@ void PinyonShiftApp::OnConfigurePaths(rex::PathConfig& paths) {
   }
 
   config_created_ = config_created;
+  g_user_data_root = paths.user_data_root;
   if (REXCVAR_GET(log_file).empty()) {
     REXCVAR_SET(log_file, rex::path_to_utf8(state_root / "logs" / "runtime.log"));
   }
@@ -756,6 +761,18 @@ void PinyonShiftApp::OnPreSetup(rex::RuntimeConfig& config) {
       if (!tool_mode) {
         if (auto* system = dynamic_cast<rex::input::InputSystem*>(input.get())) {
           system->AddDriver(pinyon_shift::ui::TouchPad::Get().CreateDriver());
+        }
+      }
+      return input;
+    };
+  }
+  // START IN SINGLE PLAYER (#617) presses A through its own synthetic pad.
+  if (pinyon_shift::auto_start::Configure(g_user_data_root) && config.input_factory) {
+    config.input_factory = [base = config.input_factory](bool tool_mode) {
+      auto input = base(tool_mode);
+      if (!tool_mode) {
+        if (auto* system = dynamic_cast<rex::input::InputSystem*>(input.get())) {
+          system->AddDriver(pinyon_shift::auto_start::CreateDriver());
         }
       }
       return input;

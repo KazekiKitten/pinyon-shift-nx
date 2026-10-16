@@ -919,6 +919,9 @@ std::unique_ptr<MenuScreen> SettingsPages::Gameplay() {
   // The boot splash movies end through the title's own end-of-stream path
   // (#617); read once at boot, so it applies at the next start.
   rows.push_back(Toggle("SKIP INTRO MOVIES", "pinyon_shift_skip_opening_movies"));
+  // Passes Press Start and SINGLE PLAYER at boot when a profile exists
+  // (#617); read at boot, so it applies at the next start.
+  rows.push_back(Toggle("START IN SINGLE PLAYER", "pinyon_shift_auto_start_single_player"));
   // The photo mode camera stops at walls and terrain unless the
   // disablephotomodecollisiondetection developer flag is set (#488).
   rows.push_back(Toggle("PHOTO CAMERA THROUGH WALLS", "pinyon_shift_photo_camera_through_walls"));

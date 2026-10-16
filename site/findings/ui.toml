@@ -348,6 +348,17 @@ source = """.local/backlog-research/near-native-2026-10-13/stage2/audio-census.m
 
 [[finding]]
 group = """Movies and camera shots"""
+base = """title flow file opens"""
+v4 = """same"""
+name = """title to free roam markers"""
+what = """On a played save the title flow opens files in a fixed order that marks each screen: `pressstart.wmv` when Press Start shows; after Press Start, the profile container's `forzaprofile`, `gameplaylog`, `playerdatabase`, `versionflags`, `storefrontpurchasehistory` and last the `thumbnails` folder, after which SINGLE PLAYER shows; after SINGLE PLAYER, the world's `trackroute000.xml` and `colorado.nav` with the loading screen. START IN SINGLE PLAYER (#617) presses A and waits for the next marker, which reached free roam in one press each on the base and v4 builds."""
+how = """`pinyon_shift_record_file_opens` with a route pressing A on each screen and captures between; the auto-start route without inputs on base and v4 seeds; a fresh profile leaves the menus alone."""
+confidence = """confirmed"""
+issue = """#617"""
+source = """src/auto_start.cpp"""
+
+[[finding]]
+group = """Movies and camera shots"""
 base = """media/ui/videos, sub_82E5D868"""
 v4 = """same"""
 name = """movies"""
