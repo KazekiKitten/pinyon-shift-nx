@@ -922,6 +922,10 @@ std::unique_ptr<MenuScreen> SettingsPages::Gameplay() {
   // The photo mode camera stops at walls and terrain unless the
   // disablephotomodecollisiondetection developer flag is set (#488).
   rows.push_back(Toggle("PHOTO CAMERA THROUGH WALLS", "pinyon_shift_photo_camera_through_walls"));
+  // Forza Data Out (Dash) packets for SimHub and dashboards (#481), to
+  // telemetry_udp_target (127.0.0.1:5300 unless the settings file says
+  // otherwise).
+  rows.push_back(Toggle("TELEMETRY OUT (UDP)", "telemetry_udp"));
   // How the AI race (#482): without the rubber band and catch-up, or also
   // one difficulty level up. The game reads it when it sets up the next
   // event's opponents.

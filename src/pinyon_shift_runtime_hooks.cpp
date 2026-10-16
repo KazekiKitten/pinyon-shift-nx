@@ -61,6 +61,7 @@
 #include "mod/overlay_device.h"
 #include "save/live_profile.h"
 #include "save/profile_body.h"
+#include "telemetry/telemetry_out.h"
 #include "ui/fh1_ui_api.h"
 #include "ui/ui_strings.h"
 
@@ -5844,7 +5845,8 @@ static void QueueCarTelemetry() {
   auto* input = rex::input::InputSystem::Live();
   if (!input) return;
   const bool wanted = ds::CurrentTriggerSettings().mode != ds::TriggerMode::kOff ||
-                      ds::CurrentLightbarMode() == ds::LightbarMode::kRpm;
+                      ds::CurrentLightbarMode() == ds::LightbarMode::kRpm ||
+                      pinyon_shift::telemetry::Wanted();
   if (!wanted) return;
   pinyon_shift::mod::EnqueueHostGuestTask([input] {
     namespace cd = car_dynamics;
@@ -5868,6 +5870,9 @@ static void QueueCarTelemetry() {
     const bool log = REXCVAR_GET(pad_ds_log_telemetry) && ++log_frames >= 30;
     if (log) log_frames = 0;
     if (!player) {
+      // Telemetry out (#481) says there is no car, as the game's own
+      // Data Out does in menus.
+      pinyon_shift::telemetry::Send({});
       if (log) {
         REXLOG_INFO("Car telemetry: no player car (world {:08X} slot {:08X} car {:08X} "
                     "dynamics {:08X} driver {})",
@@ -5904,6 +5909,14 @@ static void QueueCarTelemetry() {
     t.driven_rear = !t.driven_front;
     if (!std::isfinite(t.rpm) || !std::isfinite(t.redline_rpm)) return;
     input->SetCarTelemetry(t);
+    pinyon_shift::telemetry::CarSample sample;
+    sample.driving = !narrow;
+    sample.rpm = t.rpm;
+    sample.redline_rpm = t.redline_rpm;
+    sample.gear = t.gear;
+    sample.speed_mps = t.speed_mps;
+    for (int w = 0; w < 4; ++w) sample.wheel_slip[w] = direction * slip[w];
+    pinyon_shift::telemetry::Send(sample);
 
     if (log) {
       REXLOG_INFO("Car telemetry: rpm {:.0f} redline {:.0f} gear {} speed {:.1f} abs {} slip "

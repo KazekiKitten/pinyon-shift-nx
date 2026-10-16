@@ -33,6 +33,8 @@ set(PINYON_SHIFT_HOST_SOURCES
     src/cheats_map.cpp
     src/audio_mix.cpp
     src/dev_options.cpp
+    src/telemetry/forza_dash.cpp
+    src/telemetry/telemetry_out.cpp
     src/dlc_token_unlocks.cpp
     src/dlc_treasure_map.cpp
     src/hud_toggle.cpp
@@ -198,6 +200,10 @@ add_executable(pinyon_shift_save_backups_tests EXCLUDE_FROM_ALL
 target_include_directories(pinyon_shift_save_backups_tests PRIVATE src)
 target_link_libraries(pinyon_shift_save_backups_tests PRIVATE rex::runtime)
 
+add_executable(pinyon_shift_telemetry_tests EXCLUDE_FROM_ALL
+    tests/telemetry/forza_dash_test.cpp src/telemetry/forza_dash.cpp)
+target_include_directories(pinyon_shift_telemetry_tests PRIVATE src)
+
 add_executable(pinyon_shift_content_roots_tests EXCLUDE_FROM_ALL
     tests/dlc/content_roots_test.cpp)
 target_link_libraries(pinyon_shift_content_roots_tests PRIVATE rex::runtime)
@@ -226,6 +232,7 @@ add_dependencies(pinyon_shift_host_tests
     pinyon_shift_car_cards_tests
     pinyon_shift_save_backups_tests
     pinyon_shift_content_roots_tests
+    pinyon_shift_telemetry_tests
     pinyon_shift_overlay_device_tests
     pinyon_shift_fh1_edram_tiles_tests
     pinyon_shift_mod_hello_telemetry)
@@ -319,7 +326,7 @@ if(WIN32 AND PINYON_SHIFT_VC_REDIST_DIR)
 endif()
 
 if(WIN32)
-    target_link_libraries(pinyon_shift PRIVATE bcrypt d3d12 dbghelp dxgi rex::gpu-fh1)
+    target_link_libraries(pinyon_shift PRIVATE bcrypt d3d12 dbghelp dxgi ws2_32 rex::gpu-fh1)
 else()
     find_package(Threads REQUIRED)
     target_link_libraries(pinyon_shift PRIVATE Threads::Threads ${CMAKE_DL_LIBS} rex::gpu-fh1)

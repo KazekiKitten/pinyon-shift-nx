@@ -152,6 +152,10 @@ Turn cheats on in **SETTINGS > CHEATS** and restart. The game then plays a separ
 - **WORLD**: game speed, time of day, **DAY LENGTH** (how many real minutes 24 game hours take, from 12 minutes to 24 hours, or this PC's clock; events that set their own time still do), free camera, collectibles on the map, and **ANY CAR IN ANY EVENT**. With it on, events drop their class, make, year and other car limits, so the car you drive is eligible as it is. Turn it on before you drive up to the event.
 - **GRAPHICS** and **DEBUG**: bloom, motion blur, depth of field, filtering, a file-open log.
 
+## Telemetry out
+
+**F6 > GAMEPLAY > TELEMETRY OUT (UDP)** sends the player car's telemetry over UDP in Forza Motorsport 7's Data Out "Dash" layout (311 bytes), which SimHub, dashboards and motion software read. It goes to `127.0.0.1:5300` unless `telemetry_udp_target = "host:port"` in `pinyon_shift.toml` says otherwise; point the tool at that port and choose its Forza Motorsport 7 profile. Each frame carries whether you're driving, engine RPM and redline, speed, gear (reverse 0, neutral 11) and each tyre's longitudinal slip (1 is peak grip). Position, motion, suspension, lap and input fields are sent as 0 until the game's values for them are traced.
+
 ## Treasure Map
 
 The Treasure Map add-on was sold through a service that no longer exists. It's included and on by default. Turn it off with **F6 > GAMEPLAY > TREASURE MAP** or in the launcher's **Settings**. Once a save's map is revealed it stays revealed.
