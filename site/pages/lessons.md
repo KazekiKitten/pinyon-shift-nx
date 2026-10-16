@@ -98,6 +98,7 @@ Negative results, so they aren't retried without a new reason:
 
 | Idea | Result |
 | --- | --- |
+| A CPU pause or a thread yield for `db16cyc`, the guest's spin-wait delay hint (another ReXGlue fork cut a title's CPU by a quarter with the yield) | FH1 has 20 sites; on multivac (v4, open-world route, three interleaved runs each) process CPU per frame was 27.2 ms with no hint, 29.2 with pause and 27.2 with yield, frame time unchanged. Kept as `ppc_db16cyc_hint`, default off, for the Deck and Android |
 | Skipping texture and vertex fetch invalidation when a fetch-constant write repeats the old value (another ReXGlue fork measured 13-30 % of its writes as repeats) | FH1 repeats none: 0 of 33.5 million fetch-constant writes in a 45 s open-world route on multivac (v4, RTX 4080), so there is nothing to skip |
 | CR fields in C++ locals, synced at every call | binaries 13–26 % larger for no gain; syncing by the calling convention instead paid (see above) |
 | Every register in locals for physics functions with several calls or many live vector registers (NN-5.1) | 61 of the 80 tried got longer or did more memory accesses on arm64, from the spills of 128-bit locals and the stores before each call: the tyre model `sub_82D2F348` +1 % instructions with 639 to 780 memory accesses, `sub_82D2D730` +22 %, `sub_82D2D0B0` +20 % with stack accesses 42 to 628; only 19 functions were kept |
