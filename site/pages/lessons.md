@@ -69,6 +69,8 @@ On Windows, `std::filesystem::path::string()` converts through the ANSI code pag
 
 Running above 30 fps needed no engine changes beyond faster vblanks: the game already integrates a real time delta. What remained were systems that add a constant per update. They were found by comparing guest memory snapshots at 30 and 120 fps and trapping writes to the values that drifted. Gate every such change on simulation time against real time, pose drift and the save's hash.
 
+A faster clock exposed one more console assumption: the simulation steps on the vblank and the render thread draws the newest finished step, which pairs one step with one frame only while every frame fits its vblanks. Count steps between the title's own frame submissions to see it. A per-present counter of the loop's tick hid it, because the tick fires before the loop waits. Holding the step until the render thread catches up fixed it, but only when the hold was released at the next swap and steps that kept up stayed on the vblank: holding the main loop until the swap also stopped the skips, and moved every step onto the swap's uneven timing.
+
 ## Methods that held up
 
 - **Pinned saves.** Scripted routes from a frozen copy of a save, never the live one, so results don't depend on progress.
@@ -98,6 +100,9 @@ Negative results, so they aren't retried without a new reason:
 
 | Idea | Result |
 | --- | --- |
+| Equal simulation steps from the average present interval (#381) | game time followed wall time, but a scripted route desynced in the menus at 2x and frames still showed 0 or 2 steps |
+| Holding the main loop after its step wait until the render thread's swap (#381) | 97-99 % of frames got one step, but steps moved onto the swap's timing: at 60 fps game time per frame strayed more than with no gate (over 4 ms in 6.5-7 % of frames against 2.8 %) |
+| Holding the vblank's step signal until the next vblank, without raising it at the swap (#381) | paced as well, but the held step lost up to a vblank: the slowest tenth of seconds fell from 100 to 86 title frames |
 | A CPU pause or a thread yield for `db16cyc`, the guest's spin-wait delay hint (another ReXGlue fork cut a title's CPU by a quarter with the yield) | FH1 has 20 sites; on multivac (v4, open-world route, three interleaved runs each) process CPU per frame was 27.2 ms with no hint, 29.2 with pause and 27.2 with yield, frame time unchanged. Kept as `ppc_db16cyc_hint`, default off, for the Deck and Android |
 | Skipping texture and vertex fetch invalidation when a fetch-constant write repeats the old value (another ReXGlue fork measured 13-30 % of its writes as repeats) | FH1 repeats none: 0 of 33.5 million fetch-constant writes in a 45 s open-world route on multivac (v4, RTX 4080), so there is nothing to skip |
 | CR fields in C++ locals, synced at every call | binaries 13–26 % larger for no gain; syncing by the calling convention instead paid (see above) |
