@@ -17,6 +17,7 @@ import tempfile
 import unittest
 import zipfile
 from contextlib import redirect_stdout
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -260,6 +261,27 @@ class CrashReportTests(unittest.TestCase):
         self.assertEqual(pinyon_crash.graphics_driver("libnvidia-glcore.so.580.95"), "NVIDIA")
         self.assertEqual(pinyon_crash.graphics_driver("pinyon_shift.exe"), "")
         self.assertEqual(pinyon_crash.graphics_driver(None), "")
+
+    def test_issue_body_places_the_crash_without_the_zip(self):
+        # Almost every crash issue arrives without its ZIP (#626, #614 and
+        # others), so the issue carries the module, driver and run time.
+        details = pinyon_crash.crash_details(
+            "code=0xc0000005 address=0x7ff8 operation=Read\n"
+            "fault_module=igvk64.dll fault_offset=0x14d102\n"
+            "#0 0x00007ffc08d5d102 DumpRegistryKeyDefinitions+0x13e902\n")
+        started = datetime.now(timezone.utc) - timedelta(seconds=95)
+        lines = pinyon_crash.issue_detail_lines(
+            details, {"name": "Intel(R) UHD Graphics", "driver_version": "1656899"},
+            {"version": "0.5.1"}, {"draw_resolution_scale_x": "2"}, started)
+        self.assertEqual(lines[0], "- Faulting module: `igvk64.dll+0x14d102 "
+                                   "(dumpregistrykeydefinitions+0x13e902)`")
+        self.assertIn("- GPU driver version: `1656899`", lines)
+        self.assertIn("- Pinyon Shift version: `0.5.1`", lines)
+        self.assertIn("- Resolution scale: `2x`", lines)
+        self.assertTrue(any(line.startswith("- Ran for: `9") for line in lines))
+        # Nothing known, nothing claimed.
+        self.assertEqual(pinyon_crash.issue_detail_lines(
+            pinyon_crash.crash_details(""), None, {}, {}, datetime.now(timezone.utc))[:-1], [])
 
     def test_out_of_graphics_memory_is_recognized(self):
         # #558: at resolution scale 3x the scaled resolve buffer and then the

@@ -256,6 +256,31 @@ def crash_details(text: str) -> dict:
     return details
 
 
+def issue_detail_lines(details: dict, selected: dict | None, release: dict, settings: dict,
+                       started: datetime) -> list[str]:
+    """The issue body's lines beyond the crash ID: where it faulted, the
+    driver, the version, the resolution scale and how long the game ran."""
+    lines = []
+    if details.get("fault_module"):
+        where = details["fault_module"]
+        if details.get("fault_offset"):
+            where += "+" + details["fault_offset"]
+        if details.get("top_frame"):
+            where += f" ({details['top_frame']})"
+        lines.append(f"- Faulting module: `{where}`")
+    if selected and selected.get("driver_version"):
+        lines.append(f"- GPU driver version: `{selected['driver_version']}`")
+    if release.get("version"):
+        lines.append(f"- Pinyon Shift version: `{release['version']}`")
+    scale = settings.get("draw_resolution_scale_x") if isinstance(settings, dict) else None
+    if scale:
+        lines.append(f"- Resolution scale: `{str(scale).strip()}x`")
+    ran = (datetime.now(timezone.utc) - started).total_seconds()
+    if ran >= 0:
+        lines.append(f"- Ran for: `{int(ran)} s`")
+    return lines
+
+
 # --- Evidence ----------------------------------------------------------------------
 
 def session_log(logs: Path, process_id: int, started: datetime) -> tuple[Path | None, list[dict]]:
@@ -566,6 +591,9 @@ def create(state: Path, executable: Path, started: datetime, process_id: int, ex
             platform_line,
             (f"- GPU selected: `{selected.get('name')}`" if selected
              else f"- GPU selected: unknown; installed adapters: `{installed}`"),
+            # Most reports arrive without the ZIP, so the lines that place the
+            # crash are in the issue itself.
+            *issue_detail_lines(details, selected, release, settings, started),
             "",
             "### Diagnostic report",
             "",
