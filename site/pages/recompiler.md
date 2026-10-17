@@ -121,6 +121,15 @@ On the race route with every call verified, 192 sampled functions were run 31,10
 
 ## Building the output
 
+The clean-slate observable-state probe currently provides conservative
+read-before-write sets, with unresolved indirect calls reading every context
+slot. Its counts of stores that could be published later are not counts of
+instructions removed: a later observer still needs the value, and keeping
+it in a local may spill. Historical global function counts also cannot
+attribute shared callees to individual threads. The proposed 15% gate for
+an IR recompiler remains unestablished. See the
+[Stage 0 method and limitations](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/CLEAN_SLATE_STAGE0.md#cs-02-observable-context-state).
+
 Output is split into files of at most 1 MiB, with the function-to-file assignment kept stable between runs (`codegen.partition.json`) so a regeneration doesn't rebuild everything. CMake runs the generator with a depfile covering the manifest, the analysis files, the three images and the SDK version, then builds the main image as an object library with a precompiled header and the facades as shared libraries.
 
 | Setting | Value |

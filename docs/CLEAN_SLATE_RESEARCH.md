@@ -324,3 +324,4 @@ PM4 stream, not only within the frame and audio thresholds.
 | Item | Outcome | Evidence |
 | --- | --- | --- |
 | Research | **Done 2026-10-17.** This page. Nothing built or run. | Cites NN, NL, DL and the site's lessons and recompiler pages |
+| CS-0.2 | **Gate unestablished 2026-10-17.** Conservative CFG/direct-call census of 76,257 generated bodies: 48,100 indirect call sites remain unknown. Full GPR/LR/CTR publication deferrals are 0.87%, 1.16%, 1.53% of identified host instructions in the render, simulation and audio direct closures (global race-call weighted estimates: 0.48%, 0.55%, 2.82%). Deferrals are not net deletions; closures omit indirect reachability and have no per-thread call attribution. These numbers cannot establish or refute the 15% gate. | [Method and limitations](CLEAN_SLATE_STAGE0.md#cs-02-observable-context-state); `tools/cs/ctx-publish-sets.py`; `.local/codex-cs/ctx{,-summary}.json` |
