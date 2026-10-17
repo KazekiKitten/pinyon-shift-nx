@@ -41,6 +41,7 @@
 #include <rex/system/thread_state.h>
 #include <rex/system/xevent.h>
 #include <rex/system/xmemory.h>
+#include <rex/ui/upscaler.h>
 
 #include "pinyon_shift_diagnostics.h"
 #include "fh1_guest_address.h"
@@ -663,8 +664,11 @@ static bool PinyonShiftGuestRangeReadable(uint32_t address, uint32_t size);
 static std::string PinyonShiftReadGuestAscii(uint32_t address,
                                              uint32_t maximum_length);
 
+// A temporal upscaler keeps its own history; the game's motion blur and
+// depth of field smear what it accumulates, so both stay off while one runs
+// (UPSCALING_BACKLOG.md UP-1.6).
 bool PinyonShiftDisableMotionBlur() {
-  return REXCVAR_GET(disable_motion_blur);
+  return REXCVAR_GET(disable_motion_blur) || rex::ui::IsTemporalUpscalerActive();
 }
 
 // sub_82C7E0B0 borrows a decoded buffer and length for its memory stream.
@@ -838,7 +842,7 @@ void PinyonShiftBloomScale(PPCRegister& r1) {
 }
 
 bool PinyonShiftDisableDepthOfField(PPCRegister& r11) {
-  if (!REXCVAR_GET(disable_depth_of_field)) {
+  if (!REXCVAR_GET(disable_depth_of_field) && !rex::ui::IsTemporalUpscalerActive()) {
     return false;
   }
   r11.u64 = 0;
