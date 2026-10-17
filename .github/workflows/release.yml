@@ -25,7 +25,7 @@ jobs:
         # pinyon.py on the player's pinned runtime.
         shell: powershell
         run: |
-          . .	oolselease-common.ps1
+          . ./tools/release-common.ps1
           $python = (Get-PinyonReleaseToolchain).python
           $root = Resolve-PinyonLocalPath -RelativePath $python.install_path
           $archive = Join-Path $env:RUNNER_TEMP 'python-embed.zip'
