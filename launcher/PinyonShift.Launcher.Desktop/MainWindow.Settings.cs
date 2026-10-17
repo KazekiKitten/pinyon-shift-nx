@@ -83,6 +83,7 @@ public partial class MainWindow
         "fsr" => "FSR 1 upscales",
         "fsr2" => "FSR 2 upscales",
         "fsr3" => "FSR 3 upscales",
+        "dlss" => "DLSS upscales",
         _ => "stretched",
     };
 

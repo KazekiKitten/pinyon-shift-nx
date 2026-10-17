@@ -329,6 +329,7 @@ std::string SettingsPages::ResolutionLine() const {
   const char* upscaler = SameValue(effect, "fsr")    ? ", FSR 1 UPSCALES TO "
                          : SameValue(effect, "fsr2") ? ", FSR 2 UPSCALES TO "
                          : SameValue(effect, "fsr3") ? ", FSR 3 UPSCALES TO "
+                         : SameValue(effect, "dlss") ? ", DLSS UPSCALES TO "
                                                      : ", STRETCHED TO ";
   if (output_width * output_height > render_width * render_height) {
     return line + upscaler + size(output_width, output_height);

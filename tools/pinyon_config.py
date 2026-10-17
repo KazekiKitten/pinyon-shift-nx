@@ -508,7 +508,7 @@ def add_parser(commands) -> None:
     apply.add_argument("--post-effect", choices=("none", "fxaa", "fxaa_extreme"))
     apply.add_argument("--resolution-scale", type=int, choices=(1, 2, 3, 4))
     apply.add_argument("--graphics-api", choices=("vulkan",))
-    apply.add_argument("--output-scaling", choices=("bilinear", "cas", "fsr", "fsr2", "fsr3"))
+    apply.add_argument("--output-scaling", choices=("bilinear", "cas", "fsr", "fsr2", "fsr3", "dlss"))
     apply.add_argument("--treasure-map", choices=booleans)
     apply.add_argument("--preset", choices=("custom", "shipping_1x", "experimental_2x",
                                             "experimental_3x"))

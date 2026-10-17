@@ -11,7 +11,7 @@ param(
     [int]$ResolutionScale = 1,
     [ValidateSet('vulkan')]
     [string]$GraphicsApi = 'vulkan',
-    [ValidateSet('bilinear', 'cas', 'fsr', 'fsr2', 'fsr3')]
+    [ValidateSet('bilinear', 'cas', 'fsr', 'fsr2', 'fsr3', 'dlss')]
     [string]$OutputScaling = 'bilinear',
     [ValidateSet('true', 'false')]
     [string]$TreasureMap = 'true',
