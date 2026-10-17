@@ -49,7 +49,10 @@ function Repair-MaterializedLinks {
     param([Parameter(Mandatory)] [string]$RepositoryRoot)
     $mspackRoot = Join-Path $RepositoryRoot 'thirdparty/libmspack'
     if (-not (Test-Path -LiteralPath (Join-Path $mspackRoot '.git'))) { return }
+    # A failed git here (dubious ownership of the nested repository in 0.5.1,
+    # #639) listed no links, so the text placeholders were compiled as C.
     $entries = @(& $git -C $mspackRoot ls-files -s | Where-Object { $_ -match '^120000 ' })
+    if ($LASTEXITCODE -ne 0) { throw "Unable to list the libmspack links in $mspackRoot." }
     foreach ($entry in $entries) {
         if ($entry -notmatch '^120000 [0-9a-f]+ 0\t(.+)$') {
             throw "Unable to parse a libmspack symlink entry: $entry"
