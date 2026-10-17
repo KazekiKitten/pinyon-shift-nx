@@ -11,6 +11,16 @@ The Xbox 360 GPU, Xenos, draws into 10 MB of EDRAM and copies results out to mai
 
 ## Why a game-specific renderer
 
+A standalone driver probe found that an extension name alone is not enough
+to plan a GPU-driven front end. On the reference Deck's RADV 24.3-devel,
+`VK_EXT_device_generated_commands` is available, but execution-set pipeline
+binding supports compute only. The Odin's installed Turnip V37 exposes
+neither EXT nor NV DGC. NVIDIA 581.08 supports graphics execution sets;
+the M4 Pro accepts a native Metal render ICB with per-command pipelines,
+but MoltenVK 1.4.1 exposes neither Vulkan DGC extension. This leaves the
+proposed graphics front end blocked on the yardstick drivers. See the
+[Stage 0 device table and method](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/CLEAN_SLATE_STAGE0.md#cs-03-driver-capabilities).
+
 The first step was a census of what the game actually sends the GPU, taken over 17,580 frames of scripted routes and later extended by 10,980 more ([NATIVE_FRAME_CONTRACT.md](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/native-renderer/NATIVE_FRAME_CONTRACT.md)):
 
 | The game uses | Count |

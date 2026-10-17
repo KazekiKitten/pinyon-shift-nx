@@ -64,3 +64,63 @@ Reproduction (PowerShell, repository root):
 The self-check covers a callee reading a caller's volatile `r6`, a write
 before a call, a conditional write, a partial write, recursion and an
 unresolved indirect call. No generated code is changed.
+
+## CS-0.3: driver capabilities
+
+**Extension gate passes literally on the Deck; graphics pipeline switching
+does not, 2026-10-17.** Standalone `tools/cs/vulkan-probe.cpp`, built from
+project `ef46d6c4` plus the probe, using SDK `79d3e6f`'s Vulkan headers.
+It queries advertised extensions and their complete feature/property
+structures with `vkGetPhysicalDeviceFeatures2` and `Properties2`. It does
+not execute generated commands. Zero fields for an absent extension mean
+not queried, not a driver-returned limit. Full JSON: `vulkan-{multivac,deck,odin,mac}.json`
+in `.local/codex-cs/`.
+
+| Device / actual driver | EXT DGC / feature | Pipeline execution-set limit / pipeline-binding stages | NV DGC / shader groups | Placed map: placed / range / reserve; alignment |
+| --- | --- | --- | --- | --- |
+| Multivac, RTX 4080, NVIDIA 581.08 | yes / yes; dynamic layout yes | 16,384 / `0xFF` (graphics and compute) | yes / 16,384 | absent |
+| Steam Deck LCD, RADV Mesa 24.3.0-devel `aef01ebd12` | yes / yes; dynamic layout yes | 4,096 / `0x20` (**compute only**) | absent | yes / no / yes; 4,096 bytes |
+| Odin 2 Portal, Adreno 740, Turnip Mesa 26.3.0-devel `a995eaeda4` (installed V37) | absent | unavailable | absent | yes / no / yes; 4,096 bytes |
+| Minivac, M4 Pro, MoltenVK 1.4.1 used by the game | absent | unavailable | absent | absent |
+| Astra | not measured: no Astra in `adb devices` or the reachable mDNS endpoints (those identify as RG Rotate and Shield TV) | unknown | unknown | unknown |
+
+The EXT maximum sequence counts are 4,194,303 on NVIDIA and 1,048,576 on
+RADV; token limits 32 and 128; token offsets/strides `UINT32_MAX` on NVIDIA
+and 2,047/2,048 on RADV. Both report input modes `3`, transform feedback
+and multidraw-count support. RADV's general stages mask is `0x3FFF`, but
+the **pipeline-binding** mask is only `0x20`, and shader-binding mask zero.
+NVIDIA reports `0xFF` for all three stage masks. General DGC support is
+therefore insufficient to authorize the proposed graphics execution sets
+on the Deck. The Odin needs the existing recorder fallback. Do not assume
+a newer Mesa's features from its extension name on an installed driver.
+
+`tools/cs/metal-probe.mm` separately allocated a two-command render ICB
+on the M4 Pro with `inheritPipelineState=NO`, built a pipeline with
+`supportIndirectCommandBuffers=YES`, and bound it in both commands.
+Allocation and binding succeeded (`metal-mac.json`); GPU execution and a
+compute-generated sequence were not tested. MoltenVK's extension result
+must not be inferred from native Metal support. The Vulkan loader initially
+returned `VK_ERROR_INCOMPATIBLE_DRIVER` without its ICD manifest; querying
+the exact game's `rexglue-artifacts/libMoltenVK.dylib` directly succeeded.
+
+On the Odin, the standalone binary uses the game's adrenotools namespace
+hooks with a read-only copy of the **installed** driver, SHA-256
+`b6d445f512d15bb94be3d46bb2e2d27f604f161bf7400f32ed6008de59844c7f`.
+It runs in `/data/local/tmp/cs-stage0`, not in the player's state. The
+hooks need `libc++_shared.so` beside them; the first attempt without that
+dependency failed to load, then passed after copying it into that private
+directory. No driver or player configuration was changed.
+
+Build with C++20 and `-O2`, including
+`thirdparty/shiftglue-sdk/thirdparty/vulkan-headers/include`:
+Clang 20.1.8 on Windows; WSL clang with `-ldl -static-libstdc++
+-static-libgcc` for the native Deck executable; NDK r29 clang with
+`--target=aarch64-linux-android33 -static-libstdc++ -ldl -llog` plus the
+existing `libadrenotools.a` and `liblinkernsbypass.a` and adrenotools include
+directory for Android. Desktop/Deck take an optional loader path. Android
+takes `driver-directory/ hook-directory/ library-name` for the custom
+driver. Metal builds with `clang++ -fobjc-arc -framework Metal -framework
+Foundation`. All probes exit nonzero on API/load failure.
+
+The distinction between general DGC and pipeline binding follows the
+[Khronos DGC specification](https://docs.vulkan.org/spec/latest/chapters/device_generated_commands/generatedcommands.html).
