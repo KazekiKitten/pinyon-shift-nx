@@ -12,17 +12,19 @@ A developer alpha. The Android build is the same recompiled game, cross-compiled
 ## Requirements
 
 - A Windows PC where the game is already built and plays.
-- About 15 GB free on the PC's install drive. The launcher downloads the pinned Android SDK, NDK and JDK 17 when the PC has none, after you accept the Android SDK license.
-- An arm64 device with Android 13 or later and a Vulkan 1.3 driver, about 8 GB free, on the same network as the PC.
+- About 15 GB free on the PC's install drive. The launcher downloads the pinned Android SDK, NDK and JDK 17 when the PC has none, after you accept the Android SDK license. With Android Studio's SDK already installed, it adds the missing packages to that SDK with its own pinned command-line tools.
+- An arm64 device with an ARMv8.2 CPU (Cortex-A55, Cortex-A75 or newer; every Snapdragon 845 and later), Android 13 or later and a Vulkan 1.3 driver, about 8 GB free, on the same network as the PC.
 - Tuned for Snapdragon 8 Gen 2 or newer (Adreno 740 and up).
 
 ## Install over Wi-Fi
 
 1. In the launcher, choose **Android**, then **Build APK**. The first build takes 20 to 60 minutes.
 2. Choose **Share on Wi-Fi**. Scan the QR code with the device's camera, download the app and open it. Android asks once to allow the browser to install apps; Windows asks once to allow the launcher on private networks.
-3. The app finds the PC on the local network and asks for the six-digit code the launcher shows. It then lists what the PC offers: the game files (7.2 GB, required), title update v4, imported DLC and your PC save. Then **Play**.
+3. The app finds the PC on the local network and asks for the six-digit code the launcher shows. It then lists what the PC offers: the game files (7.2 GB, required), title update v4, imported DLC, the PC's enabled mods, custom radio stations and the XE mod, and your PC save. Then **Play**.
 
-No USB debugging is needed. Your PC save is never copied unless you select it, and the device's own save is backed up first. An interrupted copy resumes where it stopped. To copy more later, long-press the app icon and choose **Get files from PC**.
+No USB debugging is needed. Your PC save is never copied unless you select it, and the device's own save is backed up first. An interrupted copy resumes where it stopped. To copy more later, long-press the app icon and choose **Get files from PC**. When the PC offers a newer build of the app, the setup screen says so and offers **Install update**; a base build is never offered to a device that has title update v4.
+
+Mods, radio and XE copy together, because the patches the PC builds for them match exactly its set of enabled mods. Files the PC no longer has are moved to `backups` on the device. Native mods (a PC library) aren't shared, and XE isn't shared to a v4 app.
 
 The launcher serves only while sharing is on, only to private network addresses, and only the files it listed. The pairing code changes each time sharing starts, and ten wrong codes stop the share. Nothing goes from the device to the PC.
 
@@ -38,18 +40,23 @@ python tools/pinyon.py android push-data
 
 `push-data` copies the extracted game into `Android/data/studio.deimos.pinyonshift/files/game/base` and resumes if interrupted. Saves, settings, logs and mods live beside it in `files/state`, laid out as on the PC.
 
+After the game has run once on a device, `python tools/pinyon.py android shader-pack` makes a shader pack for it: it starts the game to the title screen over adb, collects the SPIR-V of every shader the device's pipeline storage names, builds a pack and puts it in the state's shader cache. Later starts load the pack instead of translating those shaders: on the Odin 2 (Adreno 740), 711 shaders, shader translation at start 0.52 to 0.07 s and start to title 2.99 to 2.66 s. The pack belongs to the device and build it was made on; run the command again after updating. Stop the game first; the command refuses while it runs.
+
 ## Presets and drivers
 
-**SETTINGS > GRAPHICS > GRAPHICS PRESET** has two choices:
+**SETTINGS > GRAPHICS > GRAPHICS PRESET** has three choices:
 
 | Preset | MSAA | Sun shadows | Rate |
 | --- | --- | --- | ---: |
+| ULTRA LOW 30 | Off | Off | 30 |
 | SMOOTH 60 | 2x | Off | 60 |
 | QUALITY 30 | 4x | On | 30 |
 
-Both draw the game's three predicated tiles in one pass and redraw the reflection map at a quarter of the game's rate.
+ULTRA LOW 30 is for entry-level phones and also keeps textures at most 256 texels across (**TEXTURE SIZE**), which saves memory a phone shares with the CPU. All three draw the game's three predicated tiles in one pass and redraw the reflection map at a quarter of the game's rate.
 
 On Adreno 7xx and 8xx the bundled Mesa Turnip driver (Gen8 V37) is chosen automatically. It is much faster than the stock driver on the Adreno 740 and takes about a fifth less GPU time on the Adreno 830. Other GPUs use the system driver. **SETTINGS > GRAPHICS > GPU DRIVER** picks the driver for the next start. **IMPORT DRIVER (.ZIP)** adds an adrenotools package, including Qualcomm driver packages; the log's `Vulkan device` line shows which driver version runs.
+
+Where a phone's fastest cores form their own cluster of two or more (the Snapdragon 8 Elite's two 4.32 GHz cores), the GPU command decoder thread is pinned to them. Left to the scheduler it spent whole stretches on the slower cores: in an in-run A/B on the Astra at the 60 fps limit, 25 % of frames took over 17.5 ms and the decoder 16.2 ms of CPU a frame, against 2 % and 10.2 ms pinned, with the same GPU time. Phones with a single fastest core, such as the 8 Gen 2 and 8 Gen 3, are left alone. The `android_thread_cores` setting overrides it (`NAME=CORES` entries separated by semicolons, `off` to disable).
 
 ## Measured devices
 
