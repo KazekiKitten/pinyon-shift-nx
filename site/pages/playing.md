@@ -66,7 +66,7 @@ The game has no built-in frame generation yet ([planned](https://github.com/arca
 2. In **F6 > DISPLAY**, set **GAME FRAME RATE LIMIT** to half your display's refresh rate, for example 60 on a 120 Hz display.
 3. In Lossless Scaling, set **Frame Generation** to LSFG 3 with a 2x multiplier, set **Scaling Type** to Off (the game already scales to your screen), then switch to the game and press the scale hotkey (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd> by default).
 
-The generated frames include the HUD, so its text can smear when the camera moves fast. On an RTX 4080 with a 4K display, LSFG 3 kept about 16 % of the GPU's 3D engine busy with the game at 1x and 60 fps. On Linux and the Steam Deck, the community [lsfg-vk](https://lsfg-vk.dev) layer does the same with your own Lossless Scaling install; we have not tested it with the game.
+The generated frames include the HUD, so its text can smear when the camera moves fast. On an RTX 4080 with a 4K display, LSFG 3 kept about 16 % of the GPU's 3D engine busy with the game at 1x and 60 fps. On Linux and the Steam Deck, the community [lsfg-vk](https://lsfg-vk.dev) Vulkan layer does the same with the `Lossless.dll` from your own Lossless Scaling install. On a Steam Deck with the game limited to 30 fps it doubled the frames sent to the screen to 60 a second, and the GPU went from 14 % to about 65 % busy at the title screen.
 
 ## HUD
 
