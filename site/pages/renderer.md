@@ -25,9 +25,17 @@ The separate placed-mapping probe succeeded on both yardsticks: a 512 MiB
 coherent Vulkan allocation mapped at a reserved fixed address, and a
 compute shader verified every CPU-written word with zero mismatches.
 Turnip's type was device local; RADV's selected type was system/GTT memory.
-This establishes placement support, while guest aliases and true fence
-latency still need checking before replacing the renderer's mirror.
+This establishes placement support. Guest aliases remain untested, and the
+completion-latency result below holds the shared-arena proposal.
 [CS-0.5 records the method and negative controls](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/CLEAN_SLATE_STAGE0.md#cs-05-placed-device-memory-mapping).
+
+The subsequent true-completion probe failed its latency gate. Waiting for
+the full host queue prefix before guest fence and interrupt completion
+raised the Odin's race mean from 16.68 to 20.27 ms and the Deck's from
+16.77 to 48.21 ms, with worse p99 on both. Free roam lost too. The cvar
+`gpu_true_fence_completion` is a default-off diagnostic; the mirror remains
+in use. A different asynchronous retirement design needs a new probe
+before a shared arena is justified.
 
 The first step was a census of what the game actually sends the GPU, taken over 17,580 frames of scripted routes and later extended by 10,980 more ([NATIVE_FRAME_CONTRACT.md](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/native-renderer/NATIVE_FRAME_CONTRACT.md)):
 
@@ -62,7 +70,7 @@ Almost all of the game's draws arrive as `PM4_INDIRECT_BUFFER` packets that repl
 | GPU VSync | drives the guest vblank |
 | Pipeline, shader and storage workers | build pipelines, translate shaders and write caches off the hot threads |
 
-The decoder hands the recorder register runs (already byte-swapped), single registers, draws, shader loads, and callbacks for packets the CPU can observe. Ordering is the hard part: a race frame has about 280 event writes, 25–30 fence writes, 5 interrupts and one swap. Fence writes are recorded rather than waited for, so the game sees a fence only after the recorder has consumed everything before it. Memory writes, conditional writes, register-to-memory copies and occlusion queries wait for the recorder.
+The decoder hands the recorder register runs (already byte-swapped), single registers, draws, shader loads, and callbacks for packets the CPU can observe. Ordering is the hard part: a race frame has about 280 event writes, 25–30 fence writes, 5 interrupts and one swap. By default, fence writes are recorded rather than waited for, so the game sees a fence only after the recorder has consumed everything before it. Memory writes, conditional writes, register-to-memory copies and occlusion queries wait for the recorder.
 
 **Shader loads.** The decoder remembers each shader load by guest address and size while a write watch shows the microcode pages unwritten, so a repeated load skips rehashing the microcode and, where recording is inline (Android), the shader lookup too (`gpu_d3d_shader_cache`, on by default). On the Odin race 97 % of loads hit; six in-run A/Bs measured decoder CPU -0.50 ± 0.07 ms and process CPU -0.52 ± 0.27 ms a frame, with 0 mismatches against full hashing over 25.5 M loads.
 

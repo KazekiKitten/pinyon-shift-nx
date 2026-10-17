@@ -189,3 +189,100 @@ resource/flag restrictions; it is not a general export-and-remap guarantee
 for the game's GPU allocation. No D3D12 code was run. The plan's placeholder
 route remains a platform-specific hypothesis, not a pass from this Vulkan
 test.
+
+## CS-0.4: true guest completion latency
+
+The SDK's default-off, hot `gpu_true_fence_completion` probe submits and
+waits for host GPU work on the recorder thread before `EVENT_WRITE_SHD`
+fence stores, enabled scratch-register writebacks, command-stream
+interrupts and `WAIT_FOR_IDLE`. Vulkan uses its existing submission-fence
+wait, which first waits for the submission worker to have submitted the
+fence; D3D12 uses its existing queue completion wait. Failure refuses the
+guest signal. The existing `FlushCpuVisibleResults` only flushes resolve
+readbacks, so it was not a general GPU completion wait. The ring read
+pointer still describes decoding progress; it is not changed into a GPU
+completion marker. This is a synchronous latency probe, not an asynchronous
+completion scheduler or a shared guest/GPU arena.
+
+**Gate failed, 2026-10-17.** The SDK implementation is commit `4d78764` on
+`main`, on project source `e8bbbb81` (no subsequent application-source
+change). Native Release builds use the existing base generated tree with
+frozen codegen. Routes
+`tools/cs/routes/cs04-{race,free}-ab.fh1test` toggle only this cvar and the
+perf A/B marker. The race uses 300-frame windows from route frame 6000;
+free roam uses 300-frame windows from frame 1800. Both use the pinned
+`appdata-2026-09-27` seed (profile SHA-256
+`CC8951E814DBC750AAC5C204772BEF84094847273849F216B1DF7462CDC314E4`),
+copied into a private state for each run. Free roam remains parked; the
+race drives. The race uses `fh1-gauntlet-entry-sync`'s longer button presses;
+free roam holds the handbrake after entry. No builds ran during routes.
+
+All measurements below are Vulkan, 1x, vsync off, with the same build on
+both sides: Odin 2 Portal/installed Turnip V37 and Steam-launched Deck
+LCD/RADV at the 60 limit; Ryzen 7 5800X/RTX 4080/NVIDIA 581.08 desktop at
+the 120 limit. Deck ancestry proves a Steam launch, its power profile was
+`auto` and gameplay clocks were 1,040-1,600 MHz. The SDK's D3D12 path was
+compiled on Windows but not measured. Source, build logs and binary
+fingerprints are `cs04-build-*-final.log`, `cs04-local-binaries.json` and
+`cs04-deck-binaries.sha256` in `.local/codex-cs/`. The build directories'
+older sidecar JSON files were stale after direct CMake rebuilds; their
+October 15/16 revision/hash fields are **not** the provenance of these
+runs. The fingerprint files and build logs are. The exact Android APK is
+retained as `cs04-probe.apk`.
+
+`tools/cs/summarize-fence-ab.py` uses the NN in-run method: drop the first
+boot/loading window, discard the first 30 frames of each remaining window,
+require 60 retained samples, then pair adjacent opposite windows. No
+frame-time outliers are removed. Race results have five pairs, free roam
+six; the side aggregates also include the final unpaired window. Means
+and p99 use `frame_time_us`; slow frames here means over **20 ms** on all
+devices. Counts, draw rates and every window are in
+`cs04-{odin,deck,win}-{race-ab5,free-ab1}-summary.json`.
+
+| Device / route / run | Mean ms, off → on | Change | p99 ms, off → on | Frames over 20 ms, off → on |
+| --- | --- | ---: | --- | --- |
+| Odin race / `race-ab5` | 16.68 → 20.27 | +21.49% | 17.29 → 24.42 | 0.30% → 53.61% |
+| Odin free roam / `free-ab1` | 16.68 → 23.08 | +38.37% | 17.26 → 27.56 | 0.19% → 98.69% |
+| Deck race / `race-ab5` | 16.77 → 48.21 | +187.52% | 20.77 → 57.33 | 1.64% → 99.54% |
+| Deck free roam / `free-ab1` | 16.84 → 48.69 | +189.20% | 21.41 → 59.97 | 1.52% → 99.60% |
+| Multivac race / `race-ab5` | 8.39 → 12.91 | +53.82% | 9.98 → 17.07 | 0.04% → 0.23% |
+| Multivac free roam / `free-ab1` | 8.45 → 13.17 | +55.93% | 11.01 → 16.73 | 0.03% → 0.08% |
+
+Paired frame-time costs (mean ± SE, ms): Odin race `3.59 ± 0.19`, free
+`6.33 ± 0.12`; Deck race `31.68 ± 0.93`, free `32.02 ± 0.65`; desktop
+race `4.70 ± 0.20`, free `4.76 ± 0.24`. The GPU-thread fence-wait counter
+increased on the Odin race from 0.049 to 14.48 ms per frame and on the
+Deck from 0.108 to 33.11 ms, confirming that the treatment awaited actual
+host submissions. Draw counts on the race differed by +1.2% on Odin and
+-3.2% on Deck, much smaller than the measured frame loss.
+
+Controls `race-aa1` and `free-aa1` run the corresponding `*-aa` routes with
+completion **off on both sides**, preserving the marker schedule. A/A
+paired differences, ms ± SE: Odin `0.00023 ± 0.00017` race,
+`0.00051 ± 0.00037` free; Deck `0.048 ± 0.050` race,
+`-0.0048 ± 0.0125` free; desktop `-0.0025 ± 0.123` race,
+`-0.0093 ± 0.096` free. All aggregate mean differences were under 1%.
+The largest absolute A/A p99 shift was 2.32 ms on the Deck race, against
+the treatment's 36.56 ms. Each device's raw A/A summary is retained too.
+
+All twelve qualified A/B and A/A routes reached their scripted stop with
+no hang or device loss. The existing race-HUD checker passes all six race
+captures (`cs04-hud-checks.json`), and inspection of pre-treatment and late
+race/free-roam captures found no new corruption. The fixture's car-select
+thumbnails already show noise before treatment; that is not attributed to
+true completion. The old free-roam
+fixture's generic 55 Hz presentation / 80 Hz simulation floors reject
+some runs, including controls capped at 60; those post-run failures are
+retained, not called passes. They are not the CS-0.4 gate. Early `race-ab1`
+to `race-ab4` attempts are excluded: incompatible output waits in a
+wall-time script, a precreated Android output directory, missing Deck
+shader storage, a short-press route that stayed in free roam, and an
+unsuccessful brake setup that selected reverse. Only the later race-HUD
+qualified route supplies race numbers.
+
+This synchronous **whole-prefix** host-fence wait is conservative: it
+also stops recording while the queue completes. The results reject this
+implementation against the unchanged 3%/p99 gate; they do not prove that
+asynchronous or stage-specific retirement must cost as much. They do
+not authorize a shared arena. The diagnostic cvar remains off by default,
+and CS-4 is held pending a different completion design and a new probe.

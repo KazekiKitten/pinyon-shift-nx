@@ -112,6 +112,7 @@ A faster clock exposed one more console assumption: the simulation steps on the 
 Negative results, so they aren't retried without a new reason:
 
 | Idea | Result |
+| Reporting guest fences at real host completion with a synchronous queue-prefix drain (CS-0.4) | in-run race/free-roam A/B, 1x: Odin means 16.68→20.27 / 16.68→23.08 ms; Deck 16.77→48.21 / 16.84→48.69 ms, with worse p99 on both. A/A means differ under 1%. The diagnostic stays off; shared guest/GPU memory is held pending a different completion design. This is a conservative whole-prefix wait, not a lower bound on asynchronous retirement. [Method and controls](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/CLEAN_SLATE_STAGE0.md#cs-04-true-guest-completion-latency) |
 | --- | --- |
 | Equal simulation steps from the average present interval (#381) | game time followed wall time, but a scripted route desynced in the menus at 2x and frames still showed 0 or 2 steps |
 | Holding the main loop after its step wait until the render thread's swap (#381) | 97-99 % of frames got one step, but steps moved onto the swap's timing: at 60 fps game time per frame strayed more than with no gate (over 4 ms in 6.5-7 % of frames against 2.8 %) |
