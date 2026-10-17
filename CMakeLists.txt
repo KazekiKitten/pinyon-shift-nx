@@ -92,6 +92,7 @@ elseif(WIN32)
     add_executable(pinyon_shift WIN32
         ${PINYON_SHIFT_HOST_SOURCES}
         src/crash_reporter_win.cpp
+        src/hitch_sampler_win.cpp
     )
 elseif(ANDROID)
     # SDL's activity loads the game as libmain.so and calls its SDL_main; the
