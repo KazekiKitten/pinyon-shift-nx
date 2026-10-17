@@ -124,3 +124,68 @@ Foundation`. All probes exit nonzero on API/load failure.
 
 The distinction between general DGC and pipeline binding follows the
 [Khronos DGC specification](https://docs.vulkan.org/spec/latest/chapters/device_generated_commands/generatedcommands.html).
+
+## CS-0.5: placed device-memory mapping
+
+**Pass on both yardsticks, 2026-10-17.** The extended standalone probe
+(`bc124685` plus `tools/cs/placed-map.h` and `placed-check.comp`; same
+drivers and SDK headers as CS-0.3) allocated 536,870,912 bytes of
+host-visible, host-coherent `VkDeviceMemory` and bound a storage buffer.
+It first reserved `[0x200000000, 0x220000000)` with `PROT_NONE` and
+`MAP_FIXED_NOREPLACE`, verified that it owned that exact range, then called
+`vkMapMemory2KHR` with `VK_MEMORY_MAP_PLACED_BIT_EXT` and the reserved
+address. The returned address matched. This is a whole-allocation map,
+requiring no `memoryMapRangePlaced` feature.
+
+The CPU wrote all 134,217,728 words with an index-dependent pattern. The
+compute shader read **every word** in sixteen 32 MiB descriptor ranges
+(respecting `maxStorageBufferRange` and dispatch limits), accumulating
+mismatches in a separate coherent result buffer. HOST-to-COMPUTE and
+COMPUTE-to-HOST barriers plus a host fence wait guard the result. Each
+device returned zero mismatches. The probe unmapped with
+`VK_MEMORY_UNMAP_RESERVE_BIT_EXT`, released the reservation and destroyed
+its allocations. These tests never attach to the game or its save.
+
+| Device | Allocation / checked bytes | Memory type / flags | Result | Evidence in `.local/codex-cs/` |
+| --- | ---: | --- | --- | --- |
+| Deck LCD / RADV `aef01ebd12` | 536,870,912 / 536,870,912 | 2 / `0x6` (visible, coherent; **not device local**) | 0 mismatches | `placed-deck.json` |
+| Odin / installed Turnip `a995eaeda4` | 536,870,912 / 536,870,912 | 0 / `0x7` (device local, visible, coherent) | 0 mismatches | `placed-odin.json` |
+| Multivac / NVIDIA 581.08 | not attempted: extension absent | unavailable | unsupported | `placed-multivac.json` |
+| M4 Pro / MoltenVK 1.4.1 | not attempted: extension absent | unavailable | unsupported | `vulkan-mac.json` |
+| Astra | not reachable | unknown | untested | CS-0.3 |
+
+A negative-control shader deliberately reports the first word as wrong
+while checking the same entire range. Both devices reported exactly one
+mismatch and exit status 2 (`placed-{deck,odin}-negative.json`). Thus the
+zero counts are not from an unexecuted dispatch or an unread result buffer.
+No latency or bandwidth claim is made from these single functional tests.
+RADV's first matching type is system/GTT memory, so this does not prove
+that a particular device-local heap can replace the mirror without a
+bandwidth or residency cost. Guest aliases, page permissions, write watches
+and CPU/GPU lifetime synchronization remain untested. CS-0.4 is still
+required before CS-4.
+
+Compile `placed-check.comp` with the existing glslang tool:
+
+```powershell
+out/build/glslang-tool/StandAlone/glslangValidator.exe -V --target-env vulkan1.1 tools/cs/placed-check.comp -o .local/codex-cs/placed-check.spv
+```
+
+Add `--placed <shader-path>` to the CS-0.3 executable's arguments. The
+placement/reservation code is implemented for Linux/Android; unsupported
+devices are only queried. The reservation uses no overwriting fixed map
+until the probe has successfully reserved and checked its own range.
+See the [Khronos placement contract](https://docs.vulkan.org/refpages/latest/refpages/source/VkMemoryMapPlacedInfoEXT.html).
+
+On multivac (Windows 11 Pro `10.0.26200`), a placeholder plus
+[`MapViewOfFile3(MEM_REPLACE_PLACEHOLDER)`](https://learn.microsoft.com/en-us/windows/win32/api/memoryapi/nf-memoryapi-mapviewoffile3)
+exists for a data/pagefile section handle. That does **not** establish a
+route for an arbitrary D3D12 allocation: a D3D12 shared-heap handle is not
+documented as such a mappable section, and `ID3D12Resource::Map` does not
+take a requested host address. Microsoft's
+[`OpenExistingHeapFromFileMapping`](https://learn.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12device3-openexistingheapfromfilemapping)
+provides a special diagnostic system-memory heap from a section, with
+resource/flag restrictions; it is not a general export-and-remap guarantee
+for the game's GPU allocation. No D3D12 code was run. The plan's placeholder
+route remains a platform-specific hypothesis, not a pass from this Vulkan
+test.

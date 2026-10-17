@@ -21,6 +21,14 @@ but MoltenVK 1.4.1 exposes neither Vulkan DGC extension. This leaves the
 proposed graphics front end blocked on the yardstick drivers. See the
 [Stage 0 device table and method](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/CLEAN_SLATE_STAGE0.md#cs-03-driver-capabilities).
 
+The separate placed-mapping probe succeeded on both yardsticks: a 512 MiB
+coherent Vulkan allocation mapped at a reserved fixed address, and a
+compute shader verified every CPU-written word with zero mismatches.
+Turnip's type was device local; RADV's selected type was system/GTT memory.
+This establishes placement support, while guest aliases and true fence
+latency still need checking before replacing the renderer's mirror.
+[CS-0.5 records the method and negative controls](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/CLEAN_SLATE_STAGE0.md#cs-05-placed-device-memory-mapping).
+
 The first step was a census of what the game actually sends the GPU, taken over 17,580 frames of scripted routes and later extended by 10,980 more ([NATIVE_FRAME_CONTRACT.md](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/native-renderer/NATIVE_FRAME_CONTRACT.md)):
 
 | The game uses | Count |

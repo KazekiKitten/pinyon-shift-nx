@@ -37,8 +37,19 @@ static void* symbol(void* library, const char* name) {
 }
 
 #define FIELD(object, name) std::cout << ",\"" #name "\":" << object.name
+#include "placed-map.h"
 
 int main(int argc, char** argv) try {
+  const char* placed_shader = nullptr;
+  for (int i = 1; i < argc; ++i) {
+    if (!strcmp(argv[i], "--placed")) {
+      if (i + 1 >= argc) throw std::runtime_error("--placed requires SPIR-V path");
+      placed_shader = argv[i + 1];
+      for (int j = i; j + 2 < argc; ++j) argv[j] = argv[j + 2];
+      argc -= 2;
+      break;
+    }
+  }
 #ifdef _WIN32
   const char* default_loader = "vulkan-1.dll";
 #elif defined(__APPLE__)
@@ -102,6 +113,7 @@ int main(int argc, char** argv) try {
   check(vkEnumeratePhysicalDevices(instance, &count, devices.data()), "physical devices");
   std::cout << "{\"schema\":\"cs-vulkan.v1\",\"loader\":" << std::quoted(loader) << ",\"devices\":[";
   bool first = true;
+  bool checks_passed = true;
   for (auto pd : devices) {
     uint32_t n = 0;
     check(vkEnumerateDeviceExtensionProperties(pd, nullptr, &n, nullptr), "device extension count");
@@ -158,11 +170,14 @@ int main(int argc, char** argv) try {
     std::cout << "},\"placedMap\":{\"advertised\":" << placed;
     FIELD(mf, memoryMapPlaced); FIELD(mf, memoryMapRangePlaced); FIELD(mf, memoryUnmapReserve);
     FIELD(mp, minPlacedMemoryMapAlignment);
-    std::cout << "}}";
+    std::cout << '}';
+    if (placed_shader && placed && mf.memoryMapPlaced)
+      checks_passed &= placed_map(gipa, instance, pd, props.properties, mf, mp.minPlacedMemoryMapAlignment, placed_shader);
+    std::cout << '}';
   }
   std::cout << "]}\n";
   vkDestroyInstance(instance, nullptr);
-  return 0;
+  return checks_passed ? 0 : 2;
 } catch (const std::exception& e) {
   std::cerr << "cs-vulkan: " << e.what() << '\n';
   return 1;
