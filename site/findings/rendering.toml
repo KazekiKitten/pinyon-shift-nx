@@ -132,6 +132,31 @@ confidence = """confirmed"""
 note = """The v4 address is the hook site at the return."""
 source = """docs/NATIVE_PORT_BACKLOG.md NP-4.4; config/rexglue/analysis/main-xex.toml midasm_hook 0x8284EF94; src/pinyon_shift_runtime_hooks.cpp PinyonShiftCameraFieldOfView"""
 
+[[finding]]
+group = """Frame structure and views"""
+name = """scene world-view-projection constants"""
+what = """Scene vertex shaders read the object's world-view-projection matrix from vertex float constants `c128`-`c131`, one row each for clip x, y, z and w (clip = matrix times position). The static world shares one matrix: the largest group of equal matrices in a free-roam frame is 600-660 draws. Because the world matrix of static geometry does not change, the previous frame's matrix times the inverse of the current one is the camera's own reprojection; over six static groups it agreed within 6e-4 while driving. Each predicated tile replays the same draws with the same matrices. The lens follows from the matrix: the y row's length is 1 / tan(fov_y / 2), 48.5 degrees for the low chase camera (the `CameraSettings.ini` value), and the z and w rows give the near plane 0.3 and the far plane about 19,960-20,000."""
+how = """Probe build logging the constants of every depth-tested draw, group census across frames, and the UP-1.4 motion vectors built from it, which keep the static world sharp under FSR 3."""
+confidence = """confirmed"""
+source = """docs/UPSCALING_BACKLOG.md UP-1.3, UP-1.4; ShiftGlue src/graphics/vulkan/fh1_camera.cpp"""
+
+[[finding]]
+group = """Frame structure and views"""
+name = """camera position constants"""
+what = """Alongside the matrix, scene vertex constant `c158` holds the camera's world position, `c11` a position near the player car, and `c132.x` 20000, the far plane."""
+how = """Probe build comparing the constants with the camera motion over a drive."""
+confidence = """probable"""
+source = """docs/UPSCALING_BACKLOG.md UP-1.3"""
+
+[[finding]]
+group = """Frame structure and views"""
+name = """scene turned 180 degrees with reversed depth"""
+what = """The main scene is drawn turned 180 degrees: its clip x and y are the screen's negated, so a screen pixel's scene depth is at the opposite pixel of the 1280x720 surface, and a later pass turns the picture back. Its stored depth is reversed (1 near, 0 at the far plane), but the matrix's clip z is the usual D3D depth; the reversal is 1 minus it, so it comes from the depth range, not the projection. The scene depth is the 1280-pitch `D24FS8` area at EDRAM base `0x400`, one 256-row band per predicated tile."""
+how = """Copying each tile's depth band at its resolve and comparing it with the frame: it matches only turned 180 degrees. Motion vectors from the matrices are right only with the clip x and y negated and z = 1 - stored depth."""
+confidence = """confirmed"""
+note = """The register setting that reverses the depth range was not looked up; "comes from the depth range" is inferred from the matrix."""
+source = """docs/UPSCALING_BACKLOG.md UP-1.3; ShiftGlue src/graphics/vulkan/command_processor.cpp kSwapCameraSource"""
+
 # ---------------------------------------------------------------------------
 # Render targets and EDRAM
 # ---------------------------------------------------------------------------
