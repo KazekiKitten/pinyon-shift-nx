@@ -62,6 +62,9 @@ ADRENOTOOLS_HOOKS = (
     "libfile_redirect_hook.so",
     "libgsl_alloc_hook.so",
 )
+# AMD's FidelityFX library for FSR 2 and 3, built from source by ShiftGlue's
+# thirdparty/fidelityfx-vk (UP-2.1); the game loads it by name when present.
+FIDELITYFX_LIBRARY = "libamd_fidelityfx_vk.so"
 
 
 class AndroidError(RuntimeError):
@@ -295,7 +298,27 @@ def build(args: argparse.Namespace) -> int:
     if args.jobs:
         command += ["-j", str(args.jobs)]
     run(command, cwd=ROOT, env=environment)
+    build_fidelityfx(tools, args, environment)
     return package(args, tools)
+
+
+def build_fidelityfx(tools: Tools, args: argparse.Namespace, environment: dict) -> None:
+    """The FidelityFX library, a separate CMake project (its SDK's own
+    build would rebuild the shader permutations with a Windows tool)."""
+    source = rexsdk_dir() / "thirdparty" / "fidelityfx-vk"
+    if not (source / "CMakeLists.txt").is_file():
+        return
+    directory = build_directory(args) / "fidelityfx-vk"
+    if not (directory / "CMakeCache.txt").is_file():
+        run([tools.cmake, "-S", source, "-B", directory, "-G", "Ninja",
+             f"-DCMAKE_MAKE_PROGRAM={tools.ninja}", "-DCMAKE_BUILD_TYPE=Release",
+             f"-DCMAKE_TOOLCHAIN_FILE={(tools.ndk / 'build' / 'cmake' / 'android.toolchain.cmake').as_posix()}",
+             f"-DANDROID_ABI={CONFIG['abi']}", f"-DANDROID_PLATFORM={CONFIG['min_sdk']}",
+             "-DANDROID_STL=c++_static"], cwd=ROOT, env=environment)
+    command = [tools.cmake, "--build", directory, "--target", "amd_fidelityfx_vk"]
+    if args.jobs:
+        command += ["-j", str(args.jobs)]
+    run(command, cwd=ROOT, env=environment)
 
 
 def _keystore(tools: Tools) -> Path:
@@ -400,6 +423,9 @@ def package(args: argparse.Namespace, tools: Tools | None = None) -> int:
         if not found:
             raise AndroidError(f"{name} is not built in {directory}")
         libraries.append(max(found, key=lambda path: path.stat().st_mtime))
+    fidelityfx = directory / "fidelityfx-vk" / "ffx-api" / FIDELITYFX_LIBRARY
+    if fidelityfx.is_file():
+        libraries.append(fidelityfx)
     libraries.append(tools.libcxx)
 
     staging = WORK / "package"

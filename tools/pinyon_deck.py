@@ -49,6 +49,7 @@ REMOTE = "pinyon-shift-dev"
 # The archive extractor goes too: `pinyon.py dlc` and Rally preparation run it
 # beside the game on the Deck.
 BUILD_FILES = ("pinyon_shift", "pinyon_shift_fh1_archive_extract", "*.so",
+               "upscalers/*/*/*.so",
                "pinyon_shift_build.json", "gamecontrollerdb.txt")
 EXECUTABLES = ("pinyon_shift", "pinyon_shift_fh1_archive_extract")
 
