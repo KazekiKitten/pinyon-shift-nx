@@ -881,6 +881,16 @@ void Worker() {
     }
     const bool captured = skipped || (g_test.presenter->CaptureGuestOutput(image) &&
                                       WritePpm(capture, image, "guest_output"));
+    // With present_capture_readable, also the presented image, after the
+    // presenter's upscaler and the host UI (UPSCALING_BACKLOG UP-0.3).
+    if (captured && !skipped && rex::cvar::GetFlagByName("present_capture_readable") == "true") {
+      rex::ui::RawImage presented;
+      if (!g_test.presenter->CapturePresentedOutput(presented) ||
+          !WritePpm(capture, presented, "presented", "-presented", false)) {
+        diagnostics::RecordEvent("fh1.render_test.presented_capture_failed",
+                                 {{"name", capture.name}});
+      }
+    }
     {
       std::lock_guard lock(g_test.mutex);
       if (!captured) {
