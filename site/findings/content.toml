@@ -46,6 +46,25 @@ how = """Hooks and a function replacement on the worker that log the queries, am
 confidence = """confirmed"""
 source = """src/pinyon_shift_runtime_hooks.cpp TraceDlcAsyncQuery, PinyonShiftTraceDlcSqlPrepare; config/rexglue/analysis/main-xex.toml midasm_hook 0x82C18964"""
 
+[[finding]]
+group = """Game database"""
+base = """sub_82C188D0, sub_8307BB98"""
+v4 = """sub_82CD8778, sub_8313CC98, sub_8313FEA8"""
+name = """SQLite 3.6.19 and the raw query method"""
+what = """The title links SQLite 3.6.19 (source id dated 2009-10-14). That version has no automatic indexes and never flattens a subquery on the right of a LEFT JOIN: it builds the subquery's rows into a temporary table and scans all of them for every outer row. Every statement is prepared with `sqlite3_prepare_v2` (`sub_8307BB98`, a stub that passes 1 as the keep-SQL flag), so a prepared statement prepares itself again after a schema change. The database object's method at +32 (`sub_82C188D0`, v4 `sub_82CD8778`) takes (recordset out, database, C string), prepares and runs the statement under the object's lock and returns a recordset. The recordset's method at +184 gives the row count and the one at +80 an integer by (row, column). The title runs `CREATE VIEW` statements on the main schema at every start, so the schema is writable at run time, and none of it is saved: each start creates the same views again. v4's virtual machine loop (`sub_8313FEA8`) is where a slow query's time goes."""
+how = """Version string and source id in the executable image; the prepare stub's arguments in the generated code; queries run through the method from a host task; the SQL profile and the hitch sampler."""
+confidence = """confirmed"""
+source = """src/pinyon_shift_runtime_hooks.cpp RunGameSql, SpeedUpRestrictionsView; docs/UPSCALING_BACKLOG.md UP-1.7 spikes"""
+
+[[finding]]
+group = """Game database"""
+v4 = """Restrictions_Data_Car, sub_8253D9E0"""
+name = """Restrictions_Data_Car view"""
+what = """At start v4 creates the view `Restrictions_Data_Car`: `Data_Car` LEFT JOINed with subqueries for each car's level-4 springs (`List_UpgradeSpringDamper`), level-5 tyres (`List_UpgradeTireCompound`) and level-4 transmissions (`List_UpgradeDrivetrain` joined with `List_UpgradeDrivetrainTransmission`), plus `CarValue`, `IsRally` (all three stock) and `CouldRally` (all three at those levels). `gamedb.slt` has no index on those tables, and SQLite 3.6.19 rescans all three subqueries for each of about 350 cars. When the player returns to free roam after a race, `sub_8253D9E0` (under `sub_82548B50`) reads every installed restricted car (`SELECT * FROM Restrictions_Data_Car WHERE IsCarInstalled(ModelId) ORDER BY ModelId`) on the title thread. On multivac that took 158-186 ms of one frame. Pinyon Shift indexes the four join columns and then, when the view's text is exactly v4's, replaces the view with joins on the base tables (level tests in the ON clauses, the drivetrains kept only when they have a level-4 transmission). The replacement returns the same column names and the same rows in the same order: compared on v4's database and on a copy with duplicated parts and missing level-4 transmissions. The frame then took 49-55 ms, the rest being the routine's other queries."""
+how = """`pinyon_shift_sql_profile` and the hitch sampler in the drive route from a warm v4 seed; `EXPLAIN QUERY PLAN` on a copy of the database with automatic indexes off; the view's text logged at prepare."""
+confidence = """confirmed"""
+source = """src/pinyon_shift_runtime_hooks.cpp kRestrictionsView, SpeedUpRestrictionsView; docs/UPSCALING_BACKLOG.md UP-1.7 spikes"""
+
 # --- Cars -----------------------------------------------------------------
 
 [[finding]]
@@ -371,8 +390,8 @@ group = """Event restrictions"""
 base = """sub_824DA3E8"""
 v4 = """0x82548B50"""
 name = """reads every restriction row"""
-what = """Runs `SELECT * FROM EventRestrictions` (string `0x8200BEE8`) next to `TargetClass` reads and does not use the decoder. Purpose not traced (perhaps the career event list)."""
-how = """String xrefs."""
+what = """Runs `SELECT * FROM EventRestrictions` (string `0x8200BEE8`) next to `TargetClass` reads and does not use the decoder. In v4 it runs on the title thread when the player returns to free roam after a race. It reads every restricted car through `sub_8253D9E0` (the `Restrictions_Data_Car` view, Game database) and runs several more queries through `sub_825473B8` and `sub_8252F610`. Together they took most of a 140-186 ms frame before the view was replaced. Purpose not traced (perhaps the career event list)."""
+how = """String xrefs; the hitch sampler's stacks on v4."""
 confidence = """guess"""
 issue = """#479"""
 source = """docs/REVERSE_ENGINEERING.md@fc1751fe2a38 Event restrictions"""

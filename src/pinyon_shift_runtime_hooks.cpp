@@ -13,6 +13,7 @@
 #include <functional>
 #include <map>
 #include <mutex>
+#include <optional>
 #include <set>
 #include <sstream>
 #include <stdexcept>
@@ -26,6 +27,7 @@
 
 #include <fmt/format.h>
 #include <rex/cvar.h>
+#include <rex/thread.h>
 #include <rex/filesystem.h>
 #include <rex/kernel/xam/module.h>
 #include <rex/input/dualsense.h>
@@ -72,6 +74,16 @@ REXCVAR_DEFINE_BOOL(pinyon_shift_skip_empty_array_walk, true, "Pinyon Shift",
                     "Skip the empty 16-byte element walk in the title's array release "
                     "(sub_8282EA80) before it frees the buffer; it has no effect but "
                     "took about a fifth of a streaming worker thread")
+    .lifecycle(rex::cvar::Lifecycle::kHotReload);
+REXCVAR_DEFINE_BOOL(pinyon_shift_sql_profile, false, "Pinyon Shift",
+                    "Diagnostics: log which game database queries take the title's time "
+                    "(\"SQL:\" lines every 5 seconds with queries)")
+    .lifecycle(rex::cvar::Lifecycle::kHotReload);
+REXCVAR_DEFINE_BOOL(pinyon_shift_game_db_indexes, true, "Pinyon Shift",
+                    "Index the upgrade tables that v4's Restrictions_Data_Car view joins and "
+                    "recreate the view with plain joins (same rows), so the title's read of "
+                    "every restricted car after a race stops stalling a frame for about "
+                    "120 ms (applies when the game database is next opened)")
     .lifecycle(rex::cvar::Lifecycle::kHotReload);
 REXCVAR_DEFINE_BOOL(pinyon_shift_skip_opening_movies, false, "Pinyon Shift",
                     "Complete the opening splash movies immediately");
@@ -5554,7 +5566,9 @@ static PPCFunc* g_dlc_raw_query = nullptr;
 static std::string ReadDlcSql(uint32_t text, uint8_t* base) {
   std::string sql;
   if (text && text <= UINT32_MAX - 65536) {
-    for (uint32_t i = 0; i < 65536 && PinyonShiftGuestRangeReadable(text + i, 1); ++i) {
+    // One readability query per 4 KiB page: it is a VirtualQuery call.
+    for (uint32_t i = 0; i < 65536; ++i) {
+      if ((i == 0 || ((text + i) & 4095) == 0) && !PinyonShiftGuestRangeReadable(text + i, 1)) break;
       const auto byte = base[text + i];
       if (!byte) break;
       sql.push_back(static_cast<char>(byte));
@@ -5613,8 +5627,168 @@ void PinyonShiftTraceUpgradeViewCar(PPCRegister& r30, PPCRegister& r31) {
   pinyon_shift::diagnostics::RecordEvent("dlc.upgrade_view_car", {
       {"profile", Hex32(r30.u32)}, {"car", Hex32(r31.u32)}});
 }
+// pinyon_shift_sql_profile: the time from one prepare to the next on a thread
+// is charged to the earlier statement (its steps, finalize and whatever the
+// caller does with the rows). Gaps of 20 ms to a second are logged as "SQL:"
+// lines with the thread, to be matched with the "Hitch:" lines of the title's
+// thread; longer gaps are the thread doing something else.
+static void ProfileSqlPrepare(uint32_t text) {
+  using Clock = std::chrono::steady_clock;
+  thread_local std::string previous;
+  thread_local Clock::time_point previous_at;
+  const auto now = Clock::now();
+  if (!previous.empty()) {
+    const double ms = std::chrono::duration<double, std::milli>(now - previous_at).count();
+    if (ms >= 20 && ms < 1000) {
+      REXLOG_WARN("SQL: {:.1f} ms on thread {:X} after: {}", ms, rex::thread::current_thread_id(),
+                  previous.substr(0, 300));
+    }
+  }
+  previous = ReadDlcSql(text, rex::system::kernel_state()->memory()->virtual_membase());
+  previous_at = Clock::now();
+}
+// v4 defines Restrictions_Data_Car as Data_Car LEFT JOINed with subqueries
+// for each car's level-4 springs, level-5 tyres and level-4 transmission.
+// The title's SQLite (3.6.19) never flattens a subquery on the right of a
+// LEFT JOIN and predates automatic indexes, and gamedb.slt has no index on
+// those tables, so every car rescans all three: the free-roam read of every
+// restricted car took 158-186 ms of a title frame after each race.
+//
+// After the title creates the view, index the join columns and, when the
+// view text is exactly v4's, replace it with joins on the base tables that
+// return the same rows in the same order with the same column names. Each
+// car then seeks its rows. The indexes are single-column, so any query that
+// filters on one of these columns alone still returns rows in table order.
+// The title prepares with sqlite3_prepare_v2, so statements it holds
+// re-prepare after the schema change.
+constexpr std::string_view kRestrictionsView =
+    "CREATE VIEW Restrictions_Data_Car AS SELECT *, BaseCost AS CarValue, CASE WHEN "
+    "Springs.IsStock = 1 AND Tyres.IsStock = 1 AND Transmission.IsStock = 1 THEN 1 ELSE 0 END "
+    "AS IsRally, CASE WHEN Springs.Level = 4 AND Tyres.Level = 5 AND Transmission.Level = 4 "
+    "THEN 1 ELSE 0 END AS CouldRally FROM Data_Car LEFT JOIN (SELECT IsStock, Level, Ordinal "
+    "FROM List_UpgradeSpringDamper WHERE Level = 4) AS Springs ON Springs.Ordinal = ModelId "
+    "LEFT JOIN (SELECT IsStock, Level, Ordinal FROM List_UpgradeTireCompound WHERE Level = 5) "
+    "AS Tyres ON Tyres.Ordinal = ModelId LEFT JOIN (SELECT t.IsStock, t.Level, d.Ordinal FROM "
+    "List_UpgradeDrivetrain d JOIN List_UpgradeDrivetrainTransmission t ON "
+    "t.DrivetrainID=d.DrivetrainID WHERE t.Level = 4) AS Transmission ON Transmission.Ordinal = "
+    "ModelId WHERE IsDrivable = 1 OR IsDrivableCar(Id)";
+// The drivetrain join keeps only drivetrains with a level-4 transmission, so
+// a car without one still gets a single row of NULLs, as the inner join in
+// v4's subquery gives.
+constexpr std::string_view kRestrictionsViewJoins =
+    "CREATE VIEW Restrictions_Data_Car AS SELECT Data_Car.*, Springs.IsStock, Springs.Level, "
+    "Springs.Ordinal, Tyres.IsStock, Tyres.Level, Tyres.Ordinal, Transmission.IsStock, "
+    "Transmission.Level, d.Ordinal, Data_Car.BaseCost AS CarValue, CASE WHEN Springs.IsStock = 1 "
+    "AND Tyres.IsStock = 1 AND Transmission.IsStock = 1 THEN 1 ELSE 0 END AS IsRally, CASE WHEN "
+    "Springs.Level = 4 AND Tyres.Level = 5 AND Transmission.Level = 4 THEN 1 ELSE 0 END AS "
+    "CouldRally FROM Data_Car LEFT JOIN List_UpgradeSpringDamper AS Springs ON Springs.Ordinal = "
+    "Data_Car.ModelId AND Springs.Level = 4 LEFT JOIN List_UpgradeTireCompound AS Tyres ON "
+    "Tyres.Ordinal = Data_Car.ModelId AND Tyres.Level = 5 LEFT JOIN List_UpgradeDrivetrain AS d "
+    "ON d.Ordinal = Data_Car.ModelId AND EXISTS (SELECT 1 FROM "
+    "List_UpgradeDrivetrainTransmission WHERE DrivetrainID = d.DrivetrainID AND Level = 4) "
+    "LEFT JOIN List_UpgradeDrivetrainTransmission AS Transmission ON Transmission.DrivetrainID = "
+    "d.DrivetrainID AND Transmission.Level = 4 WHERE Data_Car.IsDrivable = 1 OR "
+    "IsDrivableCar(Data_Car.Id)";
+
+// Runs one statement through the title's database object; returns the first
+// row's first column as an integer when the statement yields a row.
+static std::optional<uint32_t> RunGameSql(uint32_t database, std::string_view sql) {
+  auto method = [](uint32_t object, uint32_t offset) {
+    if (!PinyonShiftGuestRangeReadable(object, 4)) return 0u;
+    const auto methods = LoadGuestU32(object);
+    return PinyonShiftGuestRangeReadable(methods + offset, 4) ? LoadGuestU32(methods + offset) : 0u;
+  };
+  const auto query = method(database, 32);  // +32 takes a C string
+  if (!query) return std::nullopt;
+  auto* memory = rex::system::kernel_state()->memory();
+  const auto scratch = memory->SystemHeapAlloc(uint32_t(sql.size() + 17), 16);
+  if (!scratch) return std::nullopt;
+  auto* host = memory->virtual_membase() + scratch;
+  std::memset(host, 0, 16);
+  std::memcpy(host + 16, sql.data(), sql.size());
+  host[16 + sql.size()] = 0;
+  pinyon_shift::mod::CallGuest(query, {scratch, database, scratch + 16});
+  std::optional<uint32_t> value;
+  const auto record = LoadGuestU32(scratch), size = method(record, 184), get = method(record, 80);
+  if (size && get && pinyon_shift::mod::CallGuest(size, {record}) > 0)
+    value = pinyon_shift::mod::CallGuest(get, {record, 0, 0, 0});
+  pinyon_shift::mod::CallGuest(FH1_ADDR(0x82DE7330u), {scratch});
+  memory->SystemHeapFree(scratch);
+  return value;
+}
+
+static void SpeedUpRestrictionsView(uint32_t database, bool v4_text) {
+  const auto start = std::chrono::steady_clock::now();
+  for (const std::string_view statement : {
+           "CREATE INDEX IF NOT EXISTS PinyonShift_SpringDamper_Ordinal "
+           "ON List_UpgradeSpringDamper(Ordinal)",
+           "CREATE INDEX IF NOT EXISTS PinyonShift_TireCompound_Ordinal "
+           "ON List_UpgradeTireCompound(Ordinal)",
+           "CREATE INDEX IF NOT EXISTS PinyonShift_Drivetrain_Ordinal "
+           "ON List_UpgradeDrivetrain(Ordinal)",
+           "CREATE INDEX IF NOT EXISTS PinyonShift_DrivetrainTransmission_DrivetrainID "
+           "ON List_UpgradeDrivetrainTransmission(DrivetrainID)"}) {
+    RunGameSql(database, statement);
+  }
+  auto count = [database](const std::string& sql) { return RunGameSql(database, sql).value_or(0); };
+  auto views = [&count](std::string_view name) {
+    return count(fmt::format("SELECT COUNT(*) FROM sqlite_master WHERE type = 'view' AND "
+                             "name = '{}'", name));
+  };
+  const auto indexes = count("SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND "
+                             "name LIKE 'PinyonShift_%'");
+  // Replace the view only once the new text has been accepted under another
+  // name, and put v4's text back if the replacement does not appear.
+  const char* view = v4_text ? "kept (indexes missing)" : "kept (not v4's text)";
+  if (v4_text && indexes == 4) {
+    constexpr std::string_view kName = "Restrictions_Data_Car";
+    std::string check(kRestrictionsViewJoins);
+    check.replace(check.find(kName), kName.size(), "PinyonShift_RestrictionsCheck");
+    RunGameSql(database, "DROP VIEW IF EXISTS PinyonShift_RestrictionsCheck");
+    RunGameSql(database, check);
+    const bool accepted = views("PinyonShift_RestrictionsCheck") == 1;
+    RunGameSql(database, "DROP VIEW IF EXISTS PinyonShift_RestrictionsCheck");
+    if (!accepted) {
+      view = "kept (replacement rejected)";
+    } else {
+      RunGameSql(database, "DROP VIEW Restrictions_Data_Car");
+      RunGameSql(database, kRestrictionsViewJoins);
+      if (views(kName) == 1) {
+        view = "replaced";
+      } else {
+        RunGameSql(database, kRestrictionsView);
+        view = views(kName) == 1 ? "restored (replacement failed)" : "MISSING";
+      }
+    }
+  }
+  const double ms = std::chrono::duration<double, std::milli>(
+      std::chrono::steady_clock::now() - start).count();
+  REXLOG_INFO("Game database: {} of 4 Restrictions_Data_Car indexes, view {} ({:.1f} ms)",
+              indexes, view, ms);
+  pinyon_shift::diagnostics::RecordEvent("db.restrictions_view", {
+      {"database", Hex32(database)}, {"indexes", fmt::format("{}", indexes)}, {"view", view},
+      {"ms", fmt::format("{:.1f}", ms)}});
+}
+static bool g_changing_restrictions_view = false;  // title thread only
+static void AfterRestrictionsView(uint32_t database, uint32_t text) {
+  // Our own statements come through here too.
+  if (g_changing_restrictions_view) return;
+  static constexpr std::string_view kPrefix = "CREATE VIEW Restrictions_Data_Car ";
+  if (!PinyonShiftGuestRangeReadable(text, uint32_t(kPrefix.size()))) return;
+  auto* base = rex::system::kernel_state()->memory()->virtual_membase();
+  if (std::memcmp(base + text, kPrefix.data(), kPrefix.size())) return;
+  const bool v4_text = ReadDlcSql(text, base) == kRestrictionsView;
+  // The view statement is only prepared here; change it once it has run.
+  pinyon_shift::mod::EnqueueHostGuestTask([database, v4_text] {
+    g_changing_restrictions_view = true;
+    SpeedUpRestrictionsView(database, v4_text);
+    g_changing_restrictions_view = false;
+  });
+}
 void PinyonShiftTraceDlcSqlPrepare(PPCRegister& r3, PPCRegister& r15, PPCRegister& r30) {
   static std::atomic<uint32_t> count{};
+  if (REXCVAR_GET(pinyon_shift_game_db_indexes)) AfterRestrictionsView(r15.u32, r30.u32);
+  if (REXCVAR_GET(pinyon_shift_sql_profile)) ProfileSqlPrepare(r30.u32);
   if (!DlcSqlTraceEnabled()) return;
   const auto sql = ReadDlcSql(r30.u32, rex::system::kernel_state()->memory()->virtual_membase());
   const bool relevant = DlcSqlRelevant(sql);
