@@ -58,6 +58,16 @@ Where the sun's shadows are off (Ultra Low 30, and the Android presets that turn
 
 **POST-PROCESS AA** (FXAA) smooths the game world only, so HUD text stays sharp; **AA ON THE HUD** smooths everything, as before. **ANISOTROPIC FILTERING** and **TEXTURE DETAIL** apply to the world's textures. **TEXTURE SIZE** (1024, 512 or 256) loads large textures from a smaller level for graphics cards with little memory: the world is softer up close. It applies at the next start; the sun's shadows and the HUD keep the game's own filtering. **COLOUR LUT** gives the world a different look from a `.cube` colour table (17 or 33 points, as photo and video editors export) put in a `luts` folder you create in the state folder (`%LOCALAPPDATA%\PinyonShift\source\<version>\.local\preview\luts`); **LUT STRENGTH** blends it with the game's colours. The HUD keeps its colours, though translucent HUD panels show the game's colours behind them. These apply at once on the Vulkan renderer.
 
+## Frame generation with Lossless Scaling
+
+The game has no built-in frame generation yet ([planned](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/UPSCALING_BACKLOG.md)). If you own [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/), you can run it over the game window on Windows:
+
+1. Play in a window or in fullscreen (<kbd>F11</kbd>). Both are borderless windows, which Lossless Scaling can capture.
+2. In **F6 > DISPLAY**, set **GAME FRAME RATE LIMIT** to half your display's refresh rate, for example 60 on a 120 Hz display.
+3. In Lossless Scaling, set **Frame Generation** to LSFG 3 with a 2x multiplier, set **Scaling Type** to Off (the game already scales to your screen), then switch to the game and press the scale hotkey (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>S</kbd> by default).
+
+The generated frames include the HUD, so its text can smear when the camera moves fast. On an RTX 4080 with a 4K display, LSFG 3 kept about 16 % of the GPU's 3D engine busy with the game at 1x and 60 fps. On Linux and the Steam Deck, the community [lsfg-vk](https://lsfg-vk.dev) layer does the same with your own Lossless Scaling install; we have not tested it with the game.
+
 ## HUD
 
 **F6 > DISPLAY > HUD** shows or hides the HUD (the same as <kbd>F2</kbd>), and sets **HUD SCALE** (80 to 120 %) and **SAFE ZONE**, a margin of up to 10 % on each side for TVs that crop the picture. Both scale the HUD around the centre of the screen while you drive; the map, the pause menu and other menus keep their size. Labels that follow the world, such as event banners and driver names, move with the HUD.
