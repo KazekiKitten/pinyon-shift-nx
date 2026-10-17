@@ -325,10 +325,13 @@ std::string SettingsPages::ResolutionLine() const {
   if (output_width == render_width && output_height == render_height) {
     return line + ", SHOWN AT THAT SIZE";
   }
-  const bool fsr = SameValue(Unquote(Saved("present_effect")), "fsr");
+  const std::string effect = Unquote(Saved("present_effect"));
+  const char* upscaler = SameValue(effect, "fsr")    ? ", FSR 1 UPSCALES TO "
+                         : SameValue(effect, "fsr2") ? ", FSR 2 UPSCALES TO "
+                         : SameValue(effect, "fsr3") ? ", FSR 3 UPSCALES TO "
+                                                     : ", STRETCHED TO ";
   if (output_width * output_height > render_width * render_height) {
-    return line + (fsr ? ", FSR 1 UPSCALES TO " : ", STRETCHED TO ") +
-           size(output_width, output_height);
+    return line + upscaler + size(output_width, output_height);
   }
   return line + ", DOWNSCALED TO " + size(output_width, output_height);
 }
@@ -421,11 +424,41 @@ std::unique_ptr<MenuScreen> SettingsPages::Display() {
                           {"240", {{"host_present_fps_limit", "240"}}}}));
   // How the rendered image is scaled to the window: FSR 1 and CAS keep 2x
   // on a 4K display and 3x on 1440p sharp where bilinear blurs. The page's
-  // note gives both sizes.
-  rows.push_back(Setting("OUTPUT SCALING",
-                         {{"BILINEAR", {{"present_effect", "\"bilinear\""}}},
-                          {"CAS", {{"present_effect", "\"cas\""}}},
-                          {"FSR 1", {{"present_effect", "\"fsr\""}}}}));
+  // note gives both sizes. Temporal upscalers (UP-8.1) are offered when
+  // their runtime loaded, or while one is set; they use the game's depth,
+  // motion and a jittered scene, and RESOLUTION SCALE is their render size.
+  {
+    std::vector<Choice> scaling = {{"BILINEAR", {{"present_effect", "\"bilinear\""}}},
+                                   {"CAS", {{"present_effect", "\"cas\""}}},
+                                   {"FSR 1", {{"present_effect", "\"fsr\""}}}};
+    const std::string saved_effect = Unquote(Saved("present_effect"));
+    std::vector<rex::ui::UpscalerInfo> upscalers =
+        services_.upscalers ? services_.upscalers() : std::vector<rex::ui::UpscalerInfo>{};
+    // The presenter lists its preferred provider first; the menu goes in
+    // version order (FSR 2 before FSR 3).
+    std::stable_sort(upscalers.begin(), upscalers.end(),
+                     [](const auto& a, const auto& b) { return a.id < b.id; });
+    for (const rex::ui::UpscalerInfo& info : upscalers) {
+      if (info.kind != rex::ui::UpscalerKind::kTemporal ||
+          (!info.available && !SameValue(saved_effect, info.id))) {
+        continue;
+      }
+      std::string label = info.id == "fsr2"   ? "FSR 2"
+                          : info.id == "fsr3" ? "FSR 3"
+                          : info.id == "dlss" ? "DLSS"
+                                              : Upper(info.id);
+      if (!info.available) label += " (UNAVAILABLE)";
+      scaling.push_back({label, {{"present_effect", "\"" + info.id + "\""}}});
+    }
+    rows.push_back(Setting("OUTPUT SCALING", std::move(scaling)));
+  }
+  // FSR 1's RCAS and the temporal upscalers' own sharpening, in stops of
+  // reduction (the temporal sharpness is 1 - reduction / 2).
+  rows.push_back(Setting("SHARPENING", {{"OFF", {{"present_fsr_sharpness_reduction", "2.0"}}},
+                                        {"LOW", {{"present_fsr_sharpness_reduction", "1.0"}}},
+                                        {"MEDIUM", {{"present_fsr_sharpness_reduction", "0.5"}}},
+                                        {"HIGH", {{"present_fsr_sharpness_reduction", "0.2"}}},
+                                        {"MAX", {{"present_fsr_sharpness_reduction", "0.0"}}}}));
   // HDR output (#417, #442): the image on an HDR (scRGB) swapchain with its
   // white at the paper white, so an HDR desktop does not wash it out, and the
   // scene's highlights (not the HUD or menus) expanded towards the display's

@@ -158,6 +158,8 @@
                                 <ComboBoxItem Tag="bilinear">Bilinear</ComboBoxItem>
                                 <ComboBoxItem Tag="cas">CAS sharpening</ComboBoxItem>
                                 <ComboBoxItem Tag="fsr">FSR 1</ComboBoxItem>
+                                <ComboBoxItem Tag="fsr2">FSR 2 (temporal)</ComboBoxItem>
+                                <ComboBoxItem Tag="fsr3">FSR 3 (temporal)</ComboBoxItem>
                             </ComboBox>
                         </Grid>
                         <TextBlock x:Name="ResolutionLineText" FontSize="13.5" TextWrapping="Wrap"/>

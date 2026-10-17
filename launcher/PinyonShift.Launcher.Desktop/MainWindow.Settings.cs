@@ -76,6 +76,16 @@ public partial class MainWindow
 
     private void GraphicsChoice_Changed(object? sender, SelectionChangedEventArgs e) => UpdateResolutionLine();
 
+    // The resolution line's verb for an output scaling tag. FSR 2 and 3 need
+    // AMD's FidelityFX runtime beside the game; without it they run as FSR 1.
+    private static string UpscalerVerb(string? scaling) => scaling switch
+    {
+        "fsr" => "FSR 1 upscales",
+        "fsr2" => "FSR 2 upscales",
+        "fsr3" => "FSR 3 upscales",
+        _ => "stretched",
+    };
+
     // What the game renders and what reaches the screen, as the in-game
     // display settings say it: the scaled 1280 x 720 image, fitted to the
     // display (or the window) with the chosen output scaling.
@@ -90,11 +100,11 @@ public partial class MainWindow
             ResolutionLineText.Text = line + ".";
             return;
         }
-        var fsr = SelectedTag(OutputScalingCombo, "bilinear") == "fsr";
+        var scaling = SelectedTag(OutputScalingCombo, "bilinear");
         ResolutionLineText.Text = (long)outputWidth * outputHeight == (long)renderWidth * renderHeight
             ? $"{line}, the size of your screen."
             : (long)outputWidth * outputHeight > (long)renderWidth * renderHeight
-                ? $"{line}, {(fsr ? "FSR 1 upscales" : "stretched")} to {outputWidth} × {outputHeight}."
+                ? $"{line}, {UpscalerVerb(scaling)} to {outputWidth} × {outputHeight}."
                 : $"{line}, downscaled to {outputWidth} × {outputHeight}.";
     }
 
