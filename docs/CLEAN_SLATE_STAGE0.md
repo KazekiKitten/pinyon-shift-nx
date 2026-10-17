@@ -286,3 +286,132 @@ implementation against the unchanged 3%/p99 gate; they do not prove that
 asynchronous or stage-specific retirement must cost as much. They do
 not authorize a shared arena. The diagnostic cvar remains off by default,
 and CS-4 is held pending a different completion design and a new probe.
+
+## CS-0.1: ordered session pilot
+
+The default-off SDK pilot (`cs_session_mode=1` record, `2` replay,
+`cs_session_path` filename, both restart-only) records a total order of
+boundary observations. Mode 1 refuses an existing file. Mode 2 feeds back
+recorded guest timebase, system-time, uptime and controller-state values;
+it validates identities, kernel results, I/O results/digests and each PM4
+hash. The first mismatch exits with status 86 and an expected/actual
+boundary tuple. It does not continue with unrelated values. The same
+binary is used for record and replay.
+
+The log covers XThread starts, single/multiple/signal-and-wait requests
+and results, event/semaphore/mutant signaling, timer APC firings, XFile
+read/write status, size, offset and content digests, GPU fence writes and
+interrupts. XThread-backed workers get their kernel thread ID; other host
+threads use tag zero. I/O is reissued against the same immutable game and
+pinned initial save, with results checked, rather than copying game
+content into the recording. This is narrower than replaying arbitrary
+external I/O. Directory queries, network results, host vblank scheduling,
+host thread-pool arbitration, inline guest atomics and fast critical
+sections are not fully intercepted. Wait logging **observes** ordering;
+it does not force the host scheduler to reproduce it. Initial clock
+epochs and the timer queue's host deadlines are not virtualized. These
+are explicit limits of the cheap pilot, not claims that nondeterminism
+outside the hooks is absent.
+
+Every decoded PM4 header and payload, including IB links, nested buffers
+and zero padding, contributes to a 64-bit FNV-1a hash, closed at `XE_SWAP`.
+A separate count records the dwords in the same frame. This hashes packet
+memory at decode entry, rather than merely counting draws or final
+registers; concurrent mutation after that snapshot is not modeled.
+The log flushes at every frame. `tools/cs/read-session.py` emits
+counts and hashes, never input or I/O contents. Full guest-memory hashes
+at every kernel synchronization were not added to this pilot; a dirty-page
+snapshot design remains part of CS-1.
+
+`tools/cs/session-self-test.cpp` links the real runtime without a game.
+It records then replays a clock value and a 16-byte input state despite
+different live values; boundary-order and PM4-hash negative controls exit
+86; recording over the same file exits 86 and preserves it. The reader's
+self-check rejects malformed/truncated records and oversize payloads.
+This separates a broken log format from a real session-order divergence.
+
+The game route `tools/cs/routes/cs01-race.fh1test` uses the qualified
+Gauntlet entry and records from boot, with 60 wall seconds between the
+`gauntlet-driving` and `gauntlet-end` captures. GPU true-completion stays
+off. The recording and replay each start from a new private copy of the
+same seed as CS-0.4.
+
+**Gate failed, 2026-10-17.** Project source `c6333e00` (application C++
+unchanged from `0f8f20b2`), SDK main `40666b3`, frozen base codegen, native
+Release Windows and Android builds. Both use Vulkan, 1x, vsync off and a
+60 fps game cap. Device/driver identities are those above. Builds finished
+before routes started. Exact binary hashes are in `cs01-detail-binaries.json`;
+APK SHA-256 `80253c185dd182358d19f22e6307ba81adb283e4cf458986140bae937dceab88`.
+Build logs `cs01-build-{win,android}-detail.log` and
+`cs01-build-linux-detail-retry.log` record the rebuild. The old generated
+build sidecars still have stale metadata; they are not revision evidence.
+
+Each device's `cs01-record2` completed the route. Both start/end capture
+pairs show the race HUD and a 60-second race-clock interval
+(`cs01-record2-captures.png`, `cs01-record2-hud.json`). These are recordings
+from boot through the race, so the totals below include startup. Two
+independent replays, `cs01-replay2` and `cs01-replay3`, each use a fresh
+private seed copy and the **same binary and record2 reference** on that
+device. They fail closed at the first identity/order mismatch:
+
+| Device | Recorded bytes / boundaries | Recorded duration / PM4 frames | Replay2 first mismatch, zero-based | Replay3 first mismatch | Verified equal PM4 |
+| --- | ---: | ---: | --- | --- | --- |
+| Multivac / RTX 4080 | 1,082,406,224 / 27,056,475 | 161.179 s / 9,614 | 18: uptime expected, system-time actual | 5: uptime expected, system-time actual | 0 frames, 0 s |
+| Odin / Turnip V37 | 985,542,720 / 24,634,907 | 164.159 s / 9,555 | 1: uptime expected, system-time actual | 3: uptime expected, system-time actual | 0 frames, 0 s |
+
+All four actual/expected tuples have host-thread tag zero, key zero and
+zero payload size. The mismatch is **event order**, not an observed PM4
+hash mismatch or a differing returned time value: replay substitutes clock
+values only after the boundary identity matches. On Windows the wrapper
+reports intentional exit 86; Android's flushed runtime log records the
+same fail-closed path. Expected/actual tuples and boundary indices are in
+`desktop/cs01-replay{2,3}.state/logs/runtime.log` and
+`odin/cs01-replay{2,3}/logs/runtime.log`. Trace summaries and per-frame
+hashes are `cs01-{win,odin}-record2-summary.json`; raw references have the
+same prefix and `.bin` suffix. Raw traces are local only.
+
+Source inspection explains why scalar playback is insufficient: the kernel
+updates its guest timestamp bundle from a 1 ms **host** repeating timer
+(`xboxkrnl_module.cpp`), while guest system time is also queried during
+XThread construction (`xthread.cpp`). Their startup interleaving is not
+controlled. The log does not retain query call sites, so these particular
+call paths are an inference from the startup context, not a captured call
+stack. The observed class is the differing order of clock-boundary types.
+The broad global clock hook also includes host work tagged zero; a future
+oracle must distinguish that work from guest queries.
+
+Initial `record1/replay1` attempts had the same early order failure
+(Windows boundary 4, Odin 26), but detailed tuples went only to stderr,
+which Android did not retain. The logger was fixed and both recordings
+repeated before using the table above. No record/replay pair crosses a
+binary change. Real-runtime positive playback, order/hash negative controls,
+exclusive-create protection and disabled-mode no-file checks pass with the
+final runtime (`cs01-self-test-detail.txt`); release-contract tests: 40 pass.
+The full tools suite before the logging-only correction: 534 pass, 6 skip,
+111 subtests. No performance gate is inferred from recording overhead.
+
+This is a first-divergence census, **not an exhaustive discovery of every
+source in the race**. Replay never reaches its first PM4 comparison, so
+later scheduling, input, I/O, memory and GPU equality remain untested. No
+memory hashes were collected. Do not claim a 60-second deterministic
+session or authorize CPU/GPU rewrites against this pilot as an oracle.
+
+
+A full CS-1 design needs the following before PM4 equality can serve as an
+oracle. These are coverage gaps identified from the implementation, not
+additional experimentally observed mismatches after the first failure:
+
+| Source | Pilot coverage and required design |
+| --- | --- |
+| Host scheduling | Log order only; deterministic execution grants must arbitrate thread starts, wait returns and signaling. A log mutex orders observations, not the guest instructions between them. |
+| Time | Returned scalar values only; use a virtual epoch and shared logical clock for timer deadlines, sleeps, vblank, GPU interrupts and their delivery order. Host polling must not consume guest clock records. |
+| Identity | Kernel thread IDs and numeric boundary keys; use stable logical thread/object IDs and query-site identities, including host workers currently tagged zero. |
+| Guest shared memory | No interception of inline atomics/fast critical sections or arbitrary races; deterministic scheduling plus dirty-page snapshots at synchronization points is needed. No memory-equality claim was tested here. |
+| I/O | XFile operations and content digests observed, actual I/O reissued; capture external results, directory/metadata queries, network and entropy inputs, and isolate writes. Identical pinned files do not cover arbitrary I/O. |
+| Input | Controller values replayed at intercepted calls; wall-time route/UI events still need a logical schedule and call identity. |
+| GPU | Decoder packet snapshots, fence writes and interrupts observed; virtualize completion/vblank order and retain the memory each packet consumes. A 64-bit PM4 hash alone is not a guest-state proof. |
+| Timers | APC firing observed but host deadlines and dispatch not controlled. Neither trace recorded a `timer_fire` event; that path has no device replay coverage. |
+
+Stage 0 does not implement that scheduler, memory oracle or reference
+interpreter. Failing this pilot rejects the cheap ordered-value replay
+premise, not the feasibility of a deliberately deterministic runtime.

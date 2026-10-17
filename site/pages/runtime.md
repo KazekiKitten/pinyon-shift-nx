@@ -37,6 +37,17 @@ Implementations include threads, events, semaphores, timers, the file system, co
 
 Each guest thread is one host thread, named `Guest <start address>`. About 42 are alive in a race; the busy ones are the simulation and render threads, FMOD's mixer thread and 11 job workers. Guest CPU numbers rotate over six virtual hardware threads, and guest affinities are ignored by default: honouring them, with one host core per Xenon hardware thread, gave no consistent gain.
 
+A default-off session probe (`cs_session_mode`, `cs_session_path`) records
+clock and controller values, kernel/I/O observations and a PM4 hash per
+decoded frame. It does not control scheduling. On the RTX 4080 desktop and
+Odin with Turnip V37, recordings cover a 60-second race, but two replays on
+each stop during startup: a system-time query arrives where an uptime
+update was recorded. Zero frames of replay equality were verified. A
+replay oracle needs virtual time and deterministic boundary scheduling;
+replaying returned scalar values alone is insufficient.
+[The Stage 0 evidence](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/CLEAN_SLATE_STAGE0.md#cs-01-ordered-session-pilot)
+records the exact builds, failures and untested paths.
+
 The job workers run the game's jobs on XAPI fibers. The game's five fiber functions (`ConvertThreadToFiber`, `ConvertFiberToThread`, `CreateFiber`, `DeleteFiber`, `SwitchToFiber`) are served by the runtime's host fibers (Windows fibers; a stack switch of the runtime's own on Linux and Android; `ucontext` on macOS), so a guest fiber switch never leaves the host call chain. Before that mapping the switch went through the kernel's stack-switch call, and every generated function needed an entry for each return address ([why that mattered](recompiler.md#what-the-generator-emits)).
 
 **The global critical region.** The console disables interrupts for short sections; the runtime turns that into one process-wide recursive mutex, also taken for every guest event and wait (for the handle lookup) and by the vblank interrupt. On the desktop it is contended about 260 times a frame and blocks for about 0.34 ms of a race frame, so it was left alone there. On Android it caused visible hitches ([#416](https://github.com/arcanite24/pinyon-shift/issues/416)): a hold log (`critical_region_hold_log_ms`) and a watchdog that names the holder, matched with `simpleperf`, showed file system path lookups and AAudio stream opens running under the lock, blocking the game's thread for up to 39 ms behind I/O. Most of the guest's interrupts-off sections only wrap one load-reserve/store-conditional pair, which the generated code already turns into a host compare-exchange; the generator marks those (1,001 of 1,062) and they run without the lock (`guest_reservation_sections_unlocked`). On the Odin race that took about 5,000 lock entries a frame off it, cut its contentions from 132-160 to 22-25 a frame and the render thread's CPU by 0.36 ms a frame.
