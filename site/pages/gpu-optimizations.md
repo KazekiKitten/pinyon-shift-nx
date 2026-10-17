@@ -121,6 +121,7 @@ Fast math has a trap: Direct3D 9 shaders rely on 0 × ∞ = 0. Dropping that rul
 | No pipeline builds on the command threads | 8 Elite menus about 95 s to 10 s |
 | Specialized passes and translation moved to workers | cold worst frame 252–348 to 63–69 ms |
 | Desktop waits up to 250 ms for a missing pipeline instead of skipping the draw | frames without a present 84 to 2 |
+| The wait moved from each draw to the submission's replay (`vulkan_async_pipeline_bind_on_replay`), so a frame's new pipelines build in parallel | RTX 4080, drive route with no stored pipelines: title fence waits 1.17-1.37 s to 0.52 s, worst frame 305-416 to 145-166 ms |
 
 ## Three switches across four GPUs
 
