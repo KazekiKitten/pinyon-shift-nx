@@ -43,8 +43,9 @@ guest thread and sequence number. Round 2 fixed the original global-order
 capture failure. The desktop still diverges at a shared job-state poll:
 the worker's transition to completed state falls on a different side of
 the render thread's read, despite replayed per-object lock grants. The
-final diagnostic verifies zero PM4 frames; an earlier iteration verified
-one. A useful session oracle must control execution between kernel calls,
+final repeat removes all memory observers and still expects a job lock
+where replay makes another timebase read from the poll/work-selection path.
+It verifies zero PM4 frames; an earlier iteration verified one. A useful session oracle must control execution between kernel calls,
 including these ordinary shared-memory polls. It cannot rely on external
 event playback alone. The probe changes critical-section bookkeeping and
 object allocation only while enabled; it is not a performance build.

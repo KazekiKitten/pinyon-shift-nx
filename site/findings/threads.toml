@@ -286,12 +286,12 @@ source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Hot guest CPU functions"""
 
 [[finding]]
 group = """Hot functions"""
-base = """sub_82462050, sub_82462098, sub_823E6738"""
+base = """sub_82462030, sub_82462050, sub_82462098, sub_823E6738"""
 name = """guest time reads"""
-what = """Read the tick count through the kernel's tick query; most of the render thread's clock reads in its idle loop come through them."""
-how = """Call graph."""
+what = """The lowest helper 82462030 reads the PPC timebase, mapped to the runtime guest tick counter. The other helpers use it for time queries and timer setup; most of the render thread's clock reads in its idle loop come through them."""
+how = """Call graph and generated timebase access; same-binary mapped host stack in r2-race-no-watch."""
 confidence = """confirmed"""
-source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Hot guest CPU functions"""
+source = """docs/CLEAN_SLATE_STAGE0.md#cs-01-per-thread-replay-and-shared-memory-order"""
 
 
 [[finding]]
@@ -388,9 +388,9 @@ source = """docs/NEAR_NATIVE_RESEARCH.md NN-5.1"""
 
 [[finding]]
 group = "Main loop"
-base = "sub_82412688, sub_8243CB38, sub_82E43EA8"
+base = "sub_82412688, sub_8243CB38, sub_82E43EA8, sub_82E4B240, sub_82E4A030"
 name = "job completion polls race with worker state publication"
-what = "The job wait helper at 82412688 polls object bytes +40 and +41 before taking the job critical section. Its caller 8243CB38 then takes the critical section at object +4 and rechecks readiness. The worker transition helper 82E43EA8 writes byte +40 under that critical section; the writer in this capture is asset worker 82E4B2D0. Round 2 session replay observed the same object at +40 as 3 instead of captured 4: the reader passed the worker's completion publication. Replaying kernel outcomes and per-object lock grants therefore does not determine this polling path."
-how = "Generated control-flow and field-access analysis; default-off read/store observations in desktop r2-race1 and r2-boot21, including the last matching writer's thread and sequence. No memory value was substituted by the diagnostic."
+what = "The job wait helper at 82412688 polls object bytes +40 and +41 before taking the job critical section. Its caller 8243CB38 then takes the critical section at object +4 and rechecks readiness. The poll may enter queue work selection through 82E4B240 and 82E4A030, which reads the clock while work is pending. The worker transition helper 82E43EA8 writes byte +40 under that critical section; the writer in this capture is asset worker 82E4B2D0. Round 2 session replay observed the same object at +40 as 3 instead of captured 4: the reader passed the worker's completion publication. Replaying kernel outcomes and per-object lock grants therefore does not determine this polling path."
+how = "Generated control-flow and field-access analysis; default-off read/store observations in desktop r2-race1 and r2-boot21, including the last matching writer's thread and sequence. A final repeat without memory observers still diverges at the same job lock versus another polling timebase read. No memory value was substituted by the diagnostic."
 confidence = "confirmed"
 source = "docs/CLEAN_SLATE_STAGE0.md#cs-01-per-thread-replay-and-shared-memory-order"

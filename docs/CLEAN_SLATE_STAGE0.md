@@ -628,6 +628,25 @@ that tolerating this polling drift would necessarily change PM4. It does
 show that strict per-thread event streams do not determine that poll or
 the subsequent clock-call count without shared-memory/execution ordering.
 
+A final repeat removes **every memory observation**, keeping only the
+GetTickCount shim. `r2-race-no-watch`, parent `ce7580fb`/SDK `200bfdb`, uses
+the same route and seed and the same binary for record/replay. Its HUD
+checks pass at both ends of the 60-second race. The recording contains
+3,125,594,685 bytes, 55,407,669 events, 71 streams and 9,546 PM4 frames over
+161.2399935 s including startup; **zero `guest_memory` events**. Replay
+still stops before its first PM4 frame, render `0x13` sequence **8,511**:
+expected per-object lock grant `0x12E094004`, ticket **7**; actual timebase
+read in `sub_82462030`, called through `82462050`, `82462098`, `82E4A030`,
+`82E4B240`, `82412688`. The lock is again at job `0x2E094000 +4`.
+The polling/work-selection path therefore also diverges in the external
+event stream without an observer stopping on a memory value. It is not
+merely the earlier observation assertion. No PM4 equality is inferred
+beyond the successfully compared prefix (zero here); an oracle that
+intentionally tolerates polling drift would require a different clock/log
+contract and separate validation. Exact binaries/hashes, trace summary,
+HUD checks and stack-to-function metadata remain under this run name.
+The clock shim was restored and the normal Windows build rebuilt afterward.
+
 CS-1 must choose deterministic guest execution quanta (instruction/basic
 block or a reference interpreter), or record and enforce shared-memory
 read-from/happens-before order, including inline atomics, fast lock paths
