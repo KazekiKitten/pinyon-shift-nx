@@ -11,6 +11,14 @@ description: Fixes for rejected disc images, failed builds, startup problems, co
 
 Only the USA retail base disc (`MS-2505`) is supported. A bad dump, another region, a title update or a modified image won't match. The launcher doesn't accept near matches and can't download or repair an image.
 
+## Defender reports a Trojan or quarantines a file
+
+A named malware detection in **Windows Security > Protection history** needs investigation even when the ZIP matches the official release. Keep protection enabled. Do not add exclusions, allow the threat or restore the file to continue setup; this also applies to locally built executables.
+
+Record the release, download URL, exact threat name, affected path, detection time and Defender security intelligence version. If the ZIP is still accessible, use `Get-FileHash .\PinyonShift-Launcher.zip -Algorithm SHA256` and compare it with that asset's `digest` in the [release API](https://api.github.com/repos/arcanite24/pinyon-shift/releases/latest) (use `/releases/tags/<tag>` for older versions). Compare the same file: ZIP, EXE and bundled DLL hashes differ. A mismatch can mean a changed, incomplete or different download; stop using that copy and report its source. A match identifies the official artifact but does not establish that the alert is false.
+
+Report the evidence so the maintainer can investigate and submit the exact sample to Microsoft. The 0.5.1 report [#659](https://github.com/arcanite24/pinyon-shift/issues/659) reproduces on the official Windows ZIP; Defender identifies the DLL bundled inside its EXE. The official 0.6.0 ZIP scanned without threats with the tested intelligence version; this does not clear the older artifact. See the [investigation and submission draft](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/LAUNCHER_DEFENDER_659.md) for hashes and scan versions. An unsigned-app SmartScreen warning is a separate case; see [Verify the download](install.md#verify-the-download).
+
 ## A download fails
 
 Check the connection and run the launcher again. Network failures are retried, and every pinned download is verified by SHA-256 before use, so partial files are never trusted. If curl fails, the launcher retries without a strict certificate revocation check and then with Windows' own downloader, which follows the system proxy. If a file still won't download but your browser can fetch it (a proxy or antivirus web filtering is the usual cause), download it in the browser and save it under the name and folder the error gives; setup checks it and continues.
@@ -28,7 +36,7 @@ When the Visual Studio Installer stops, the error gives its exit code and, for t
 
 ## The game doesn't start
 
-Update the GPU driver and check that the GPU supports Vulkan 1.3. To reset the runtime settings, delete `.local/preview/config/pinyon_shift.toml`. Security software may quarantine the newly compiled, unsigned executable. Restore it only if it was built by your own install.
+Update the GPU driver and check that the GPU supports Vulkan 1.3. To reset the runtime settings, delete `.local/preview/config/pinyon_shift.toml`. If security software quarantines the executable, follow [the detection reporting steps](#defender-reports-a-trojan-or-quarantines-a-file).
 
 ## A white window after the first screen
 
@@ -36,7 +44,7 @@ Up to 0.5.1, a `pinyon_shift.toml` without a `gpu_backend` line started the game
 
 ## "Could not build the mods' archive members"
 
-Before each start the launcher rebuilds the enabled mods' archives in `.local/preview/mods/zz-archive-patches`. When the mods haven't changed it keeps the previous copy; otherwise it replaces it, and a file still open elsewhere stops it with "is in use by another program". Wait for a game that is still closing, or for antivirus to finish scanning the folder, and start again. If it keeps happening, add the install folder to the antivirus exclusions.
+Before each start the launcher rebuilds the enabled mods' archives in `.local/preview/mods/zz-archive-patches`. When the mods haven't changed it keeps the previous copy; otherwise it replaces it, and a file still open elsewhere stops it with "is in use by another program". Wait for a game that is still closing, or for antivirus to finish scanning the folder, and start again. If it keeps happening, report the exact error and check Protection history for [a detection](#defender-reports-a-trojan-or-quarantines-a-file).
 
 ## The game runs on the wrong GPU
 

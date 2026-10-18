@@ -24,11 +24,13 @@ Your disc image and game files stay on your machine. The launcher downloads only
 
 ## Verify the download
 
-The launcher isn't code-signed yet, so SmartScreen may call it an unrecognized app. Download it only from this repository's releases, and compare the ZIP's SHA-256 with the value in the release notes:
+The launcher isn't code-signed yet, so SmartScreen may call it an unrecognized app. Download it only from this repository's releases, and compare the ZIP's SHA-256 with that asset's `digest` in the [GitHub release API](https://api.github.com/repos/arcanite24/pinyon-shift/releases/latest) (use `/releases/tags/<tag>` for older releases):
 
 ```powershell
 Get-FileHash .\PinyonShift-Launcher.zip -Algorithm SHA256
 ```
+
+A matching hash identifies the official download. If Defender names a threat or quarantines a file, follow [the detection reporting steps](troubleshooting.md#defender-reports-a-trojan-or-quarantines-a-file) before running it.
 
 Administrator permission is requested only when Visual Studio 2022 C++ Build Tools (17.1 or newer) must be installed. VS 2019 alone isn't enough.
 
