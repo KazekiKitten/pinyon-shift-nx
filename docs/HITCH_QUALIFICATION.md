@@ -12,6 +12,15 @@ writable player save. Keep the executable, seed, settings and GPU driver
 identical within each comparison. On a shared machine reserve the game and
 exclude heavy builds while collecting timings.
 
+Validate the measured scene as well as the seed. Identical input scripts can
+reach different positions when loading or traffic changes. Compare captures
+and vehicle poses before treating a frame-time difference as a regression.
+For a stationary comparison, hold the handbrake: the brake pedal selects
+reverse once the car has stopped. Warm that stationary scene itself, rather
+than assuming a preceding drive compiled its pipelines. Reject a repeat if
+traffic moves the car. Check the race HUD's elapsed time when qualifying a
+60-second race; startup and route-clock time do not establish racing time.
+
 Useful diagnostic arguments (each supplied as `--game-argument=...`):
 
 ```text
