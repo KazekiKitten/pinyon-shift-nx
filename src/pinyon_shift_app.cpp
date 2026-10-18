@@ -17,6 +17,7 @@
 #include <string>
 #include <system_error>
 #include <thread>
+#include <toml++/toml.hpp>
 
 #include <rex/cvar.h>
 #include <rex/filesystem.h>
@@ -144,6 +145,50 @@ constexpr uint32_t kConfigSchema = 29;
 // For START IN SINGLE PLAYER, armed once the settings are loaded.
 std::filesystem::path g_user_data_root;
 
+// Shared by first start and schema-less repair so their defaults stay in sync.
+std::string DefaultConfigText() {
+  std::ostringstream output;
+  output << "# Pinyon Shift host configuration.\n"
+            "# Increment this only with an explicit migration.\n"
+            "# Controller support with keyboard emulation as a fallback.\n"
+            "pinyon_shift_config_schema = "
+         << kConfigSchema << "\n"
+            "input_backend = \"sdl\"\n"
+            "hid_mappings_file = \"gamecontrollerdb.txt\"\n"
+            "mnk_mode = true\n";
+  for (const auto& key : pinyon_shift::config::kDefaultKeys) {
+    output << key.name << " = " << pinyon_shift::config::Quote(key.keys) << "\n";
+  }
+  output <<
+            "d3d12_allow_variable_refresh_rate_and_tearing = false\n"
+            "gpu_backend = \"vulkan\"\n"
+            "gpu_record_thread = true\n"
+            "vsync = true\n"
+            "host_present_fps_limit = 0\n"
+            "host_present_sleep_spin = true\n"
+            "pinyon_shift_capture_performance = true\n"
+            "xma_relaxed_padding_admission = false\n"
+            "pinyon_shift_stabilize_vehicle_presentation = false\n"
+            "pinyon_shift_skip_opening_movies = false\n"
+            // LOW-SPEC 60 (LS-1.5): never the display's rate, which on a
+            // 144-240 Hz display renders and simulates that many frames.
+            // A capable machine moves to PERFORMANCE 120 once its GPU is
+            // known (ApplyFirstRunHardwareDefaults).
+            "pinyon_shift_fh1_render_fps_limit = 60\n"
+            "pinyon_shift_fh1_source_presentation = true\n"
+            "anisotropic_override = -1\n"
+            "present_effect = \"bilinear\"\n"
+            "swap_post_effect = \"none\"\n"
+            "disable_bloom = true\n"
+            "disable_motion_blur = true\n"
+            "disable_depth_of_field = true\n"
+            "fh1_msaa_single_sample = true\n"
+            "draw_resolution_scale_x = 1\n"
+            "draw_resolution_scale_y = 1\n"
+            "clear_memory_page_state = false\n";
+  return output.str();
+}
+
 bool EnsureSupportedConfig(const std::filesystem::path& path, bool& created,
                            bool& migrated) {
   created = false;
@@ -153,44 +198,7 @@ bool EnsureSupportedConfig(const std::filesystem::path& path, bool& created,
     if (!output) {
       return false;
     }
-    output << "# Pinyon Shift host configuration.\n"
-              "# Increment this only with an explicit migration.\n"
-              "# Controller support with keyboard emulation as a fallback.\n"
-              "pinyon_shift_config_schema = "
-           << kConfigSchema << "\n"
-              "input_backend = \"sdl\"\n"
-              "hid_mappings_file = \"gamecontrollerdb.txt\"\n"
-              "mnk_mode = true\n";
-    for (const auto& key : pinyon_shift::config::kDefaultKeys) {
-      output << key.name << " = " << pinyon_shift::config::Quote(key.keys) << "\n";
-    }
-    output <<
-              "d3d12_allow_variable_refresh_rate_and_tearing = false\n"
-              "gpu_backend = \"vulkan\"\n"
-              "gpu_record_thread = true\n"
-              "vsync = true\n"
-              "host_present_fps_limit = 0\n"
-              "host_present_sleep_spin = true\n"
-              "pinyon_shift_capture_performance = true\n"
-              "xma_relaxed_padding_admission = false\n"
-              "pinyon_shift_stabilize_vehicle_presentation = false\n"
-              "pinyon_shift_skip_opening_movies = false\n"
-              // LOW-SPEC 60 (LS-1.5): never the display's rate, which on a
-              // 144-240 Hz display renders and simulates that many frames.
-              // A capable machine moves to PERFORMANCE 120 once its GPU is
-              // known (ApplyFirstRunHardwareDefaults).
-              "pinyon_shift_fh1_render_fps_limit = 60\n"
-              "pinyon_shift_fh1_source_presentation = true\n"
-              "anisotropic_override = -1\n"
-              "present_effect = \"bilinear\"\n"
-              "swap_post_effect = \"none\"\n"
-              "disable_bloom = true\n"
-              "disable_motion_blur = true\n"
-              "disable_depth_of_field = true\n"
-              "fh1_msaa_single_sample = true\n"
-              "draw_resolution_scale_x = 1\n"
-              "draw_resolution_scale_y = 1\n"
-              "clear_memory_page_state = false\n";
+    output << DefaultConfigText();
     created = true;
     return output.good();
   }
@@ -232,6 +240,15 @@ bool EnsureSupportedConfig(const std::filesystem::path& path, bool& created,
     if (std::regex_search(config_text, std::regex(R"((?:^|\n)\s*pinyon_shift_config_schema\s*=)"))) {
       return false;
     }
+    toml::table saved;
+    try {
+      saved = toml::parse(config_text);
+    } catch (const toml::parse_error&) {
+      return false;
+    }
+    if (saved.contains("pinyon_shift_config_schema")) {
+      return false;
+    }
     std::filesystem::path backup = path;
     backup += ".noschema.bak";
     std::error_code backup_error;
@@ -240,8 +257,21 @@ bool EnsureSupportedConfig(const std::filesystem::path& path, bool& created,
     if (backup_error) {
       return false;
     }
-    const std::string repaired =
-        "pinyon_shift_config_schema = " + std::to_string(kConfigSchema) + "\n" + config_text;
+    // The file can also be the first one in a new state folder: the mod
+    // builders (tools/build-mod-patches.py, build-mod-archives.py) write
+    // enabled_mods before the game has ever started. Prepend only missing
+    // defaults, keeping saved syntax and comments. Defaults must precede
+    // any tables in the original text.
+    std::string repaired;
+    const std::string newline = config_text.find("\r\n") != std::string::npos ? "\r\n" : "\n";
+    std::istringstream lines(DefaultConfigText());
+    for (std::string line; std::getline(lines, line);) {
+      const auto separator = line.find(" = ");
+      if (separator == std::string::npos || !saved.contains(line.substr(0, separator))) {
+        repaired += line + newline;
+      }
+    }
+    repaired += config_text;
     if (!pinyon_shift::config::WriteAtomically(path, repaired)) {
       return false;
     }

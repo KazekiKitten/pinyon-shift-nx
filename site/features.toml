@@ -106,7 +106,7 @@ pinyon = "None; the 1000 Club challenges run offline on the v4 build"
 feature = "Installing and updating"
 link = "install.md#updating"
 xbox = "Disc"
-pinyon = "The launcher verifies your disc, builds the game and updates itself"
+pinyon = "The launcher verifies your disc, builds the game and updates itself; startup [repairs partial settings](troubleshooting.md#a-partial-settings-file-on-a-fresh-state) with missing defaults and an exact backup, keeping saved values"
 
 # Table 2: features by platform.
 [[platform]]
