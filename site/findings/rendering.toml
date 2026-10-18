@@ -102,6 +102,16 @@ source = """docs/native-renderer/LIVERY_TEXTURE_OWNERSHIP.md; SDK tests/unit/gra
 
 [[finding]]
 group = """Frame structure and views"""
+name = """livery editor single-channel resolves"""
+what = """Opening Add Decals in Design Creator issues RGBA8-to-8-bit unorm resolves (color format 0, destination texture format 2), both single-sampled with sample 0 and 4x MSAA with samples 0123. The native resolve planner originally rejected this destination as unsupported. The format is a byte per texel, so storing a 32-bit word per pixel would overwrite neighbouring texture data."""
+how = """Scripted Paint Shop route on multivac, Windows Vulkan at 2x, from a private stock-MX5 save. Runtime warnings identify c0->t2/1x/s0 and c0->t2/4x/s6 with RB_COPY_DEST_INFO 0x01000100; captures identify the Add Decals screen."""
+confidence = """confirmed"""
+issue = """#628"""
+note = """The trace establishes the unsupported operation; it does not by itself establish the cause of the reported world corruption after saving."""
+source = """docs/native-renderer/LIVERY_TEXTURE_OWNERSHIP.md; SDK src/graphics/fh1_edram_resolve.cpp"""
+
+[[finding]]
+group = """Frame structure and views"""
 name = """FMV YUV draw and composite"""
 what = """Movies play as a YUV draw (vertex shader `7156CE05`, pixel `31511D87`, three 8-bit planes) followed by a composite pass (`20A41D46`/`5F479FC4`). When `FMV_04` loops, the title skips the YUV draw for about 35 output frames (0.8 s) while the composite still draws, which shows solid green (0, 77, 0): YUV planes of zero convert to green. The title loop with its movie removed shows black."""
 how = """Per-frame census during story movies played from a linked mirror of the game files; same result at 30 fps."""

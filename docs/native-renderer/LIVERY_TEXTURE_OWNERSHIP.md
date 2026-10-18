@@ -39,6 +39,36 @@ original unscaled object. With the patch all 14 assertions pass. The regression
 also passes in the SDK unit suite built entirely from the worktree sources
 (296 tests passed, four skipped, 2,436 assertions passed).
 
+## Single-channel editor resolves
+
+Entering Add Decals from a stock MX5 also exposed an unsupported native resolve:
+`c0->t2/1x/s0`, followed by `c0->t2/4x/s6`, with destination register
+`0x01000100`. These copy RGBA8 EDRAM into a tiled 8-bit unorm texture, including
+the average of all four MSAA samples. The native planner rejected destination
+format `k_8`, producing backend draw failures. This is an observed editor defect;
+it alone does not explain corruption after saving a design.
+
+The resolve shader now packs this format into one byte per texel, after sample
+averaging, exponent bias, and channel swap. Atomic masked word updates preserve
+the other three bytes while independent texel threads execute. Endianness
+permutes the destination byte lane. The same tiled and scaled address formulas
+apply with bytes-per-texel log2 set to zero. This path uses the ordinary texture
+reload mechanism rather than the optional direct-to-32-bit-texture optimization.
+
+Both DXBC and SPIR-V resolve variants were rebuilt using the SDK shader script's
+compiler options. All 12 SPIR-V variants pass `spirv-val`. A unit regression
+passes the observed destination register through the real resolve planner at
+1x and 4x MSAA, checking support, byte size, destination extent, and base. With
+both corrections the full SDK suite passes 297 tests (four skipped), with 2,452
+assertions.
+
+The first editor-entry ownership trace recorded 278,506 invalidation ranges,
+of which 259,069 came from GPU writes, and 84 sampled texture reload attempts.
+Four sampled identities had both ordinary and scaled host allocations, including
+the 1280x720 front buffers. It contained no whole-512-MiB GPU invalidation.
+Those observations establish alias activity, not which world texture becomes
+corrupt after a saved design; that needs the acceptance checks below.
+
 ## Gameplay acceptance
 
 The unit regression establishes the cache defect independently of menu timing.

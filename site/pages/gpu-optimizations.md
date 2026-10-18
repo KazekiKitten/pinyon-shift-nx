@@ -216,3 +216,10 @@ These were correctness fixes, not speed, but each cost days to find:
 - **Qualcomm push descriptors** read as null in some draws, which broke shadows. Qualcomm devices use descriptor sets.
 - **Barriers and formats.** A resolve's writes were declared as reads, and 10-bit targets were stored at 8 bits.
 - **Validation.** A query ended inside a rendering, one present semaphore was shared between swapchain images, and a storage view had the wrong type. One query warning at startup is still open.
+
+The livery editor also resolves RGBA8 EDRAM into single-channel 8-bit masks,
+including MSAA averages. The native path packs these as individual bytes and
+preserves neighbouring texels with atomic masked writes. The same tiled and
+scaled layouts apply; this format uses texture reloads rather than direct
+32-bit image writes. See the [livery investigation](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/native-renderer/LIVERY_TEXTURE_OWNERSHIP.md)
+for the trace and remaining gameplay checks.
