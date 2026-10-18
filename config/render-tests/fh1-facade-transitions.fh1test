@@ -30,6 +30,7 @@ capture 1980 pending-language
 hostkey 2040 escape
 hostkey 2060 escape
 # Closing host settings leaves the guest pause menu open.
+# Seven downs cover the optional HORIZON RALLY row; the list clamps at QUIT.
 capture 2240 first-pause
 input 2260 0002 0 0 0 0 0 0
 input 2266 0000 0 0 0 0 0 0
@@ -43,6 +44,8 @@ input 2340 0002 0 0 0 0 0 0
 input 2346 0000 0 0 0 0 0 0
 input 2360 0002 0 0 0 0 0 0
 input 2366 0000 0 0 0 0 0 0
+input 2380 0002 0 0 0 0 0 0
+input 2386 0000 0 0 0 0 0 0
 capture 2400 first-quit-highlighted
 input 2460 1000 0 0 0 0 0 0
 input 2466 0000 0 0 0 0 0 0
@@ -74,6 +77,8 @@ input 5540 0002 0 0 0 0 0 0
 input 5546 0000 0 0 0 0 0 0
 input 5560 0002 0 0 0 0 0 0
 input 5566 0000 0 0 0 0 0 0
+input 5580 0002 0 0 0 0 0 0
+input 5586 0000 0 0 0 0 0 0
 capture 5600 second-quit-highlighted
 input 5660 1000 0 0 0 0 0 0
 input 5666 0000 0 0 0 0 0 0
