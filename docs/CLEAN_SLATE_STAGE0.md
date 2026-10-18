@@ -490,6 +490,48 @@ attempt failed; the accepted instruction recording uses the default
 monotonic clock. Both failures are retained. No live save was used.
 
 
+
+### CS-0.2: strict follow-up and unresolved exact census
+
+After the ceiling cleared 15%, `ctx-strict-model.py` continued the analysis
+with transitive may-write and must-write summaries, fixed-point CFG
+read-before-write, and a matched AArch64 import/publication census. It
+keeps partial writes, unknown memory operands, unknown calls and all return
+state; opaque register-reference helpers retain all state. Forward cache
+facts intersect at joins, and backward demand follows every known CFG
+successor. This avoids the optimistic model's may-cache joins, partial
+kills and branch elision. No replacement code is emitted.
+
+On the same `r2-ctx-regs4` samples and matched `libmain.so`, the analyzed
+subset is **0.468% render (268 load + 83 store samples /75,042), 0.319%
+simulation (270 + 34 /95,174), 0.680% mixer (148 + 1 /21,916)**. These are
+model census estimates, **not an exact net host-instruction count or a
+certified performance lower bound**. The strict source scan covers 76,764
+bodies including named helpers, 48,101 indirect sites and 58,299 opaque
+sites. No sound call-site vtable resolution is available; dynamically seen
+targets are not a proof that other targets cannot occur. Source SHA-256 is
+`f73cb4edadf3461d014c18601b66bb28b1ef0b2c6f15aa155fe46628465c4613`.
+
+**Blocked / gate unestablished, CS-2 HOLD.** The remaining gap is material:
+the 23.72/25.44/29.59% ceiling clears the gate, while the strict subset
+cannot decide it. Restricting return demand to ABI state or assuming all
+writes occur would shrink this gap without proving it. An exact net count
+still requires call-site return demand and read/write proofs for opaque
+escapes, plus charging the imports/publications introduced by moving a
+store across a call. The machine census retains ambiguous aliases and does
+not emit that transformed variant or its register allocation. Neither this
+number nor round one's deferrals may reject CS-2. No exact deletion result
+has been established; this part of Round 2 remains incomplete. The desktop
+retired-instruction profile also remains unavailable without an elevated
+PMU capture; its suspend-PC snapshots are excluded, as described above.
+
+Evidence: `round2/cs02-strict-source-v2.json`, `cs02-strict-census.json` and
+self-tests for partial writes, conditional must-writes and repeated imports.
+The earlier `cs02-strict-source.json` predates opaque-reference handling
+and is exploratory only. Keep the accepted optimistic ceiling separate
+from this stricter, incomplete attempt. Completing a compiler or a session
+scheduler to validate these assumptions would be Stage 1 and was not begun.
+
 ### CS-0.1: per-thread replay and shared-memory order
 
 **Round 2 result: external-event capture does not decide shared-memory

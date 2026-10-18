@@ -125,8 +125,10 @@ The clean-slate observable-state probe's first conservative deferral counts
 could not decide its 15% instruction gate. A second probe uses matched
 retired-instruction samples per hot thread on the Odin. Its optimistic
 ceilings are 23.72% render, 25.44% simulation and 29.59% mixer, granting
-unknown calls only ABI inputs and charging no spills. The exact census is
-still in progress; these are potential deletions, not measured savings.
+unknown calls only ABI inputs and charging no spills. A stricter follow-up finds only 0.468/0.319/0.680% in its analyzed subset,
+but cannot prove exact return demand through opaque calls or charge every
+new publication. The exact gate remains blocked; CS-2 is on hold. Neither
+these subset counts nor the ceiling is an achieved instruction saving.
 Desktop suspend-PC samples were biased by blocked waits and are excluded
 from that instruction gate.
 [Stage 0 method and limitations](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/CLEAN_SLATE_STAGE0.md#cs-02-optimistic-traffic-ceiling).
