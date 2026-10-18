@@ -74,11 +74,11 @@ source = """docs/native-renderer/NATIVE_FRAME_CONTRACT.md Primitives, front buff
 [[finding]]
 group = """Frame structure and views"""
 name = """occlusion queries only while loading"""
-what = """The game's occlusion queries use `EVENT_WRITE_ZPD`: 1,056 events over 48 report addresses, all in two windows, the title-to-free-roam load and the event menus. Race, free roam, map, pause, photo and movie frames issue none, and no draw runs inside a legacy query. The race frame has 24 indirect point draws that write nothing, possibly query probes. At startup one query is ended in a later command buffer than the one it began in."""
-how = """Frame census; an Android counter of query ends (0 in the race); a Vulkan validation message at startup."""
+what = """The game's occlusion queries use `EVENT_WRITE_ZPD`: 1,056 events over 48 report addresses, all in two windows, the title-to-free-roam load and the event menus. Race, free roam, map, pause, photo and movie frames issue none in those censuses; the measured gameplay windows add no draws inside a legacy query. The race frame has 24 indirect point draws that write nothing, possibly query probes. At startup one query is ended in a later command buffer than the one it began in."""
+how = """Frame census; an Android counter of query ends (0 in the race); a Vulkan validation message at startup. In an October 18, 2026 exploratory two-minute night run on the Odin 2 Portal (0.5.1 v4, SDK 71e09d4), the cumulative `draw_in_occlusion_query` count remained at one through the driving window, including an oncoming car. This bounds the legacy host-query path in that sample, not shader-based depth visibility or all traffic-light rendering."""
 confidence = """confirmed"""
 note = """That the point draws are query probes is a guess."""
-source = """docs/native-renderer/NATIVE_FRAME_CONTRACT.md Primitives, front buffer, side effects; docs/native-renderer/XENOS_RETIREMENT_BACKLOG.md XR-06; docs/ANDROID_60FPS_BACKLOG.md A60-E10; docs/RECORDER_PER_DRAW_BACKLOG.md Validation"""
+source = """docs/native-renderer/NATIVE_FRAME_CONTRACT.md Primitives, front buffer, side effects; docs/native-renderer/XENOS_RETIREMENT_BACKLOG.md XR-06; docs/ANDROID_60FPS_BACKLOG.md A60-E10; docs/RECORDER_PER_DRAW_BACKLOG.md Validation; docs/native-renderer/HEADLIGHT_FLICKER.md Evidence and remaining gate"""
 
 [[finding]]
 group = """Frame structure and views"""

@@ -220,6 +220,14 @@ pipeline waiting to address the remaining restart-dependent sky tint.
 | The game's anisotropy instead of forced 4x | 0.43 ms on the 8 Elite |
 | Bloom, motion blur, depth of field off | nothing measurable; every post-processing group still changes the frame |
 
+Oncoming headlight flicker remains under investigation in
+[#531](https://github.com/arcanite24/pinyon-shift/issues/531), including with
+HDR off. Restoring the projected headlight pool with shadows off does not
+qualify that separate behavior. The [night-traffic route and recording
+method](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/native-renderer/HEADLIGHT_FLICKER.md) preserve a two-minute observation
+window at each output limit; its sparse captures and successful exit alone
+cannot establish that the lights stayed stable.
+
 ## Frame pacing
 
 {{diagram:frame-pacing|A frame that misses its vblank by a little used to wait for the next one.}}
