@@ -5,6 +5,67 @@ hook points and a C API, and asset mods that replace game files. This page
 is the contract for mod authors. The design and its history are in the
 [native port backlog](NATIVE_PORT_BACKLOG.md#np-7-mod-host-v1) (NP-7).
 
+## Shader replacements
+
+Vulkan mods put independently authored SPIR-V in `mods/<name>/shaders/`.
+Use an ordinary `mod.toml` without `library`; a visual-only mod can declare
+`shares_save = true`. Only successfully loaded mods participate. The earlier
+mod in resolved load order wins for each exact shader identity, as for
+`game/` files. Dependencies and `load_after` are resolved first. Restart
+after changing mods or bytecode.
+
+Each file is named
+`shader_<guest hash>_<modification>_<translated hash>.spv`, with three
+uppercase 16-digit hexadecimal values. The last value is XXH3-64 of the
+**original** translation before mod or built-in edits. Specialization,
+translator output and graphics settings can change that identity. A
+nonmatching filename is ignored; rebuild and reverify against a fresh
+capture instead of renaming old bytecode to bypass the check.
+
+Mods precede developer `vulkan_shader_override_dirs` (semicolon-separated),
+then legacy `vulkan_shader_override_dir`, then built-in edits. The first
+valid matching file wins; replacements of one shader do not merge. Files
+are limited to 16 MiB and checked by the bundled SPIRV-Tools Vulkan 1.2
+validator, including the translation's `main` execution model. Unreadable,
+malformed or wrong-stage files are logged and skipped, allowing the next
+directory or built-in edit. A Vulkan shader-module rejection retries the
+original translation. `vulkan_shader_overrides = false` disables mod,
+developer and built-in replacements.
+
+To find shaders without disassembly, capture one frame using the native
+Vulkan renderer and a pinned seed:
+
+```powershell
+python tools/run-fh1-render-test.py config/render-tests/fh1-smoke.fh1test `
+  --state-root .local/render-seeds/appdata-2026-09-27 `
+  --output .local/shader-discovery-run `
+  --game-argument=--async_shader_compilation=false `
+  --game-argument=--vulkan_shader_discovery_frame=300 `
+  --game-argument=--vulkan_shader_discovery_dir=C:/path/to/pinyon/.local/shader-discovery
+python tools/discover-fh1-shaders.py .local/shader-discovery
+```
+
+The frame is the GPU swap count; choose one with native draws and a new
+output directory for each capture. Discovery writes original translated
+`.spv` files with full identities and `draws.jsonl`. The tool groups them
+by stage, draw number, HUD boundary and bound color/depth surface (slot,
+packed key, size, format and samples). These are render targets, not
+material or object labels. Use `--shader <hash>`, `--surface <key>` or
+`--json` to inspect them. `--check-mod <state>/mods/<name>/shaders`
+distinguishes stale translations from shaders absent from that frame;
+a matching name still needs runtime validation.
+
+Overrides change how existing inputs are used. Preserve descriptor
+bindings, stage inputs/outputs, push constants and the entry point: this
+feature adds no textures, uniforms or game-side data. Validation does not
+prove interface compatibility or visual correctness. Test on the target
+GPU; replacement pipelines still cost driver compilation time, especially
+on Android.
+
+Keep captures and translated guest shaders under `.local/`; never commit
+or distribute them. Distribute only independently authored code or a local
+transformation built from the player's files, following [LEGAL.md](LEGAL.md).
+
 ## Layout and enabling
 
 A mod lives in the state directory, never in the game files:

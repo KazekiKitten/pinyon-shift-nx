@@ -2,12 +2,12 @@
 title: Modding
 section: Technical
 order: 4
-description: Asset, archive, database, texture and native mods for Pinyon Shift, and how they keep your save separate.
+description: Asset, archive, database, texture, Vulkan shader and native mods, and how they keep your save separate.
 ---
 
 # Modding
 
-Mods live in the state folder, never in the game files. They can replace files, patch single archive members, merge settings, patch the game database, replace textures, or run native code through a C API. This page is a summary; the full contract is [docs/MODDING.md](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/MODDING.md).
+Mods live in the state folder, never in the game files. They can replace files, patch single archive members, merge settings, patch the game database, replace textures or Vulkan shaders, or run native code through a C API. This page is a summary; the full contract is [docs/MODDING.md](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/MODDING.md).
 
 ## Layout
 
@@ -22,6 +22,7 @@ Mods live in the state folder, never in the game files. They can replace files, 
   strings/<lang>/*.toml  new or changed text in the string tables
   db/*.sql               database patches
   textures/<hash>.dds    texture replacements
+  shaders/shader_<guest>_<modification>_<translated>.spv  Vulkan replacements
 ```
 
 `<state>` for an installed preview is `%LOCALAPPDATA%\PinyonShift\source\<version>\.local\preview`.
@@ -112,6 +113,29 @@ Update member merges also preserve the winning whole-archive override
 under a mod's `update/` directory.
 
 Nothing from the game disc may be distributed. A mod's install steps should build its files from the player's own copy, as `tools/install-sample-mod.py english_strings` does.
+
+## Shader mods
+
+Enabled mods can provide Vulkan SPIR-V in `shaders/`. The earlier loaded
+mod with a valid exact match wins; separate shaders compose, while two
+replacements of one shader do not merge. Names include the guest hash,
+specialization and XXH3 hash of the original translation, so changed
+translator output cannot silently select stale bytecode. Invalid files
+are logged and skipped. Changes require a restart.
+
+Capture one GPU frame with `vulkan_shader_discovery_dir` and
+`vulkan_shader_discovery_frame`, then run
+`python tools/discover-fh1-shaders.py <capture>`. It lists exact identities,
+draws, the HUD boundary and bound color/depth surfaces without disassembly.
+`--check-mod <mod>/shaders` compares a mod against that frame. Surfaces do
+not identify materials or objects. Keep capture files in `.local/`.
+
+Overrides can change existing inputs' use; preserve the renderer's bindings
+and stage interface. They cannot add game inputs. Rebuild and test after
+translator or graphics-setting changes, and test driver compilation cost
+on the target GPU. Only independently authored code may be distributed;
+translated guest bytecode stays local.
+[Authoring contract and capture commands](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/MODDING.md#shader-replacements).
 
 ## Custom radio stations
 

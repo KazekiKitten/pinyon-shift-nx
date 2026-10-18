@@ -1182,6 +1182,14 @@ void PinyonShiftApp::OnPostSetup() {
           std::move(hidden));
       pinyon_shift::diagnostics::RecordEvent("mod.dlc.hidden", {{"packages", packages}});
     }
+    if (auto shaders = pinyon_shift::mod::ShaderRoots(); !shaders.empty()) {
+      std::string dirs;
+      for (const auto& root : shaders) dirs += (dirs.empty() ? "" : ";") + rex::path_to_utf8(root);
+      if (const auto configured = rex::cvar::GetFlagByName("vulkan_shader_override_dirs");
+          !configured.empty()) dirs += ";" + configured;
+      rex::cvar::SetFlagByName("vulkan_shader_override_dirs", dirs);
+      pinyon_shift::diagnostics::RecordEvent("mod.shaders", {{"dirs", dirs}});
+    }
     // Mods' texture replacements, ahead of any folders already configured.
     if (auto textures = pinyon_shift::mod::TextureRoots(); !textures.empty()) {
       std::string dirs;

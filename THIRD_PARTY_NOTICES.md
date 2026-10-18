@@ -12,3 +12,7 @@ Their own licenses apply; they are not relicensed by this repository.
 Exact versions, source URLs, and archive hashes are recorded in
 `config/release-toolchain.json`. ReXGlue's transitive dependencies are fetched
 by its pinned source tree and retain their upstream notices.
+
+The Vulkan shader-mod loader statically links the SDK's pinned
+[SPIRV-Tools](https://github.com/KhronosGroup/SPIRV-Tools) validator
+(Apache License 2.0, in `thirdparty/shiftglue-sdk/thirdparty/spirv-tools/LICENSE`).

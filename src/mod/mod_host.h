@@ -69,6 +69,8 @@ std::vector<std::string> HiddenDlc();
 // Directories of loaded mods' textures/ replacements (<hash>.dds, NP-10.3),
 // in priority order.
 std::vector<std::filesystem::path> TextureRoots();
+// Loaded mods' shaders/ directories, with the same first-wins order as game/.
+std::vector<std::filesystem::path> ShaderRoots();
 
 // Profile isolation (NP-7.5). With mods enabled the title plays the separate
 // `user_root` profile (<state>/user-modded); each save then writes

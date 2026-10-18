@@ -152,6 +152,15 @@ if(WIN32)
     target_link_libraries(pinyon_shift_fh1_shader_pack_tests PRIVATE bcrypt)
 endif()
 
+if(REXGLUE_USE_VULKAN)
+    add_executable(pinyon_shift_shader_override_tests EXCLUDE_FROM_ALL
+        tests/native_renderer/shader_override_test.cpp
+        ${REXSDK_DIR}/src/graphics/vulkan/shader_override_files.cpp)
+    target_include_directories(pinyon_shift_shader_override_tests PRIVATE ${REXSDK_DIR}/include)
+    target_link_libraries(pinyon_shift_shader_override_tests PRIVATE
+        rex::runtime SPIRV-Tools-static fmt::fmt)
+endif()
+
 add_executable(pinyon_shift_hostui_tests EXCLUDE_FROM_ALL
     tests/ui/hostui_test.cpp
     src/ui/hostui/fh1_archive.cpp
@@ -252,6 +261,9 @@ add_dependencies(pinyon_shift_host_tests
     pinyon_shift_overlay_device_tests
     pinyon_shift_fh1_edram_tiles_tests
     pinyon_shift_mod_hello_telemetry)
+if(TARGET pinyon_shift_shader_override_tests)
+    add_dependencies(pinyon_shift_host_tests pinyon_shift_shader_override_tests)
+endif()
 
 # These checks use assert; Release must execute them instead of compiling
 # away the test operations themselves.
