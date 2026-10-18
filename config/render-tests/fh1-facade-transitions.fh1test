@@ -1,6 +1,7 @@
 pinyon-shift-fh1-render-test-v1
 # Issue #674: five saved language changes and two free-roam/title cycles.
 # Use appdata-2026-09-27 and --include-opening-movies. Output-frame paced.
+# Windows: --game-argument=--pinyon_shift_fh1_render_fps_limit=60
 # Language changes go through PROFILE and remain pending until process restart.
 # expect-facade-transitions 2
 input 0 0000 0 0 0 0 0 0

@@ -99,6 +99,15 @@ ordered load/unload pairs for both facades and the five settings events;
 survival without reaching the transition cannot pass. The runner copies the
 seed into a private per-run state.
 
+On Windows, also pass
+`--game-argument=--pinyon_shift_fh1_render_fps_limit=60`. The opening movies
+take wall time, while the route sends input at output-frame numbers. On
+multivac, an unlimited-output run of the integrated build reached SINGLE
+PLAYER after its startup presses and correctly failed the facade-cycle gate.
+The same route at 60 fps reached gameplay and completed both cycles. Keep
+the cycle gate enabled; captures and normal process completion alone do not
+prove that the facade lifetime was exercised.
+
 The route also enables `PINYON_SHIFT_FACADE_LIFETIME_TRACE`. Immediately
 before the override call, `facade.allocation_override` records the guest
 thread ID, object, target, size and attributes when the object/target changes
