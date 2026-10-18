@@ -308,6 +308,25 @@ confidence = """confirmed"""
 note = """One starting area tested."""
 source = """docs/DLC_BACKLOG.md Base-disc Rally investigation"""
 
+[[finding]]
+group = """Placements and routes"""
+name = """Owned Rally route-zero descriptor"""
+what = """The accepted Rally database merge has one Tracks row with MediaName ColoradoDirt, DevName DirtFreeRoam and RouteId 0 (ID 1112). The ordinary base free-roam loader selects track 317. A private probe copies the entire owned descriptor into that slot, retaining its environment and route settings, and derives a valid initial spawn from route 001's start_location_00. The package also supplies ColoradoDirt.nav and TrackRoute000.xml. Its merge tables omit the primary-key constraints of the otherwise matching base columns."""
+how = """Read-only SQLite/archive inventory of the verified imported package; an independently authored private seed builder, tested with synthetic databases and immutable input/save checks."""
+confidence = """confirmed"""
+note = """Descriptor and asset presence do not qualify travel, traffic, minimap, collectibles or saving. The probe forces placement on every start, so cannot establish world-aware resume."""
+source = """docs/RALLY_FREEROAM.md; tools/create-rally-freeroam-seed.py"""
+
+[[finding]]
+group = """Placements and routes"""
+name = """Rally initial-placement probe retains the Colorado full map"""
+what = """The base-disc route-zero Rally probe renders textured terrain, traffic and a local-road minimap in native game mode 17, and permits short driving. Opening the full map still shows Colorado labels and base-event markers. A successful map-open/map-close script therefore does not establish a world-correct destination or collectibles implementation."""
+how = """Private pinned-save Vulkan drive/map route on multivac, with readiness and 30-metre movement waits, plus visual inspection of all four captures."""
+confidence = """confirmed"""
+negative = true
+note = """Traffic persistence, minimap alignment, collectible interaction, save/resume and the 20-minute base/v4 travel gate remain unqualified."""
+source = """docs/RALLY_FREEROAM.md Initial probe receipt, 2026-10-18; config/render-tests/fh1-rally-freeroam-probe.fh1test"""
+
 # --- Time and weather --------------------------------------------------------
 
 [[finding]]

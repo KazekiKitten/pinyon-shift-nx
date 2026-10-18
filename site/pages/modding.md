@@ -165,6 +165,14 @@ the tested recording still differed from its live frame. Disabled frame-time
 measurements varied too much to establish a no-regression result. The linked
 contract records the method, numbers and remaining qualification work.
 
+## Rally world probe
+
+For Rally-world experiments, `tools/create-rally-freeroam-seed.py` builds a
+private base-disc seed from verified owned Rally and a pinned save. It uses a
+separate test profile and always places the car at an owned stage start.
+It cannot qualify save/resume or travel back to Colorado, and is not installed
+as a built-in mod. See the [probe and remaining gates](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/RALLY_FREEROAM.md).
+
 ## Custom radio stations
 
 `tools/build-fh1-radio.py` builds a mod that adds a folder of music to Radio1, Radio2 or Radio3, or replaces a station's playlist with it. It needs [FFmpeg](https://ffmpeg.org/) and uses your own game files:
