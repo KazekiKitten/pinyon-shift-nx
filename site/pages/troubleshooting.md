@@ -38,6 +38,14 @@ Up to 0.5.1, a `pinyon_shift.toml` without a `gpu_backend` line started the game
 
 Before each start the launcher rebuilds the enabled mods' archives in `.local/preview/mods/zz-archive-patches`. When the mods haven't changed it keeps the previous copy; otherwise it replaces it, and a file still open elsewhere stops it with "is in use by another program". Wait for a game that is still closing, or for antivirus to finish scanning the folder, and start again. If it keeps happening, add the install folder to the antivirus exclusions.
 
+## A partial settings file or black frames on a fresh state
+
+When `pinyon_shift.toml` exists without its configuration schema line, startup
+backs it up as `pinyon_shift.toml.noschema.bak`, fills in the current defaults
+(including Vulkan), and reapplies the settings already in the file. This also
+covers a new state where the mod builders wrote only `enabled_mods` before the
+first game launch. Existing explicit values keep precedence over defaults.
+
 ## The game runs on the wrong GPU
 
 On a PC with two GPUs, such as a laptop, the game asks for the high-performance one. To pick another with Vulkan, find the "Available Vulkan physical devices" list near the top of `.local/preview/logs/runtime.log` and add its number to `.local/preview/config/pinyon_shift.toml`, for example `vulkan_device = 1`. Direct3D 12 takes `d3d12_adapter`, numbered in Windows' adapter order. `-1` goes back to the automatic choice. Windows' **Settings → System → Display → Graphics** can also assign `pinyon_shift.exe` (not the launcher) to a GPU.
