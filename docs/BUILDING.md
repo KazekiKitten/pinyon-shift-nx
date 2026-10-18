@@ -61,6 +61,13 @@ To rebuild after changing host or ShiftGlue code:
 .\tools\build-preview.ps1
 ```
 
+Updates track the generator, manifest, analysis and disc inputs. When translation
+adds or removes source files, the build regenerates all three module source
+lists and reruns CMake before compiling or linking. This applies to both the
+base and v4 builds; ordinary updates do not require `-CleanGenerated`.
+If an older build stopped with undefined `PPCFoldedRanges` or `PPCFoldedHash`
+symbols in a facade DLL, update the source and rerun the build script.
+
 To build the distributable launcher package:
 
 ```powershell

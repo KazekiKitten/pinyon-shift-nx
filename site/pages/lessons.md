@@ -74,6 +74,7 @@ A faster clock exposed one more console assumption: the simulation steps on the 
 ## Methods that held up
 
 - **Pinned saves.** Scripted routes from a frozen copy of a save, never the live one, so results don't depend on progress.
+- **Declare generated source lists as outputs.** CMake already tracks an included `sources.cmake`, but Ninja also needs its producer edge to regenerate it before rerunning CMake. A synthetic Windows/Ninja update that added a folded-data unit reproduced the facade link failure; declaring all three module lists as codegen byproducts made the same build translate, reconfigure and link successfully in both base and v4 layouts. The regression also removes partitions and source lists, retries a failed translation and checks no-op and frozen builds. See [Building](building.md#rebuild).
 - **Interleaved pairs.** The same build drifts about 4 % between batches. Compare A and B inside one batch, and on hot handhelds inside one run.
 - **Frame replay.** A dumped frame replays deterministically on any device, to 0.02 ms. It turns "slower on device X" into a bisectable problem.
 - **Knock-outs over timestamps.** Per-phase GPU timestamps distorted the phases they measured.

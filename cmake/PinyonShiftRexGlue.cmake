@@ -366,6 +366,11 @@ add_custom_command(
     # it rewrote would otherwise leave the precompiled headers stale.
     BYPRODUCTS
         "${PINYON_SHIFT_GENERATED_DIR}/codegen.d"
+        # These included lists must be produced before Ninja reruns CMake,
+        # so this build sees added/removed units before compiling or linking.
+        "${PINYON_SHIFT_GENERATED_DIR}/sources.cmake"
+        "${PINYON_SHIFT_GENERATED_ROOT}/speech/sources.cmake"
+        "${PINYON_SHIFT_GENERATED_ROOT}/xmedia/sources.cmake"
         ${_all_generated_sources}
         ${_all_generated_headers}
     COMMAND ${CMAKE_COMMAND} -E make_directory
