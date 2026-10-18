@@ -38,6 +38,11 @@ title's starter-car fallback, preserving the trainer setting. Keep a
 save-isolating mod enabled after recovery. Use the same title version and let it save
 before restarting. [Audit, limits and restore instructions](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/HIDDEN_CARS.md).
 
+The intro Corrado's Garage and Design Creator entry routes pass on Windows
+with the integrated livery resolve corrections. Paint editing, saving and
+reloading, the other variants' full garage checks and v4 qualification remain
+open; these entry checks do not establish complete model support.
+
 List mods, in load order, in `<state>/config/pinyon_shift.toml`:
 
 ```toml

@@ -102,11 +102,13 @@ back for all four, paint-shop editing and v4 qualification remain pending.
 Showroom color selection alone does not qualify the paint shop.
 
 The intro Corrado also reached the paint shop and Design Creator with its
-body rendered. That entry run failed the graphics gate: Vulkan logged
-unsupported resolve destination-format conversions and backend draw
-failures with EDRAM mode 6. This is distinct from the purchase run's
-indirect-ring-buffer error. Editing, saving and reloading paint remain
-unqualified; the failure has not been isolated to the car's metadata.
+body rendered. The initial isolated-batch run failed the graphics gate with
+resolve destination-format conversions and EDRAM mode 6 draw failures.
+After integration with the livery resolve corrections, the same pinned
+entry route passed the graphics gate on Windows/RTX 4080, with the Corrado
+body and Design Creator menu visible. This does not isolate which correction
+removed the earlier errors. Editing, saving and reloading this car's paint
+remain unqualified. The purchase run's indirect-ring-buffer error is separate.
 `config/render-tests/fh1-hidden-car-paint-entry.fh1test` reproduces the
 entry path and stops before changing paint.
 
