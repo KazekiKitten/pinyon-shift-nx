@@ -200,9 +200,9 @@ link = "modding.md"
 cells = ["yes", "yes", "yes", "partly: DXT texture replacements need a GPU with BC formats ([#516](https://github.com/arcanite24/pinyon-shift/issues/516))"]
 
 [[platform]]
-feature = "Traffic and showcase cars"
+feature = "Hidden player-car variants"
 link = "playing.md#traffic-and-showcase-cars"
-cells = ["yes", "partly: the same database mod; tried on Windows only", "partly: the same database mod; tried on Windows only", "partly: shared from the PC with its mods; not tried"]
+cells = ["partly: four player-model variants; garage/paint qualification pending", "partly: the same database mod; not qualified", "partly: the same database mod; not qualified", "partly: shared from the PC with its mods; not qualified"]
 
 [[platform]]
 feature = "Wider photo camera limits"

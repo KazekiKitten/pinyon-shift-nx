@@ -141,7 +141,7 @@ The setting changes how the AI drives, not the game's files, so it plays your ow
 
 ## Traffic and showcase cars
 
-Turn on **F6 > MODS > HIDDEN_CARS** and restart to buy 22 cars the game drives but never sells: traffic cars such as the tour bus, the Kenworth T440 truck, the Nissan Leaf and the Toyota Prius, and the showcase Mini Cooper S, 500 Abarth and Peugeot 205 T16. They are in the Autoshow under their make. Most of them have no Autoshow picture, so their tile stays black; the garage shows the car once you own it. Like any mod it plays a separate profile, so your own save is not changed. The tour bus and the Kenworth were bought and driven on the base game; not every car has been tried.
+Turn on **F6 > MODS > HIDDEN_CARS** and restart to list the intro Corrado and showcase Mini Cooper S, 500 Abarth and Peugeot 205 T16 in the Autoshow. The traffic cars previously listed by this mod, including the tour bus, are excluded because they lack qualified player models. It plays a separate profile, so your own save is not changed. Existing traffic-car purchases remain there. If one blocks your garage, close the game and follow the [backed-up selection recovery](modding.md#enabling); it requests a starter Corrado without deleting the purchased car.
 
 ## Saves
 

@@ -353,11 +353,11 @@ group = """Leftover modes and hardware"""
 base = """Data_Car IsSelectable=0, IsDrivable=1 (23 rows)"""
 v4 = """same"""
 name = """hidden drivable cars"""
-what = """23 cars are marked drivable but not selectable: traffic cars (tour bus, Kenworth T440, Leaf, Prius and others) and the showcase Mini, 500 Abarth and 205 T16, each with its media archive, upgrade rows and name; id 1215 is the placeholder `NUL_Car_00`. With `IsSelectable = 1` the Autoshow lists them under their make, and they are bought, saved and driven like any car. Seven have `BaseCost = 0`. Only the three showcase cars have an Autoshow thumbnail (another car's), so the others show a black tile; the garage thumbnail the game renders after a purchase works. The game rates a bought car from its physics: the tour bus arrives as E 198."""
-how = """`gamedb` query; the hidden_cars mod with fh1-buy-car and fh1-hidden-car-drive on a seed: the tour bus bought, saved and driven about 1 km in free roam, the Kenworth T440 bought and raced in the Gauntlet. With the mod off, a modded profile that owns the bus still loads and drives it."""
+what = """23 cars are marked drivable but not selectable; 1215 is the placeholder `NUL_Car_00`. The old hidden_cars patch listed the other 22. IsDrivable includes traffic assets and does not establish showroom, garage or paint compatibility (#669). The tour bus has model-named LOD0/cockpit members of only 11,226/17,539 bytes; Explorer and Focus lack the expected names, and F-350 lacks the cockpit member. All 18 traffic entries are now excluded from the built-in sales patch. Only the intro Corrado and three showcase variants have full-size LOD0 and cockpit payloads (1.6–7.7 MB for the body models). The explicit sales list contains these four IDs; it never automatically exposes another drivable row. Existing purchases are preserved. A car's owned rating comes from its physics: the tour bus arrived as E 198."""
+how = """Read-only database and archive-directory audit of all 22 entries on the supported base disc, 2026-10-18; CarAttribs extraction. Earlier pinned-seed tests bought and drove the bus about 1 km and raced the T440, but did not qualify garage or paint support. The crash in #669 has no diagnostic attachment and was not reproduced by merely opening event car select on the pinned bus save."""
 confidence = """confirmed"""
 note = """Tested on the base build. Not every one of the 22 was driven."""
-source = """mods_src/builtin/hidden_cars; config/render-tests/fh1-hidden-car-drive.fh1test; docs/MODDING.md Built-in mods"""
+source = """mods_src/builtin/hidden_cars; docs/HIDDEN_CARS.md; config/render-tests/fh1-hidden-car-drive.fh1test"""
 
 # -------------------------------------------------------------- Gameplay systems
 

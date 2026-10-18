@@ -28,6 +28,15 @@ Mods live in the state folder, never in the game files. They can replace files, 
 
 ## Enabling
 
+The built-in `hidden_cars` mod lists four hidden player-model variants.
+Traffic entries such as the tour bus are excluded because driving support
+does not establish garage or paint support. Existing purchases remain in
+the isolated modded profile. To recover a blocked current selection, close
+the game and run `python tools/fh1-profile.py recover-car --state-root "<state>"`.
+It backs up the selected modded profile and settings before requesting the
+title's starter-car fallback. Use the same title version and let it save
+before restarting. [Audit, limits and restore instructions](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/HIDDEN_CARS.md).
+
 List mods, in load order, in `<state>/config/pinyon_shift.toml`:
 
 ```toml

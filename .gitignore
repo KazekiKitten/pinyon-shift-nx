@@ -57,6 +57,7 @@ private/
 !/docs/android/
 !/docs/android/*.json
 !/docs/MODDING.md
+!/docs/HIDDEN_CARS.md
 !/docs/releases/
 !/docs/releases/*.md
 !/docs/native-renderer/

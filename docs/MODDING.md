@@ -120,14 +120,16 @@ set each one (CUSTOM). On the v4 build the title update's own
 so the layers do not load there yet.
 
 `hidden_cars` (#484) is listed on F6 > MODS, off by default. Its
-`db/10-hidden-cars.sql` lists the 22 cars the database marks drivable but
-not selectable (traffic cars such as the tour bus, the Kenworth T440, the
-Leaf and the Prius, and the showcase Mini, 500 Abarth and 205 T16) and
-prices the seven that cost nothing. They are sold in the Autoshow under
-their make and play the modded profile. Most have no Autoshow thumbnail, so
-their tile is black until bought. The tour bus was bought, saved and driven,
-and the Kenworth raced, on the base build
-(`config/render-tests/fh1-hidden-car-drive.fh1test`).
+`db/10-hidden-cars.sql` lists only the intro Corrado and showcase Mini,
+500 Abarth and 205 T16. Traffic entries, including the tour bus, are no
+longer exposed: `IsDrivable` does not establish garage or paint support
+(#669). Purchases play the modded profile. Existing purchases stay in that
+profile; updating the mod does not delete them. If an unsupported selected
+car prevents garage use, close the game and run
+`python tools/fh1-profile.py recover-car --state-root "<state>"` to back up
+that profile and request the title's starter-car fallback on its next load.
+See [Hidden-car qualification and recovery](HIDDEN_CARS.md) for the complete
+asset audit, limitations and backup restoration steps.
 
 `photo_mode_limits` (#488) is listed on F6 > MODS, off by default, and
 keeps the player's own save (`shares_save`). It merges four
