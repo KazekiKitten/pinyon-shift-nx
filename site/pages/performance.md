@@ -33,6 +33,24 @@ The scripted race (`fh1-race-sync`) is the heaviest route. Measured over its bus
 
 At a 60 fps limit, 2x with MSAA holds a 16.66 ms median (p95 17.04 ms).
 
+## First visits and hitches
+
+Shader preparation covers a short route, so a new area or event can still
+request pipelines it has never reached. The desktop renderer requests a
+frame's new pipelines in parallel and waits at submission replay. A warm
+route and a first visit must be measured separately; a recurring night-race
+stutter is not established to be shader compilation merely because first
+visits also hitch.
+
+The `fh1-hitch-drive` and `fh1-hitch-race` test routes keep only one final
+capture, whose GPU readback is excluded from gameplay timings. Warm repeats
+keep the original seed's user and configuration and add the completed run's
+Vulkan shader storage, base and specialized pipeline descriptions, and
+persisted driver cache. The driver's own disk
+cache remains present in both runs, so an unseeded run is not a cold-driver
+measurement. The [qualification method](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/HITCH_QUALIFICATION.md)
+lists the diagnostics, cache policy and limits of the seeded routes.
+
 ## Fewer cores
 
 The Low-spec 60 preset on the heavy start of the race (about 6,200 draws a frame), with the same machine limited to fewer cores or less free VRAM. These show sensitivity to core count, not real older hardware: a real older CPU also has smaller caches and lower clocks, and the GPU is still an RTX 4080.

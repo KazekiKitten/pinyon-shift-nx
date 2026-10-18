@@ -216,17 +216,16 @@ def seed_fh1_shader_storage(source: Path, destination: Path) -> list[str]:
 
 
 def seed_vulkan_shader_storage(source: Path, destination: Path) -> list[str]:
-    """Copy the seed's Vulkan shader (.xsh) and pipeline (.fbo.vk.xpso) storage.
+    """Copy Vulkan shader/pipeline storage and the persisted driver cache.
 
     The Vulkan backend translates at run time and recreates the stored
-    pipelines at start, so a route seeded with the storage of an earlier run
-    renders the race without compiling shaders on the way, which is what a
-    performance measurement needs.
+    pipelines at start. Warm comparisons need the specialized descriptions
+    and device-specific cache too; omitting them can compile pipelines again.
     """
     source_directory = source / "cache" / "shaders" / "shareable"
     names = sorted(
         path.name
-        for pattern in ("*.xsh", "*.fbo.vk.xpso")
+        for pattern in ("*.xsh", "*.fbo.vk.xpso", "*.fbo.vk.signs.xpso")
         for path in source_directory.glob(pattern)
         if path.is_file()
     )
@@ -236,6 +235,10 @@ def seed_vulkan_shader_storage(source: Path, destination: Path) -> list[str]:
     destination_directory.mkdir(parents=True, exist_ok=True)
     for name in names:
         shutil.copy2(source_directory / name, destination_directory / name)
+    for path in sorted(source_directory.parent.glob("*.vkpipelinecache.*.bin")):
+        if path.is_file():
+            shutil.copy2(path, destination_directory.parent / path.name)
+            names.append(path.name)
     return names
 
 
@@ -2230,7 +2233,7 @@ def main() -> int:
     parser.add_argument("--seed-pipeline-prewarm", action="store_true")
     parser.add_argument(
         "--seed-vulkan-shader-storage", action="store_true",
-        help="copy the seed's Vulkan shader and pipeline storage into the run",
+        help="copy the seed's Vulkan shader/pipeline storage and persisted driver cache into the run",
     )
     parser.add_argument("--require-zero-shader-misses", action="store_true")
     parser.add_argument("--include-opening-movies", action="store_true")

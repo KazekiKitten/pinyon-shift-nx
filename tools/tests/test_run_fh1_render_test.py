@@ -1079,19 +1079,28 @@ class Fh1RenderTestRunnerTests(unittest.TestCase):
             storage.mkdir(parents=True)
             (storage / "4D5309C9.xsh").write_bytes(b"ucode")
             (storage / "4D5309C9.fbo.vk.xpso").write_bytes(b"pipelines")
+            (storage / "4D5309C9.fbo.vk.signs.xpso").write_bytes(b"specialized")
             (storage / "4D5309C9.rtv.d3d12.xpso").write_bytes(b"d3d12")
             (storage / "pack.pnsp").write_bytes(b"pack")
+            driver_cache = storage.parent / "4D5309C9.vkpipelinecache.10DE_00002704_91420000.bin"
+            driver_cache.write_bytes(b"driver cache")
+            (storage.parent / "unrelated.bin").write_bytes(b"unrelated")
             destination = root / "destination"
 
             self.assertEqual(
-                ["4D5309C9.fbo.vk.xpso", "4D5309C9.xsh"],
+                ["4D5309C9.fbo.vk.signs.xpso", "4D5309C9.fbo.vk.xpso", "4D5309C9.xsh",
+                 driver_cache.name],
                 MODULE.seed_vulkan_shader_storage(source, destination),
             )
             copied = destination / "cache" / "shaders" / "shareable"
             self.assertEqual(b"ucode", (copied / "4D5309C9.xsh").read_bytes())
             self.assertEqual(b"pipelines", (copied / "4D5309C9.fbo.vk.xpso").read_bytes())
+            self.assertEqual(b"specialized", (copied / "4D5309C9.fbo.vk.signs.xpso").read_bytes())
+            self.assertEqual(b"driver cache", (copied.parent / driver_cache.name).read_bytes())
             self.assertFalse((copied / "4D5309C9.rtv.d3d12.xpso").exists())
             self.assertFalse((copied / "pack.pnsp").exists())
+            self.assertFalse((copied.parent / "unrelated.bin").exists())
+            self.assertEqual(b"driver cache", driver_cache.read_bytes())
             with self.assertRaises(ValueError):
                 MODULE.seed_vulkan_shader_storage(root / "empty", destination)
 
