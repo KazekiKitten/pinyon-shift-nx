@@ -10,6 +10,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import tomllib
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -30,13 +31,14 @@ class StartupConfigTests(unittest.TestCase):
         gate = app.index('bool EnsureSupportedConfig(')
         end = app.index('\n}\n', gate) + len('\n}')
         cls.schema = int(re.search(r'constexpr uint32_t kConfigSchema = (\d+);', app)[1])
-        source = '#include <filesystem>\n#include <fstream>\n#include <sstream>\n#include <regex>\n#include <string>\n#include <cstdint>\n#include <iostream>\n#include "platform/host_platform.h"\n#include "config/host_config.h"\n#include "config/default_keys.h"\n'
+        source = '#include <filesystem>\n#include <fstream>\n#include <sstream>\n#include <regex>\n#include <string>\n#include <cstdint>\n#include <iostream>\n#include <toml++/toml.hpp>\n#include "platform/host_platform.h"\n#include "config/host_config.h"\n#include "config/default_keys.h"\n'
         source += f'constexpr uint32_t kConfigSchema = {cls.schema};\n' + app[start:end]
         source += '\nint main(int argc,char** argv) { bool created=false,migrated=false; bool valid=EnsureSupportedConfig(argv[1],created,migrated); std::cout<<valid<<" "<<created<<" "<<migrated; return valid?0:2; }\n'
         cpp = cls.root / 'gate.cpp'
         cpp.write_text(source, encoding='utf-8')
         cls.exe = cls.root / ('gate.exe' if os.name == 'nt' else 'gate')
-        command = [str(CXX), '-std=c++23', '-I' + str(ROOT / 'src'), str(cpp),
+        command = [str(CXX), '-std=c++23', '-I' + str(ROOT / 'src'),
+            '-I' + str(ROOT / 'thirdparty/shiftglue-sdk/thirdparty/tomlplusplus/include'), str(cpp),
             str(ROOT / 'src/config/host_config.cpp'), str(ROOT / 'src/platform/host_platform.cpp')]
         if os.name == 'nt':
             command += ['-luser32', '-lkernel32']
@@ -74,9 +76,15 @@ class StartupConfigTests(unittest.TestCase):
         self.assertEqual((again.returncode, again.stdout), (0, '1 0 0'))
         self.assertEqual(path.read_bytes(), updated)
 
-    def test_unsupported_or_invalid_schema_stays_untouched(self):
-        for body in (f'pinyon_shift_config_schema = {self.schema + 1}\n',
-                     'pinyon_shift_config_schema = 0\n',
+    def test_future_schema_loads_without_rewriting(self):
+        data = f'\ufeffpinyon_shift_config_schema = {self.schema + 1}\r\nfuture_setting = 77\r\n'.encode()
+        path, result = self.run_gate(data)
+        self.assertEqual((result.returncode, result.stdout), (0, '1 0 0'))
+        self.assertEqual(path.read_bytes(), data)
+        self.assertEqual(list(path.parent.iterdir()), [path])
+
+    def test_invalid_schema_stays_untouched(self):
+        for body in ('pinyon_shift_config_schema = 0\n',
                      'pinyon_shift_config_schema = "invalid"\n'):
             data = ('\ufeff' + body).encode()
             path, result = self.run_gate(data)
@@ -94,7 +102,7 @@ class StartupConfigTests(unittest.TestCase):
         self.assertEqual(Path(str(path) + '.noschema.bak').read_bytes(), data)
         for line in fresh.read_bytes().splitlines():
             if b'=' in line:
-                self.assertIn(line + b'\n', repaired)
+                self.assertIn(line, repaired.splitlines())
         self.assertIn(b'gpu_backend = "vulkan"\n', repaired)
         self.assertIn(data, repaired)
         again = subprocess.run([str(self.exe), str(path)], capture_output=True, text=True)
@@ -116,6 +124,51 @@ class StartupConfigTests(unittest.TestCase):
             for line in (b'vsync = false', b'draw_resolution_scale_x = 2',
                          b'keybind_a = "Space,LMB"', b'custom_value = 77',
                          b'gpu_backend = "vulkan"', b'gpu_record_thread = true'):
-                self.assertIn(line + b'\n', repaired)
+                self.assertIn(line, repaired.splitlines())
             self.assertEqual(repaired.count(b'keybind_a = '), 1)
             self.assertFalse(repaired.startswith(b'\xef\xbb\xbf'))
+
+    def test_schema_repair_preserves_toml_syntax_and_comments(self):
+        fresh, _ = self.run_gate(None)
+        defaults = tomllib.loads(fresh.read_text(encoding='utf-8'))
+        for newline in ('\n', '\r\n'):
+            body = newline.join((
+                '# retain my settings',
+                '"vsync" = false # explicit override',
+                "'gpu_backend' = 'vulkan'",
+                'keybind_a = """Space,',
+                'LMB""" # multiline string',
+                'custom-name = "hash # in a string" # unknown key',
+                'custom_array = [',
+                '  "first", # array comment',
+                '  "second",',
+                ']',
+                '[custom_table]',
+                'value = 77',
+            ))  # Also cover a file without a trailing newline.
+            data = ('\ufeff' + body).encode()
+            path, result = self.run_gate(data)
+            self.assertEqual((result.returncode, result.stdout), (0, '1 0 1'))
+            self.assertEqual(Path(str(path) + '.noschema.bak').read_bytes(), data)
+            repaired = path.read_text(encoding='utf-8')
+            expected = defaults | tomllib.loads(body)
+            self.assertEqual(tomllib.loads(repaired), expected)
+            self.assertIn(body.encode(), path.read_bytes())
+            again = subprocess.run([str(self.exe), str(path)], capture_output=True, text=True)
+            self.assertEqual((again.returncode, again.stdout), (0, '1 0 0'))
+            self.assertEqual(path.read_text(encoding='utf-8'), repaired)
+
+    def test_empty_schema_less_config_matches_first_launch(self):
+        fresh, _ = self.run_gate(None)
+        path, result = self.run_gate(b'')
+        self.assertEqual((result.returncode, result.stdout), (0, '1 0 1'))
+        self.assertEqual(path.read_bytes(), fresh.read_bytes())
+        self.assertEqual(Path(str(path) + '.noschema.bak').read_bytes(), b'')
+
+    def test_invalid_schema_less_toml_stays_untouched(self):
+        for data in (b'vsync = false\nvsync = true\n', b'custom_array = [\n',
+                     b'"pinyon_shift_config_schema" = "invalid"\n'):
+            path, result = self.run_gate(data)
+            self.assertEqual((result.returncode, result.stdout), (2, '0 0 0'))
+            self.assertEqual(path.read_bytes(), data)
+            self.assertEqual(list(path.parent.iterdir()), [path])

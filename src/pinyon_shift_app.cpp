@@ -17,6 +17,7 @@
 #include <string>
 #include <system_error>
 #include <thread>
+#include <toml++/toml.hpp>
 
 #include <rex/cvar.h>
 #include <rex/filesystem.h>
@@ -144,7 +145,7 @@ constexpr uint32_t kConfigSchema = 29;
 // For START IN SINGLE PLAYER, armed once the settings are loaded.
 std::filesystem::path g_user_data_root;
 
-// The file a first start writes: every default at the current schema.
+// Shared by first start and schema-less repair so their defaults stay in sync.
 std::string DefaultConfigText() {
   std::ostringstream output;
   output << "# Pinyon Shift host configuration.\n"
@@ -239,6 +240,15 @@ bool EnsureSupportedConfig(const std::filesystem::path& path, bool& created,
     if (std::regex_search(config_text, std::regex(R"((?:^|\n)\s*pinyon_shift_config_schema\s*=)"))) {
       return false;
     }
+    toml::table saved;
+    try {
+      saved = toml::parse(config_text);
+    } catch (const toml::parse_error&) {
+      return false;
+    }
+    if (saved.contains("pinyon_shift_config_schema")) {
+      return false;
+    }
     std::filesystem::path backup = path;
     backup += ".noschema.bak";
     std::error_code backup_error;
@@ -249,22 +259,19 @@ bool EnsureSupportedConfig(const std::filesystem::path& path, bool& created,
     }
     // The file can also be the first one in a new state folder: the mod
     // builders (tools/build-mod-patches.py, build-mod-archives.py) write
-    // enabled_mods before the game has ever started. Prepending the schema
-    // alone left every default out, gpu_backend included, so the SDK chose
-    // Direct3D 12 and drew black frames. Start from the defaults and keep the
-    // file's own settings on top of them.
-    std::string repaired = DefaultConfigText();
-    std::istringstream lines(config_text);
-    const std::regex setting_pattern(R"(^\s*([A-Za-z0-9_]+)\s*=\s*(.*?)\s*$)");
+    // enabled_mods before the game has ever started. Prepend only missing
+    // defaults, keeping saved syntax and comments. Defaults must precede
+    // any tables in the original text.
+    std::string repaired;
+    const std::string newline = config_text.find("\r\n") != std::string::npos ? "\r\n" : "\n";
+    std::istringstream lines(DefaultConfigText());
     for (std::string line; std::getline(lines, line);) {
-      if (!line.empty() && line.back() == '\r') {
-        line.pop_back();
-      }
-      std::smatch setting;
-      if (std::regex_match(line, setting, setting_pattern) && !setting[2].str().empty()) {
-        repaired = pinyon_shift::config::SetValue(repaired, setting[1].str(), setting[2].str());
+      const auto separator = line.find(" = ");
+      if (separator == std::string::npos || !saved.contains(line.substr(0, separator))) {
+        repaired += line + newline;
       }
     }
+    repaired += config_text;
     if (!pinyon_shift::config::WriteAtomically(path, repaired)) {
       return false;
     }

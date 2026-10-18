@@ -38,13 +38,16 @@ Up to 0.5.1, a `pinyon_shift.toml` without a `gpu_backend` line started the game
 
 Before each start the launcher rebuilds the enabled mods' archives in `.local/preview/mods/zz-archive-patches`. When the mods haven't changed it keeps the previous copy; otherwise it replaces it, and a file still open elsewhere stops it with "is in use by another program". Wait for a game that is still closing, or for antivirus to finish scanning the folder, and start again. If it keeps happening, add the install folder to the antivirus exclusions.
 
-## A partial settings file or black frames on a fresh state
+## A partial settings file on a fresh state
 
 When `pinyon_shift.toml` exists without its configuration schema line, startup
-backs it up as `pinyon_shift.toml.noschema.bak`, fills in the current defaults
-(including Vulkan), and reapplies the settings already in the file. This also
-covers a new state where the mod builders wrote only `enabled_mods` before the
-first game launch. Existing explicit values keep precedence over defaults.
+backs it up as `pinyon_shift.toml.noschema.bak` and adds missing current defaults
+(including Vulkan). Explicit values, unknown keys, and comments stay in the
+file. This also covers a new state where the mod builders wrote only
+`enabled_mods` before the first game launch.
+The backup keeps the original bytes, including a UTF-8 BOM or Windows line endings.
+Invalid TOML is left for you to correct before retrying. A configuration from a
+newer build is accepted without changing its schema or dropping unknown settings.
 
 ## The game runs on the wrong GPU
 
