@@ -27,6 +27,7 @@
 
 #include <fmt/format.h>
 #include <rex/cvar.h>
+#include <rex/session_probe.h>
 #include <rex/thread.h>
 #include <rex/filesystem.h>
 #include <rex/kernel/xam/module.h>
@@ -4793,6 +4794,11 @@ void ApplyUiMutationExperiment() {
 // until the job thread catches up or two seconds pass, so the title's own
 // escape needs a real stall, as on the 360.
 void PinyonShiftThrottleRenderJobs(PPCRegister& r1) {
+  const bool trace = rex::session_probe::Enabled();
+  const uint32_t address = r1.u32 + 84;
+  if (trace) rex::session_probe::Scalar(rex::session_probe::Kind::kHostHook,
+      UINT64_C(0x823F4B3000000000), LoadGuestU32(address));
+  auto live = [&]() {
   using Clock = std::chrono::steady_clock;
   constexpr uint32_t kIterations = 1000;
   constexpr auto kLimit = std::chrono::seconds(2);
@@ -4808,6 +4814,11 @@ void PinyonShiftThrottleRenderJobs(PPCRegister& r1) {
     if (left < 2) StoreGuestU32(counter, 2);
     std::this_thread::sleep_for(std::chrono::microseconds(50));
   }
+
+  };
+  if (!(trace && rex::session_probe::Replaying())) live();
+  if (trace) StoreGuestU32(address, uint32_t(rex::session_probe::Scalar(
+      rex::session_probe::Kind::kHostHook, UINT64_C(0x823F4B3000000001), LoadGuestU32(address), true)));
 }
 
 // Observe the same player and finish flag as CWaitForEndCondition
@@ -7056,6 +7067,13 @@ struct FixedStepSite {
 };
 
 void ScaleFixedStep(FixedStepSite& site, uint32_t object, PPCRegister& step) {
+  const bool trace = rex::session_probe::Enabled();
+  const uint64_t key = trace ? (uint64_t(uint32_t(rex::session_probe::Digest(site.name, std::strlen(site.name)))) << 32) | object : 0;
+  if (trace) rex::session_probe::Scalar(rex::session_probe::Kind::kHostHook, key, step.u64);
+  if (trace && rex::session_probe::Replaying()) {
+    step.u64 = rex::session_probe::Scalar(rex::session_probe::Kind::kHostHook, key ^ 1, 0, true); return;
+  }
+
   using Clock = FixedStepSite::Clock;
   const Clock::time_point now = Clock::now();
   std::lock_guard<std::mutex> lock(site.mutex);
@@ -7097,6 +7115,8 @@ void ScaleFixedStep(FixedStepSite& site, uint32_t object, PPCRegister& step) {
     site.log_calls = 0;
     site.log_fixed = site.log_applied = 0.0;
   }
+
+  if (trace) rex::session_probe::Scalar(rex::session_probe::Kind::kHostHook, key ^ 1, step.u64);
 }
 
 FixedStepSite animated_camera_step{"animated_camera"};
@@ -7125,6 +7145,12 @@ thread_local uint32_t crowd_call_steps = 1;
 
 // sub_82E08A00 after its prologue: r29 is the procedural models object.
 void PinyonShiftCrowdStepBegin(PPCRegister& r29) {
+  const bool trace = rex::session_probe::Enabled();
+  const uint64_t key = UINT64_C(0x82E08A0000000000) | r29.u32;
+  if (trace && rex::session_probe::Replaying()) {
+    crowd_call_steps = uint32_t(rex::session_probe::Scalar(rex::session_probe::Kind::kHostHook, key, 0, true)); return;
+  }
+
   const auto now = std::chrono::steady_clock::now();
   std::lock_guard<std::mutex> lock(crowd_clock_mutex);
   if (crowd_clocks.size() >= 1024) crowd_clocks.clear();
@@ -7142,6 +7168,8 @@ void PinyonShiftCrowdStepBegin(PPCRegister& r29) {
   }
   clock.last = now;
   crowd_call_steps = steps;
+
+  if (trace) rex::session_probe::Scalar(rex::session_probe::Kind::kHostHook, key, crowd_call_steps);
 }
 
 namespace {
@@ -7214,10 +7242,10 @@ void RaiseStepEvent() {
 // between the swaps. Logged every second as simulation.step_pacing.
 void PinyonShiftNoteTitleSwap() {
   g_title_swaps.fetch_add(1, std::memory_order_release);
+  bool raise = false;
   if (g_step_raise_held.load(std::memory_order_acquire)) {
     // A raise is held for this swap: raise it now rather than at the next
     // vblank, so a frame that missed its vblank pair still gets its step.
-    bool raise = false;
     {
       std::lock_guard lock(g_step_gate_mutex);
       if (g_step_raise_held.load(std::memory_order_relaxed) && StepLead() < 2) {
@@ -7228,10 +7256,14 @@ void PinyonShiftNoteTitleSwap() {
     // Raise after unlocking: the vblank callback takes g_step_gate_mutex
     // while it holds the global critical region, and the object lookup takes
     // that region, so raising under the gate mutex deadlocks the two threads.
-    if (raise) {
-      RaiseStepEvent();
-    }
   }
+  if (rex::session_probe::Enabled()) {
+    std::lock_guard lock(g_step_gate_mutex);
+    raise = bool(rex::session_probe::Scalar(rex::session_probe::Kind::kHostHook, UINT64_C(0x8247C6F100000001), raise, true));
+    g_step_raise_held.store(bool(rex::session_probe::Scalar(rex::session_probe::Kind::kHostHook, UINT64_C(0x8247C6F100000002), g_step_raise_held.load(), true)));
+    g_step_gate_base = int64_t(rex::session_probe::Scalar(rex::session_probe::Kind::kHostHook, UINT64_C(0x8247C6F100000003), uint64_t(g_step_gate_base), true));
+  }
+  if (raise) RaiseStepEvent();
   if (!REXCVAR_GET(pinyon_shift_step_pacing_log)) {
     return;
   }
@@ -7292,6 +7324,9 @@ void PinyonShiftNoteTitleSwap() {
 // that keep up stay on the vblank, so each step's time matches the vblank its
 // frame is shown on.
 void PinyonShiftGateSimulationStep(PPCRegister& r11) {
+  const bool trace = rex::session_probe::Enabled();
+  if (trace) rex::session_probe::Scalar(rex::session_probe::Kind::kHostHook, UINT64_C(0x8247C6F000000000), r11.u64);
+
   using Clock = std::chrono::steady_clock;
   // Runs on the vblank thread only.
   static Clock::time_point held_since{};
@@ -7308,6 +7343,12 @@ void PinyonShiftGateSimulationStep(PPCRegister& r11) {
   }
   if ((r11.u32 & 0xFF) != 0) {
     std::lock_guard lock(g_step_gate_mutex);
+    if (trace && rex::session_probe::Replaying()) {
+      r11.u64 = rex::session_probe::Scalar(rex::session_probe::Kind::kHostHook, UINT64_C(0x8247C6F000000001), 0, true);
+      g_step_raise_held.store(bool(rex::session_probe::Scalar(rex::session_probe::Kind::kHostHook, UINT64_C(0x8247C6F000000002), 0, true)));
+      g_step_gate_base = int64_t(rex::session_probe::Scalar(rex::session_probe::Kind::kHostHook, UINT64_C(0x8247C6F000000003), 0, true));
+      return;
+    }
     bool hold = false;
     if (REXCVAR_GET(pinyon_shift_step_backpressure)) {
       int64_t lead = StepLead();
@@ -7341,6 +7382,11 @@ void PinyonShiftGateSimulationStep(PPCRegister& r11) {
         held_since = {};
       }
       ++raises;
+    }
+    if (trace) {
+      rex::session_probe::Scalar(rex::session_probe::Kind::kHostHook, UINT64_C(0x8247C6F000000001), r11.u64);
+      rex::session_probe::Scalar(rex::session_probe::Kind::kHostHook, UINT64_C(0x8247C6F000000002), hold);
+      rex::session_probe::Scalar(rex::session_probe::Kind::kHostHook, UINT64_C(0x8247C6F000000003), uint64_t(g_step_gate_base));
     }
   }
   if (now - report >= std::chrono::seconds(10)) {

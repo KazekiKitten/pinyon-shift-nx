@@ -488,3 +488,94 @@ Android's profiling wrapper rejected `--no-unwind`; the accepted run uses
 `run-as` with a debuggable APK and an 8-byte stack capture. A realtime-clock
 attempt failed; the accepted instruction recording uses the default
 monotonic clock. Both failures are retained. No live save was used.
+
+
+### CS-0.1: per-thread replay and shared-memory order
+
+**Round 2 result: external-event capture does not decide shared-memory
+ordering. CS-1 needs execution scheduling.** This replaces the round-one
+capture failure as the design evidence. No Stage 1 scheduler was built.
+The final full race replay verifies **zero PM4 frames / zero seconds**;
+earlier iterations `r2-boot9` and `r2-boot13` verified one frame each, not a
+race. Odin replay was conditional on desktop success and was not retried.
+
+All runs use multivac, RTX 4080/NVIDIA 581.08, native Windows Release,
+Vulkan, 1x, vsync off, 60 fps, the immutable `appdata-2026-09-27-winwarm`
+seed and a new private state per run. `r2-race1-record` completed the
+160-second route: the HUD clock advances 00:18.510 to 01:18.526 between
+`gauntlet-driving` and `gauntlet-end`, 60.016 seconds. The trace contains
+**3,387,155,130 bytes, 60,832,197 events, 71 streams and 9,525 PM4 frames**
+(overall duration 161.3749725 s, including startup). These are counts of
+that capture, not replay equality. `r2-race1-summary.json` holds the census.
+
+Measured source: root `9d7d9d07`, SDK `67bb7fb`, plus the exact dirty diffs
+saved by `run-session.py` under each run name. `r2-race1-binaries/` and
+`r2-boot21-binaries/` retain the exact EXE/runtime/GPU DLL and SHA-256
+manifests. Every record/replay pair uses the same binary. The final SDK
+capture checkpoint is `4ed1cc7`; it incorporates these fixes. Local
+GetTickCount/read/store instrumentation was backed up with hashes, applied
+only to native definitions, and restored after the captures. Those
+instrumented binaries remain archived. Rebuilding the ordinary tree does
+not reproduce their observations without explicitly applying the tools.
+
+The V2 format has one file per stable guest thread ID, with tagged host
+roles for timestamp, vblank, GPU, recorder and audio workers. Each event
+contains kind, thread, sequence, site/key, value, payload length and host
+relative time. Replay consumes each stream independently; it does not
+impose one global event order. Returned inputs are fed back; observed
+PM4 hashes/word counts and diagnostic memory loads are compared, never
+substituted. Callback delivery is paced by recorded host time. This pacing
+cannot determine how many guest instructions execute before a delivery.
+
+Capture and replay were expanded until the first failure was an observed
+shared-memory value, rather than a missing boundary. The classes found:
+
+| Class | Correction or disposition |
+| --- | --- |
+| Global inter-thread event order | Replaced by per-thread sequence streams; a two-thread unit replay deliberately reverses host arrival order. |
+| Time sources and call identity | Uptime, system time, performance counter/frequency and PPC timebase reads captured at stable module-relative sites. The guest GetTickCount helper reads the shared timestamp bundle directly, so it also needs the local generated hook. |
+| Timer/vblank/APC/IRQ delivery | Tagged delivery, callback address/argument, registration and GPU MMIO reads captured. Timestamp writes and vblank are separate roles. No timer-fire or APC event occurred in the final full race; those paths have no route coverage. |
+| Kernel wait outcomes | Capture result and wait request separately, replay timeout/success choice and alertable delay result; unfinished waits at the recording boundary are allowed. Semaphore release has its own event kind. |
+| Kernel identities | Replay published slots, thread IDs, virtual CPU selection, allocation addresses and TLS layout/data. Lazy guest-memory objects use their guest address as identity; private handles do not consume published slots. |
+| Contended lock implementation | Per-object acquisition grants replace a global ticket that deadlocked. Probe-only Rtl critical sections use a CAS wait and preserve ownership/recursion while avoiding private waiter-event allocation differences. This changes enabled-probe bookkeeping; it is not a performance result or an unchanged scheduler. |
+| Files and input | Feed file read bytes, status/count/position, query/directory metadata and controller state/capabilities/keystrokes. Check write payloads and feed write status/count. File-open side effects, arbitrary devices, network and entropy are not claimed exhaustively captured. |
+| Host hooks and audio | Capture camera/crowd scaling, render-job throttle result, step-backpressure decisions, native voice state, audio pump/callback selection and built PCM. Other optional host-clock features are off in the seed. XMA direct-memory completion remains a coverage limitation. |
+| Ordinary shared job-state poll | **Scheduling required.** The final first value mismatch is a guest load, with matching prior per-thread boundaries. Read/write evidence below identifies the completion transition crossing the poll. |
+
+The first value divergence in `r2-race1-replay` is render thread `0x13`,
+sequence **8,588**, site `82412688:+40`, object `0x2E094000`: capture reads
+**3**, replay reads **4**. `sub_82412688` polls job state bytes +40/+41
+outside the job critical section. `sub_8243CB38` takes the lock at +4 and
+rechecks only after the polling helper reports readiness. Worker helper
+`sub_82E43EA8` publishes byte +40 under that lock.
+
+`r2-boot21` adds observed stores, retaining a last-writer diagnostic. Its
+first mismatch is the inverse: render `0x13`, sequence **8,595**, captured
+**4**, actual **3** at `0x2E094028`. The reference worker `0x10` writes 3 at
+sequence **19**, time **949,111,100 ns**, then 4 at sequence **92**, time
+**950,273,500 ns**. The reference reader sees 4 at **950,274,600 ns**.
+Replay's last matching store is still worker `0x10` sequence 19, value 3,
+actual time **953,093,500 ns**. Both writer values are ordinary guest
+stores; the reader does not acquire their lock. The diagnostic does not
+force either value. Independent per-object grants therefore leave this
+poll on opposite sides of completion. The byte is internal shared state,
+not a missing external I/O or clock return that can simply be fed back.
+Replacing the load's value would be memory-order replay and must also
+order its dependent accesses; it would no longer test external-event
+capture alone. This does not establish what the original console scheduler
+did, nor prove that every possible later divergence is known.
+
+CS-1 must choose deterministic guest execution quanta (instruction/basic
+block or a reference interpreter), or record and enforce shared-memory
+read-from/happens-before order, including inline atomics, fast lock paths
+and polling loops. Stable object identities, virtual time and interrupt
+injection must share that execution schedule. Validate dirty memory at
+synchronization points as well as PM4. Kernel-call grants alone are too
+coarse. The prototype did not collect a complete memory oracle or classify
+unreached later races; those remain explicit design work.
+
+Validation: the real-runtime two-thread positive replay, disabled no-file,
+order/hash negative controls and existing-path protection pass
+(`session-unit-final.json`, exits 0/0/0/86/86/86). Reader and instrumentation
+self-tests pass. Seven locally patched generated partitions were restored
+byte-for-byte using their guarded backups before performance builds.

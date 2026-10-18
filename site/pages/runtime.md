@@ -38,15 +38,18 @@ Implementations include threads, events, semaphores, timers, the file system, co
 Each guest thread is one host thread, named `Guest <start address>`. About 42 are alive in a race; the busy ones are the simulation and render threads, FMOD's mixer thread and 11 job workers. Guest CPU numbers rotate over six virtual hardware threads, and guest affinities are ignored by default: honouring them, with one host core per Xenon hardware thread, gave no consistent gain.
 
 A default-off session probe (`cs_session_mode`, `cs_session_path`) records
-clock and controller values, kernel/I/O observations and a PM4 hash per
-decoded frame. It does not control scheduling. On the RTX 4080 desktop and
-Odin with Turnip V37, recordings cover a 60-second race, but two replays on
-each stop during startup: a system-time query arrives where an uptime
-update was recorded. Zero frames of replay equality were verified. A
-replay oracle needs virtual time and deterministic boundary scheduling;
-replaying returned scalar values alone is insufficient.
-[The Stage 0 evidence](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/CLEAN_SLATE_STAGE0.md#cs-01-ordered-session-pilot)
-records the exact builds, failures and untested paths.
+clock, input, wait, file and callback results in separate streams keyed by
+guest thread and sequence number. Round 2 fixed the original global-order
+capture failure. The desktop still diverges at a shared job-state poll:
+the worker's transition to completed state falls on a different side of
+the render thread's read, despite replayed per-object lock grants. The
+final diagnostic verifies zero PM4 frames; an earlier iteration verified
+one. A useful session oracle must control execution between kernel calls,
+including these ordinary shared-memory polls. It cannot rely on external
+event playback alone. The probe changes critical-section bookkeeping and
+object allocation only while enabled; it is not a performance build.
+[The Round 2 evidence](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/CLEAN_SLATE_STAGE0.md#cs-01-per-thread-replay-and-shared-memory-order)
+records the capture gaps fixed, writer evidence and remaining limits.
 
 The job workers run the game's jobs on XAPI fibers. The game's five fiber functions (`ConvertThreadToFiber`, `ConvertFiberToThread`, `CreateFiber`, `DeleteFiber`, `SwitchToFiber`) are served by the runtime's host fibers (Windows fibers; a stack switch of the runtime's own on Linux and Android; `ucontext` on macOS), so a guest fiber switch never leaves the host call chain. Before that mapping the switch went through the kernel's stack-switch call, and every generated function needed an entry for each return address ([why that mattered](recompiler.md#what-the-generator-emits)).
 
