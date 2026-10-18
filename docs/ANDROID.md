@@ -304,9 +304,23 @@ and both refresh-rate settings at 120.00001 Hz. Both drivers used format 64,
 a 10-bit buffer marked PQ, pre-transform 2 and the same 420 / 210.1615 /
 0.323 metadata. Host-UI screenshots reproduce the guest menu image covering
 the paper-white chart; Turnip also reproduces it with compare off. This
-establishes the old renderer's chart contamination, not emitted luminance
-or a device check of the updated binary. The normal user trees retained all
+establishes the old renderer's chart contamination, not emitted luminance. The normal user trees retained all
 36 file hashes; the APK and settings were unchanged and private states removed.
+
+The updated base 0.6.0 build passed the same private route on both drivers.
+Host-UI screenshots taken when the pattern-change logs appeared show the
+square and gray steps instead of the guest menu. The paper-white chart band
+has identical decoded RGB pixels with compare on and off, both within each
+driver and between SYSTEM and Turnip; leaving calibration restores the
+comparison divider. Startup logs include the raw display settings, and the
+six step transitions log their 200-nit white / 1000-nit peak signal values.
+This verifies chart visibility and signal routing, not physical luminance.
+The test-only repack used the installed version code 501, with native
+libraries and Java bytecode identical to the normal build. The original
+0.5.1 APK was restored by exact SHA-256; all 36 user-file hashes and the
+recorded brightness/refresh settings were unchanged. The APK, private states
+and captures stay local; the Astra measurement gate remains open.
+
 
 
 ## Troubleshooting

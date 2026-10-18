@@ -67,7 +67,7 @@ the panel. If the peak square never disappears, keep the existing peak
 pending a measured calibration. Patterns replace the guest image and HUD;
 HDR COMPARE is suspended while they are shown and resumes when you leave calibration.
 
-HDR10 presentation was checked on the Odin 2 Portal. The RedMagic Astra's
+HDR10 and calibration chart visibility were checked on the Odin 2 Portal with SYSTEM and Turnip at fixed brightness and refresh. The captured paper-white chart is identical with compare on or off; this does not measure panel luminance. The RedMagic Astra's
 calibration remains unqualified ([#566](https://github.com/arcanite24/pinyon-shift/issues/566));
 there is no measured Astra preset. The reported luminance is not a panel
 measurement. The [Android reference](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/ANDROID.md#hdr-calibration)
