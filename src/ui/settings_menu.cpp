@@ -28,6 +28,7 @@
 #include <rex/ui/vulkan/presenter.h>
 
 #include "cheats.h"
+#include "cheats_travel.h"
 #include "config/default_keys.h"
 #include "mod/mod_host.h"
 #include "pinyon_shift_diagnostics.h"
@@ -1697,17 +1698,62 @@ std::unique_ptr<MenuScreen> SettingsPages::TrainerWorld() {
 }
 
 std::unique_ptr<MenuScreen> SettingsPages::TrainerVehicle() {
-  // The pose the project hooks is the car's presentation transform; freezing
-  // or moving the car needs the physics body, which is still to be located.
-  std::vector<MenuRow> rows(2);
+  std::vector<MenuRow> rows(1);
   rows[0].label = "FREEZE POSITION";
   rows[0].value = [] { return std::string("NOT YET"); };
   rows[0].enabled = [] { return false; };
-  rows[1].label = "TELEPORT";
-  rows[1].value = [] { return std::string("NOT YET"); };
-  rows[1].enabled = [] { return false; };
+  rows.push_back(Toggle("FAST TRAVEL ANYWHERE", "cheat_fast_travel_anywhere"));
+  MenuRow teleport;
+  teleport.label = "TELEPORT TO LAST MAP ROAD";
+  teleport.enabled = [] { return cheats::MapDestination().has_value(); };
+  teleport.activate = [this] {
+    if (const auto point = cheats::MapDestination(); point && cheats::RequestTeleportDestination(*point))
+      host_ui_.Close();
+  };
+  rows.push_back(std::move(teleport));
+  MenuRow gps;
+  gps.label = "GPS TO LAST MAP ROAD";
+  gps.enabled = [] { return cheats::MapDestination().has_value(); };
+  gps.activate = [this] {
+    if (const auto point = cheats::MapDestination(); point && cheats::RequestGpsDestination(*point))
+      host_ui_.Close();
+  };
+  rows.push_back(std::move(gps));
+  MenuRow remember;
+  remember.label = "SAVE LAST MAP ROAD";
+  remember.enabled = [] { return cheats::MapDestination().has_value(); };
+  remember.activate = [this] {
+    if (const auto point = cheats::MapDestination()) {
+      const std::string text = std::to_string((*point)[0]) + "," +
+          std::to_string((*point)[1]) + "," + std::to_string((*point)[2]);
+      config_.Set("cheat_saved_destination", "\"" + text + "\"");
+      rex::cvar::SetFlagByName("cheat_saved_destination", text);
+      Save();
+    }
+  };
+  rows.push_back(std::move(remember));
+  MenuRow saved;
+  saved.label = "GPS TO SAVED ROAD";
+  saved.enabled = [] {
+    return cheats::ParseDestination(rex::cvar::GetFlagByName("cheat_saved_destination")).has_value();
+  };
+  saved.activate = [this] {
+    const auto point = cheats::ParseDestination(rex::cvar::GetFlagByName("cheat_saved_destination"));
+    if (point && cheats::RequestGpsDestination(*point)) host_ui_.Close();
+  };
+  rows.push_back(std::move(saved));
+  MenuRow saved_travel;
+  saved_travel.label = "TELEPORT TO SAVED ROAD";
+  saved_travel.enabled = [] {
+    return cheats::ParseDestination(rex::cvar::GetFlagByName("cheat_saved_destination")).has_value();
+  };
+  saved_travel.activate = [this] {
+    const auto point = cheats::ParseDestination(rex::cvar::GetFlagByName("cheat_saved_destination"));
+    if (point && cheats::RequestTeleportDestination(*point)) host_ui_.Close();
+  };
+  rows.push_back(std::move(saved_travel));
   return std::make_unique<MenuScreen>("VEHICLE", std::move(rows), [] {
-    return std::string("NEEDS THE CAR'S PHYSICS BODY, STILL TO BE FOUND");
+    return std::string("TELEPORT: OPEN THE GAME MAP FIRST; THE TITLE STREAMS THE ROAD");
   });
 }
 

@@ -1500,6 +1500,22 @@ name = "PinyonShiftAnyCarEventClass"
 registers = ["r4"]
 jump_address_on_true = 0x825F6FA8
 
+# #485: preserve the title's travel lock (r31), but let the isolated trainer
+# admit the map's nearest road point. r30 is the map component; r11 is the
+# return value before clrlwi. The map still owns the fade/streaming flow.
+[[midasm_hook]]
+address = 0x827FB0E8
+name = "PinyonShiftMapTravelGate"
+registers = ["r11", "r30", "r31"]
+
+# Before the map reads its input latch: r21 is a hovered marker whose transform
+# normally wins over the road fallback. Arm a queued request at consumption,
+# after the title's earlier processing, with the native flow intact.
+[[midasm_hook]]
+address = 0x82803344
+name = "PinyonShiftMapTravelInput"
+registers = ["r21", "r31"]
+
 # #482 AI OPPONENTS (pinyon_shift_ai_opponents, src/pinyon_shift_runtime_hooks.cpp):
 # the event's opponent difficulty before sub_8249BCB8 picks the database
 # column suffix (r3); the car spawn's call to the AI config fill

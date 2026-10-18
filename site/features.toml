@@ -88,7 +88,7 @@ pinyon = "Automatic save backups, PNG photos, saves imported from Xenia"
 feature = "Cheats"
 link = "playing.md#trainer"
 xbox = "None"
-pinyon = "A trainer on a separate profile: credits, wristbands, game speed, time of day, day length, free camera, collectibles on the map, any car in any event"
+pinyon = "A trainer on a separate profile: credits, wristbands, game speed, time of day, day length, free camera, collectibles on the map, any car in any event; experimental map travel and saved GPS targets"
 
 [[original]]
 feature = "AI opponents"

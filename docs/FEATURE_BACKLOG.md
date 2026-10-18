@@ -323,7 +323,7 @@ is unverified.
 
 | ID | Item | Effort | Status |
 | --- | --- | --- | --- |
-| FB-10.1 | **Trainer v2**: freeze and teleport (blocked on the physics body, NP-8.1), unlock cars and events, any car in any event, remove car limits (NP-8.5-8.7). | M | Pointer |
+| FB-10.1 | **Trainer v2**: freeze (blocked on the physics body, NP-8.1) and native-map teleport (#485), unlock cars and events, any car in any event, remove car limits (NP-8.5-8.7). | M | Pointer |
 | FB-10.2 | **AI driving for the player's car** in the trainer, reused by automated routes (README mid term). | M-L | Not started |
 | FB-10.3 | **Photo mode upgrades**: free camera with field of view, roll, depth of field and HUD hidden, writing through photo export. | M | Not started |
 | FB-10.4 | **Shorter loading and transitions** (README mid term; PB owns measurement). | L | Pointer |
@@ -414,7 +414,7 @@ offline Auction House (needs FB-7.3's server emulation), a randomizer
 (after FB-12.2 and FB-12.3 exist), and a drag-and-drop in-game mod list
 (FB-9.1; XE's crash reports show added cars need a check before loading).
 
-ABI work that unlocks several rows: `call_guest_fp` (FB-12.7, FB-12.9),
+ABI work that unlocks several rows: `call_guest_fp` (FB-12.7; FB-12.9 uses the native position descriptor),
 HUD rectangles and images (FB-12.5 pages, lap deltas), vehicle-sim symbols
 for speed, RPM and gear (FB-12.5, FB-6.2), and a built-in mod with
 selectable variants (FB-12.6, FB-12.10, FB-12.16).
@@ -422,7 +422,8 @@ selectable variants (FB-12.6, FB-12.10, FB-12.16).
 Working order: FB-12.0, then FB-12.1 to FB-12.3 from what it finds;
 FB-12.4's spike in parallel because it can reopen split-screen; the data
 mods (FB-12.6, FB-12.8, FB-12.10, FB-12.11, FB-12.16) as one built-in pack;
-then `call_guest_fp` and FB-12.5, FB-12.7, FB-12.9.
+then `call_guest_fp` and FB-12.5, FB-12.7. FB-12.9 uses the native map
+and position descriptor independently.
 
 ### FB-13 Custom content on top of the game
 

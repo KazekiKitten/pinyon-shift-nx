@@ -41,6 +41,14 @@ Pinyon Shift sets three of these flags itself (the skippable voice-over, the idl
 
 ## Gameplay systems
 
+Fast travel runs through a native state graph that coordinates game control,
+traffic, audio, the car move, streaming and the camera. Its teleport action
+finishes before the graph's streaming wait, so its active flag alone cannot
+confirm a safe landing. The trainer's experimental map option retains that
+graph and the title's travel locks; GPS requests use the position action on
+the guest thread. [Travel destination contracts and qualification](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/research/TRAVEL_DESTINATIONS.md)
+describe the base/v4 arguments and the remaining checks.
+
 {{findings:systems/Gameplay systems}}
 
 ## AI opponents

@@ -56,6 +56,7 @@
 #include "pinyon_shift_runtime_hooks.h"
 #include "cheats.h"
 #include "cheats_map.h"
+#include "cheats_travel.h"
 #include "dev_options.h"
 #include "dlc_token_unlocks.h"
 #include "hud_toggle.h"
@@ -6607,6 +6608,7 @@ void PinyonShiftTraceFrameTelemetry(PPCRegister& r28, PPCRegister& r31) {
   // The trainer's collectible markers (NP-8.6) queue their pass here, so it
   // also runs while the pause map is open.
   pinyon_shift::cheats::UpdateCollectibleMarkers();
+  pinyon_shift::cheats::UpdateDestinations();
   // The Treasure Map add-on's reveal, when the setting owns it.
   pinyon_shift::dlc::UpdateTreasureMap();
   UpdateMapView();
@@ -7104,6 +7106,15 @@ void PinyonShiftAiTraceDynamicUpdate(PPCRegister&) {
   if (REXCVAR_GET(pinyon_shift_ai_trace)) {
     pinyon_shift::diagnostics::RecordEvent("ai.dynamic_update", {});
   }
+}
+
+// The map still runs its complete native fade, move and streaming sequence.
+void PinyonShiftMapTravelGate(PPCRegister& r11, PPCRegister& r30, PPCRegister& r31) {
+  if (pinyon_shift::cheats::AllowMapTravel(r30.u32, (r31.u32 & 0xFFu) != 0)) r11.u64 = 1;
+}
+
+void PinyonShiftMapTravelInput(PPCRegister& r21, PPCRegister& r31) {
+  if (pinyon_shift::cheats::PrepareMapTravelInput(r31.u32)) r21.u64 = 0;
 }
 
 // The trainer's live credits (NP-8.3), through the title's own accessors as

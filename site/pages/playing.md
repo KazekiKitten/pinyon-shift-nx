@@ -193,6 +193,27 @@ Turn cheats on in **SETTINGS > CHEATS** and restart. The game then plays a separ
 - **WORLD**: game speed, time of day, **DAY LENGTH** (how many real minutes 24 game hours take, from 12 minutes to 24 hours, or this PC's clock; events that set their own time still do), free camera, collectibles on the map, and **ANY CAR IN ANY EVENT**. With it on, events drop their class, make, year and other car limits, so the car you drive is eligible as it is. Turn it on before you drive up to the event.
 - **GRAPHICS** and **DEBUG**: bloom, motion blur, depth of field, filtering, a file-open log.
 
+**VEHICLE** has an experimental **FAST TRAVEL ANYWHERE** option, off by default.
+Open the game's map, choose a road and press <kbd>X</kbd> to use the game's
+normal travel confirmation, loading screen and streaming wait. Races and
+scripted travel locks still apply. This temporary trainer option is separate
+from v4's Fast Travel Anywhere ownership setting.
+
+After selecting a road on the map, **GPS TO LAST MAP ROAD** requests guidance
+there. **SAVE LAST MAP ROAD** remembers that road in the settings file;
+**GPS TO SAVED ROAD** reuses it after a restart. Advanced users can request a
+custom target once with `cheat_gps_destination = "x,y,z"` (world metres).
+Launch requests wait for the first free roam; requests during races are rejected.
+The title's destination lock still applies. A saved
+point also has a separate **TELEPORT TO SAVED ROAD** action. Open the game's
+full map (A from the pause menu's MAP page) before opening the trainer for a teleport; the request expires after ten
+seconds if the map cannot accept it. Confirm the title's travel dialog with A.
+Explicit trainer travel
+snaps to a road, uses the title's heading and charges no credits. Centre the
+map on a collectible's marker to travel to a road nearby. Advanced users can request it once
+with `cheat_teleport_destination = "x,y,z"`. Twenty consecutive landings and custom route guidance were tested on Windows
+with both the base game and v4. Other platforms are not qualified; details are in [the research notes](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/research/TRAVEL_DESTINATIONS.md).
+
 ## Telemetry out
 
 **F6 > GAMEPLAY > TELEMETRY OUT (UDP)** sends the player car's telemetry over UDP in Forza Motorsport 7's Data Out "Dash" layout (311 bytes), which SimHub, dashboards and motion software read. It goes to `127.0.0.1:5300` unless `telemetry_udp_target = "host:port"` in `pinyon_shift.toml` says otherwise; point the tool at that port and choose its Forza Motorsport 7 profile. Each frame carries whether you're driving, engine RPM and redline, speed, gear (reverse 0, neutral 11) and each tyre's longitudinal slip (1 is peak grip). Position, motion, suspension, lap and input fields are sent as 0 until the game's values for them are traced.

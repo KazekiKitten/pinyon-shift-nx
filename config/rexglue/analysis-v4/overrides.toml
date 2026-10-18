@@ -2,6 +2,15 @@
 # mapper (tools/map-fh1-v4-addresses.py) cannot place. Each entry records why.
 
 [default]
+# #485: the map update still keeps the hovered marker in r21 and the map
+# in r31 before its travel-input test. v4 adds a second entry below the branch,
+# so an automatic context match is ambiguous. Both sites precede the input test.
+"82803344" = "828B787C"
+# Native map nearest-road wrapper: r4 is still a position pointer and r3
+# input is unused. v4 replaces the base road_type lookup through component
+# 832FF094 with a query on the GPS position manager (v4 833EDC44).
+# Verified from the corresponding map-update call sites and both bodies.
+"827FADE8" = "828AF1B8"
 # DynamicRenderSettings control vtables (graphics_hooks.cpp): the float
 # control (EnvMapFrequencyScale) and the bool control
 # (SkipShadowMapUnlessCockpit). Their v4 vtables hold the mapped methods in

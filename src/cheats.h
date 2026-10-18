@@ -41,6 +41,7 @@ bool FreeCamera();
 // event loads without its make, year and other EventRestrictions limits, and
 // without the limit its class (Events.TargetClass) adds to them.
 bool AnyCarInEvents();
+bool FastTravelAnywhere();
 
 // The cheats currently changing the game, as "name=value" pairs separated by
 // commas ("" when none), for the modded profile's save tag.

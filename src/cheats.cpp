@@ -1,4 +1,5 @@
 #include "cheats.h"
+#include "cheats_travel.h"
 
 #include <algorithm>
 #include <atomic>
@@ -41,6 +42,10 @@ REXCVAR_DEFINE_BOOL(cheat_free_camera, false, "Cheats",
 REXCVAR_DEFINE_BOOL(cheat_any_car_events, false, "Cheats",
                     "Let any car enter any event: events load without their class, make, year "
                     "and other car limits; applies the next time an event's ticket loads")
+    .lifecycle(rex::cvar::Lifecycle::kHotReload);
+REXCVAR_DEFINE_BOOL(cheat_fast_travel_anywhere, false, "Cheats",
+                    "Allow the map's fast travel to any road, using the title's loading and "
+                    "streaming sequence; races and scripted travel locks still apply")
     .lifecycle(rex::cvar::Lifecycle::kHotReload);
 REXCVAR_DEFINE_STRING(cheat_set_profile_fields, "", "Cheats",
                       "Set these profile fields when it next loads, once, as "
@@ -121,6 +126,10 @@ double DayLengthMinutes() {
 bool FreeCamera() { return Enabled() && REXCVAR_GET(cheat_free_camera); }
 
 bool AnyCarInEvents() { return Enabled() && REXCVAR_GET(cheat_any_car_events); }
+bool FastTravelAnywhere() { return Enabled() && REXCVAR_GET(cheat_fast_travel_anywhere); }
+
+void GpsDestinationApplied() { CallApplied("cheat_gps_destination"); }
+void TeleportDestinationApplied() { CallApplied("cheat_teleport_destination"); }
 
 std::string Active() {
   std::string active;
@@ -133,6 +142,7 @@ std::string Active() {
   if (AnyCarInEvents()) {
     active += fmt::format("{}any_car_events", active.empty() ? "" : ",");
   }
+  if (FastTravelAnywhere()) active += fmt::format("{}fast_travel_anywhere", active.empty() ? "" : ",");
   if (const double seconds = TimeOfDaySeconds(); seconds >= 0.0) {
     active += fmt::format("{}time_of_day={:.2f}", active.empty() ? "" : ",", seconds / 3600.0);
   } else if (const double minutes = DayLengthMinutes(); minutes != 0.0) {
@@ -338,6 +348,7 @@ void InstallChangeLog() {
   for (const char* name : {"cheat_time_scale", "cheat_time_of_day", "cheat_day_length_minutes",
                            "cheat_free_camera",
                            "cheat_any_car_events", "cheat_show_collectibles",
+                           "cheat_fast_travel_anywhere", "cheat_saved_destination",
                            "disable_motion_blur", "disable_depth_of_field",
                            "force_trilinear_filtering", "fh1_render_test_log_file_opens"}) {
     rex::cvar::RegisterChangeCallback(name, [](std::string_view name, std::string_view value) {

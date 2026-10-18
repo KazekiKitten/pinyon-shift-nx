@@ -177,6 +177,11 @@ add_executable(pinyon_shift_profile_body_tests EXCLUDE_FROM_ALL
 )
 target_include_directories(pinyon_shift_profile_body_tests PRIVATE src)
 
+add_executable(pinyon_shift_cheats_destination_tests EXCLUDE_FROM_ALL
+    tests/config/cheats_destination_test.cpp)
+target_include_directories(pinyon_shift_cheats_destination_tests PRIVATE src)
+target_compile_options(pinyon_shift_cheats_destination_tests PRIVATE -UNDEBUG)
+
 add_executable(pinyon_shift_car_recovery_tests EXCLUDE_FROM_ALL
     tests/save/car_recovery_test.cpp src/cheats.cpp src/save/profile_body.cpp)
 target_include_directories(pinyon_shift_car_recovery_tests PRIVATE src)

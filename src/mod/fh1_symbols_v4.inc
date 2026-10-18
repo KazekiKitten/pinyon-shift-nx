@@ -14,8 +14,11 @@ PINYON_SYMBOL("camera.player_controller", 0x824B6758)
 PINYON_SYMBOL("camera.reset_to_player", 0x826207B0)
 PINYON_SYMBOL("camera.set_mode", 0x82908AC0)
 PINYON_SYMBOL("content.mount_marketplace", 0x82580638)
+PINYON_SYMBOL("fast_travel.enabled", 0x826BAAC8)
+PINYON_SYMBOL("fast_travel.find_road_point", 0x828AF1B8)
 PINYON_SYMBOL("flyer.smash", 0x82972A38)
 PINYON_SYMBOL("frame.tick", 0x8241DAD0)
+PINYON_SYMBOL("gps.set_position_action", 0x829F5278)
 PINYON_SYMBOL("gpu.fence_wait_predicate", 0x82AAD418)
 PINYON_SYMBOL("graphics.frame", 0x82AACE28)
 PINYON_SYMBOL("hook.PinyonShiftAcceptModdedBlock", 0x82CC4C00)
@@ -52,6 +55,8 @@ PINYON_SYMBOL("hook.PinyonShiftGuardNullOutputHandle", 0x830605E0)
 PINYON_SYMBOL("hook.PinyonShiftGuardQueueAppend", 0x82F0A3B0)
 PINYON_SYMBOL("hook.PinyonShiftImmersiveCameraLayer", 0x82908120)
 PINYON_SYMBOL("hook.PinyonShiftInitializeCarUpgradeViews", 0x825A32A8)
+PINYON_SYMBOL("hook.PinyonShiftMapTravelGate", 0x828AF4C8)
+PINYON_SYMBOL("hook.PinyonShiftMapTravelInput", 0x828B787C)
 PINYON_SYMBOL("hook.PinyonShiftObserveGraphicsFrame", 0x82AACE28)
 PINYON_SYMBOL("hook.PinyonShiftObserveSaveDecrypted", 0x82D27174)
 PINYON_SYMBOL("hook.PinyonShiftObserveSimulationDelta", 0x8241DC44)
@@ -181,6 +186,7 @@ PINYON_SYMBOL("treasure_map.consumed", 0x825D6B90)
 PINYON_SYMBOL("ui.pause_button_constructed", 0x826F9300)
 PINYON_SYMBOL("ui.pause_menu_action", 0x827EBEE0)
 PINYON_SYMBOL("vehicle.pose_written", 0x82C84424)
+PINYON_SYMBOL("world.components", 0x8269B4F8)
 PINYON_SYMBOL("world.game_mode", 0x824B75E8)
 PINYON_SYMBOL("world.player_car_slot", 0x824BB8F8)
 PINYON_OFFSET("activity.name", 16)  // verified on v4
@@ -214,16 +220,23 @@ PINYON_OFFSET("flyer.smashed", 140)  // verified on v4
 PINYON_OFFSET("flyer.state", 148)  // verified on v4
 PINYON_OFFSET("game.components", 76)  // verified on v4
 PINYON_OFFSET("game.user", 108)  // verified on v4
+PINYON_OFFSET("gps_action.position", 32)  // verified on v4
+PINYON_OFFSET("gps_manager.destination_locked", 764)  // verified on v4
 PINYON_OFFSET("launch_options.allowskipvoiceover", 4952)  // verified on v4; base 4924
 PINYON_OFFSET("launch_options.disablephotomodecollisiondetection", 4949)  // verified on v4; base 4921
 PINYON_OFFSET("launch_options.noattractvideo", 4238)  // verified on v4; base 4222
 PINYON_OFFSET("launch_options.nohandofgodreset", 4965)  // verified on v4; base 4937
 PINYON_OFFSET("launch_options.nohud", 3217)  // verified on v4; base 3213
 PINYON_OFFSET("main_loop.delta", 448)  // verified on v4
+PINYON_OFFSET("map.fast_travel_cost", 444)  // verified on v4
+PINYON_OFFSET("map.nearest_road_point", 576)  // verified on v4; base 564
+PINYON_OFFSET("map.request_fast_travel", 426)  // verified on v4
 PINYON_OFFSET("map_entity.on_map", 52)  // verified on v4
 PINYON_OFFSET("map_marker.entity", 4)  // verified on v4
 PINYON_OFFSET("profile.loaded", 44)  // verified on v4; base 40
 PINYON_OFFSET("profile.values", 32)  // verified on v4
+PINYON_OFFSET("road_point.position", 4)  // verified on v4
+PINYON_OFFSET("script.components", 28)  // verified on v4
 PINYON_OFFSET("session.game_mode", 56)  // verified on v4
 PINYON_OFFSET("time_of_day.script_hold", 10505)  // verified on v4
 PINYON_OFFSET("time_of_day.seconds", 10488)  // verified on v4

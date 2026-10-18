@@ -94,6 +94,18 @@ A faster clock exposed one more console assumption: the simulation steps on the 
 
 ## Methods that held up
 
+- **Trace the graph around a move.** FH1's teleport action finishes before the
+  following streaming wait. Its active flag cannot prove a safe landing; the
+  surrounding graph also owns traffic, control, audio and the camera. Enter
+  through the native map and check driving after the full transition
+  ([travel contracts](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/research/TRAVEL_DESTINATIONS.md)).
+- **Verify input was consumed.** A 100 ms map-button pulse was lost during a
+  Windows travel-route hitch even though its synthetic input receipt was logged.
+  The request expired safely, but counting subsequent captures as landings
+  would have overstated the result. Hold the button for 500 ms, inspect the
+  map capture, and pair each landing with its accepted destination. Arm a
+  movement wait with the throttle: a delayed baseline missed a short drive
+  that stopped near roadside collision.
 - **Pinned saves.** Scripted routes from a frozen copy of a save, never the live one, so results don't depend on progress.
 - **Declare generated source lists as outputs.** CMake already tracks an included `sources.cmake`, but Ninja also needs its producer edge to regenerate it before rerunning CMake. A synthetic Windows/Ninja update that added a folded-data unit reproduced the facade link failure; declaring all three module lists as codegen byproducts made the same build translate, reconfigure and link successfully in both base and v4 layouts. The regression also removes partitions and source lists, retries a failed translation and checks no-op and frozen builds. See [Building](building.md#rebuild).
 - **Qualify every use of an exposed asset.** FH1's `IsDrivable` flag includes traffic cars; a bus drive did not qualify garage selection, thumbnails or paint. Even named LOD0 and cockpit archive members can be much smaller than player models. Use an explicit sales list and test purchase, garage changes, paint, driving and saved reload separately. Check the saved garage and model IDs too: a clean route exit can select a different owned car. Provide a backed-up selection recovery before exposing a model that becomes persistent save state. See the [hidden-car audit](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/HIDDEN_CARS.md).
