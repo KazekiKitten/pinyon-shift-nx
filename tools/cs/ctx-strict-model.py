@@ -133,6 +133,17 @@ def source_sets(generated):
 
 
 class Model(abi.Model):
+    # Historical strict mode observes every local ctx read. The caller-demand
+    # census overrides this to distinguish a local SSA use from publication.
+    publication_census = False
+    charge_conditional_writes = True
+
+    def return_mask(self, pos):
+        return s.ALL
+
+    def tail_reads(self, ins, aliases):
+        return 0
+
     @staticmethod
     def norm(reg):
         if reg == 'fp':
@@ -268,7 +279,9 @@ class Model(abi.Model):
             escaped_branch = ins.group(cs.CS_GRP_JUMP) and ins.mnemonic not in ('bl', 'blr') and any(
                 o.type == arm64.ARM64_OP_IMM and o.imm not in indices for o in ins.operands)
             if not succ[i] or escaped_branch:
-                reads |= s.ALL
+                reads |= self.return_mask(pos)
+            if escaped_branch:
+                reads |= self.tail_reads(ins, old)
             access[i] = reads, kills, touched
             state = aliases, known
             if outgoing[i] != state:
@@ -289,6 +302,32 @@ class Model(abi.Model):
                 value = reads | (tail & ~kills)
                 if value != live[i]:
                     live[i], changed = value, True
+        if self.publication_census:
+            logical = live
+            access_publication = []
+            for i, ins in enumerate(insns):
+                reads, kills, touched = access[i]
+                # A local use reads the cached value, not the backing context.
+                if touched and ins.mnemonic.startswith('ld'):
+                    reads &= ~touched
+                if self.charge_conditional_writes and ins.mnemonic in ('bl', 'blr') and incoming[i] is not None:
+                    target = self.target(ins, incoming[i][0])
+                    tail = 0
+                    for j in succ[i]: tail |= logical[j]
+                    # A may-write that preserves the slot on another path
+                    # needs its incoming backing value for a later reimport.
+                    reads |= tail & target['writes'] & ~target['must']
+                access_publication.append((reads, kills, touched))
+            live = [0] * n
+            changed = True
+            while changed:
+                changed = False
+                for i in range(n-1, -1, -1):
+                    tail = 0
+                    for j in succ[i]: tail |= live[j]
+                    reads, kills, _ = access_publication[i]
+                    value = reads | (tail & ~kills)
+                    if value != live[i]: live[i], changed = value, True
         result = {}
         for i, ins in enumerate(insns):
             if incoming[i] is None:

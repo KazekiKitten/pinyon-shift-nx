@@ -121,17 +121,18 @@ On the race route with every call verified, 192 sampled functions were run 31,10
 
 ## Building the output
 
-The clean-slate observable-state probe's first conservative deferral counts
-could not decide its 15% instruction gate. A second probe uses matched
-retired-instruction samples per hot thread on the Odin. Its optimistic
-ceilings are 23.72% render, 25.44% simulation and 29.59% mixer, granting
-unknown calls only ABI inputs and charging no spills. A stricter follow-up finds only 0.468/0.319/0.680% in its analyzed subset,
-but cannot prove exact return demand through opaque calls or charge every
-new publication. The exact gate remains blocked; CS-2 is on hold. Neither
-these subset counts nor the ceiling is an achieved instruction saving.
-Desktop suspend-PC samples were biased by blocked waits and are excluded
-from that instruction gate.
-[Stage 0 method and limitations](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/CLEAN_SLATE_STAGE0.md#cs-02-optimistic-traffic-ceiling).
+The clean-slate observable-state census fails its 15% gate under conservative
+unknown-call contracts. Caller continuation demand, opaque boundaries and
+native-to-original callbacks leave net context-instruction counts of
+0.850% render, 0.979% simulation and 0.753% mixer (0.903% pooled), weighted
+with matched Odin retired-instruction samples. Unknown indirects read all
+state; observed targets do not prove a complete target set. Required stores
+remain at their original sites, including the backing state needed when a
+callee only conditionally writes a later-read slot. This declines CS-2 at
+the present gate. The earlier 23.7–29.6% ABI ceiling used deliberately more
+generous contracts. Neither result is an executed optimized backend;
+new target/escape proofs would justify a new census.
+[Stage 0 method, counts and limits](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/CLEAN_SLATE_STAGE0.md#cs-02-caller-demand-and-net-publications).
 
 Output is split into files of at most 1 MiB, with the function-to-file assignment kept stable between runs (`codegen.partition.json`) so a regeneration doesn't rebuild everything. CMake runs the generator with a depfile covering the manifest, the analysis files, the three images and the SDK version, then builds the main image as an object library with a precompiled header and the facades as shared libraries.
 

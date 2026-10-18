@@ -43,6 +43,103 @@ prevents attributing that difference to the flag. Before source is parent
 `571e8c09` / SDK `200bfdb`; after is that source plus the guarded probe patch.
 Raw results, symbol check and binary fingerprints: `.local/codex-cs/round3/`.
 
+### CS-0.2: caller demand and net publications
+
+**Gate FAIL under the required conservative contracts; CS-2 is rejected at
+this gate.** On the matched hot-thread instruction profile, net removable
+context traffic is **0.850% render, 0.979% simulation and 0.753% mixer**;
+pooled by retired-instruction samples, **0.903%**, against 15%.
+
+| Thread / native TID | Load / store deletion samples | Total hot-thread instruction samples | Net fraction |
+| --- | ---: | ---: | ---: |
+| Render / 5178 | 419 / 219 | 75,042 | 0.850% |
+| Simulation / 5168 | 792 / 140 | 95,174 | 0.979% |
+| Hot mixer / 5189 | 157 / 8 | 21,916 | 0.753% |
+
+The conditional-write charge retains no additional **sampled** store in
+this profile; the synthetic control demonstrates that it retains one when
+needed. This is not a claim that no such publication exists in all code.
+Required stores are retained at their existing sites, with zero inserted
+store sites. Unknown sampled instructions and unproved aliases receive no
+deletion credit. The three small mixer threads remain separate in the raw
+output and do not dilute the hot mixer. The percentages are the static
+model weighted by a sampling profile, not an executed optimized build.
+
+The final source artifact has 76,816 summaries (76,513 generated bodies,
+267 opaque native override contracts and 36 reviewed native-entry aliases), 48,101
+unresolved indirect sites, 49,929 opaque publication contracts and 267
+native-to-original callback contracts. Return demand reaches ALL for
+76,794 summaries after three iterations. The 23.7–29.6% ABI ceiling remains
+historical: it deliberately granted narrower unknown-call and return
+contracts. It is not the net count under read-everything handling. New
+complete target/escape proofs would change the contracts and justify a
+new census; this result is not a limit on every possible IR design.
+
+Final evidence only: `.local/codex-cs/round3/ctx-net-{source,census,summary}.json`,
+`ctx-imports.json`, extended `context-layout.json` and their build/self-check
+logs. Earlier `ctx-source-*` / `ctx-census-*` variants in that directory are
+exploratory. The full tool suite runs 540 tests: 534 pass, six skip; analysis
+self-checks and native/Android ARM64 layout checks pass. The first test
+invocation used an isolated Python without the repository import path;
+the corrected full invocation uses the existing analysis environment.
+
+The Round 3 census uses the **same** `r2-ctx-regs4` Odin instruction samples,
+context layout and archived `libmain.so` as Round 2. No new timing run or
+rebuilt library is substituted. `tools/cs/ctx-exact-census.py` computes
+may-read-before-write, may-write and must-write sets, then propagates each
+caller's continuation demand back to its callees until stable. Tail calls
+propagate their caller's return demand. Unknown indirect calls read/change
+all slots and their continuation demands reach every dispatch-table entry.
+The resulting full return demand is derived from those continuations;
+it is not an assumed ABI result mask. Opaque native replacement wrappers
+also demand the complete result of their callable strong original bodies.
+
+All 421 emitted switches are lowered into their recovered CFG edges.
+Trap helpers, context snapshots/restores, CR/FPSCR methods, vector stores,
+conditional writes and mutable atomic expected operands have explicit
+effects. Partial writes preserve the rest of the slot. Reviewed native
+CRT and critical-section contracts come from SDK bodies and the typed
+marshal, including the void memory routines that preserve r3. ELF PLT/GOT
+relocations resolve 11 reviewed import stubs among 869 imports. Other
+opaque boundaries retain ALL read/write sets with no definite kill.
+Every such publication contract is retained in the local source artifact.
+
+The dispatch table gives a global target set, not a receiver-type proof
+at a particular call site. The RE workspace's class/name index and the
+historical observed targets provide no complete site-specific set. Literal
+and straight-line copy propagation is also checked; no additional bounded
+indirect target set is established. Unresolved sites therefore keep the
+required read-everything contract, rather than using observed targets.
+
+The matched AArch64 census separates local uses from memory observers.
+Forward cache facts intersect at joins; backward demand retains the
+original store when a call, escape or return can observe its value. A
+conditional callee write also requires the old backing value when a later
+reimport might need the unwritten path. These newly required publications
+are charged before counting deletions. A pair survives if either component
+is required. Required publications stay at original store sites, so the
+count introduces no new store site. Unknown aliases/instructions are
+retained. This counts context memory instructions under the stated
+conservative contracts; it does not predict spills, instruction selection
+or performance of a future IR backend.
+
+Reproduce with the analysis-only Capstone environment used in Round 2:
+
+```powershell
+$py = '.local/codex-cs/round2/analysis-venv/Scripts/python.exe'
+& $py tools/cs/ctx-exact-census.py --self-test
+& $py tools/cs/ctx-exact-census.py --generated .local/generated/default `
+  --binary .local/codex-cs/round2/cs02-measured-libs/libmain.so `
+  --output .local/codex-cs/round3/ctx-net-source.json
+& $py tools/cs/ctx-exact-census.py `
+  --sets .local/codex-cs/round3/ctx-net-source.json `
+  --android-dump .local/codex-cs/round2/cs02-odin-regs4-dump.txt `
+  --runtime .local/codex-cs/odin/r2-ctx-regs4/logs/runtime.log `
+  --binaries .local/codex-cs/round2/cs02-measured-libs `
+  --layout .local/codex-cs/round3/context-layout.json `
+  --output .local/codex-cs/round3/ctx-net-census.json
+```
+
 ## CS-0.2: observable context state
 
 **Gate not established, 2026-10-17.** The multivac analysis ran on the base
