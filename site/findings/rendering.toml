@@ -92,6 +92,16 @@ source = """docs/native-renderer/NATIVE_FRAME_CONTRACT.md Primitives, front buff
 
 [[finding]]
 group = """Frame structure and views"""
+name = """scaled texture binding ownership"""
+what = """A texture's fetch constants do not identify its current memory owner. Above 1x, a resolve selects the scaled buffer while a CPU write can return the same allocation to ordinary shared memory. Retaining an outdated texture pointer in the binding memo bypassed that selection even when the fetch constants were unchanged. Outdated entries now select their host texture again; unrelated textures retain their contents."""
+how = """Shared cache source analysis and a backend-independent unit regression exercising CPU-to-resolve-to-CPU transitions, an inactive binding, and an unrelated texture. The fixture uses synthetic allocations, not guest function addresses."""
+confidence = """confirmed"""
+issue = """#628"""
+note = """This establishes a renderer defect at scaled resolutions; the complete reported decal-save/travel/reload sequence needs separate gameplay qualification."""
+source = """docs/native-renderer/LIVERY_TEXTURE_OWNERSHIP.md; SDK tests/unit/graphics/texture_cache_test.cpp"""
+
+[[finding]]
+group = """Frame structure and views"""
 name = """FMV YUV draw and composite"""
 what = """Movies play as a YUV draw (vertex shader `7156CE05`, pixel `31511D87`, three 8-bit planes) followed by a composite pass (`20A41D46`/`5F479FC4`). When `FMV_04` loops, the title skips the YUV draw for about 35 output frames (0.8 s) while the composite still draws, which shows solid green (0, 77, 0): YUV planes of zero convert to green. The title loop with its movie removed shows black."""
 how = """Per-frame census during story movies played from a linked mirror of the game files; same result at 30 fps."""

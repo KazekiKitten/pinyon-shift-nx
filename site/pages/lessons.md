@@ -21,6 +21,14 @@ Profile before optimizing generated code. Here the guest threads were flat, with
 
 Most per-draw savings came from noticing that inputs hadn't changed. 58 % of draws changed only shader constants, so caching pipeline, binding and constant derivation behind a state epoch paid off repeatedly. Replaying whole recorded draws did not: proving a recorded draw is still valid cost as much as deriving it. Once each subsystem got an O(1) unchanged-since-last-draw test (fetch constants written, a texture usage generation, a per-state memo), skipping the stages it covers saved 8 % of a draw. What remains is spread over about 20 small steps, so per-draw reuse has a floor, and only replaying whole buffers on the GPU goes below it.
 
+A cached texture object also depends on memory ownership. The same fetch
+constants can select ordinary memory after a CPU upload and scaled memory
+after a resolve. Reusing an outdated pointer bypassed that choice. A test of
+the shared cache with synthetic allocations caught the stale object without
+needing a GPU or an editor save; an unrelated texture stayed loaded throughout.
+Re-derive affected entries when ownership may have changed, and keep gameplay
+qualification separate from that unit proof ([GPU optimizations](gpu-optimizations.md#the-recorder-thread)).
+
 ## Waits are performance
 
 The largest CPU savings outside the renderer came from how the host waits, not from translated code:

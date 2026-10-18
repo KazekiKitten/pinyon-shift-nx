@@ -60,6 +60,15 @@ At 1x on the desktop the frame was bound by CPU work on the recorder thread, not
 
 Together with the binding memo table and ThinLTO for the GPU code, the 1x race went from 20.79 ms (48 fps) on 2026-09-30 to an 8.3 ms median, the 120 fps limit.
 
+The binding memo remembers texture objects as well as fetch constants. Above
+1x, an invalidated entry must choose its texture object again: resolving into
+an allocation makes it scaled, while a CPU write can reuse it for an ordinary
+texture with exactly the same fetch constants. Reusing the old object reads
+the wrong memory copy. Only outdated memo entries are re-derived; other
+textures retain their bindings and contents. A backend-independent regression
+test covers both ownership transitions and an unrelated texture. See the
+[ownership analysis and gameplay checks](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/native-renderer/LIVERY_TEXTURE_OWNERSHIP.md).
+
 On 2026-10-13 (RTX 4080, `fh1-race-sync`, last 600 frames, three runs) the frames with more than 5,000 draws, about half of them at about 6,500 draws, have a median of 8.5-9.0 ms. In them the decoder does 6.4-7.1 ms of work besides 1.6 ms of waiting for the title, and the recorder 7.6-8.0 ms, so both threads sit at the 8.33 ms budget: making either one alone faster leaves the frame where it is. A sampled profile of the decoder with a PDB: 22-27 % waiting, about 25 % applying register runs, 18 % packet dispatch, 2 % hashing shader microcode on load.
 
 **Tried and dropped.**
