@@ -31,8 +31,9 @@ This establishes placement support. Guest aliases remain untested, and the
 completion-latency result below rejects the shared-arena proposal at its gate.
 [CS-0.5 records the method and negative controls](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/CLEAN_SLATE_STAGE0.md#cs-05-placed-device-memory-mapping).
 
-The asynchronous completion probe failed the latency gate too. A default-off
-mode (`gpu_async_fence_probe` at startup, `gpu_async_fence_completion` hot)
+The asynchronous completion probe failed the latency gate too. An experimental
+build (`REXGLUE_ENABLE_CS_PROBES=ON`, default OFF) provides the default-off
+mode (`gpu_async_fence_probe` at startup, `gpu_async_fence_completion` hot). It
 ends the submission at each guest fence and signals a timeline value behind
 it. A completion thread waits and publishes the guest result; the producer
 never waits on that semaphore. On the same pinned race/free-roam routes at

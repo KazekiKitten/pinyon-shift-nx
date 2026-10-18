@@ -37,7 +37,8 @@ Implementations include threads, events, semaphores, timers, the file system, co
 
 Each guest thread is one host thread, named `Guest <start address>`. About 42 are alive in a race; the busy ones are the simulation and render threads, FMOD's mixer thread and 11 job workers. Guest CPU numbers rotate over six virtual hardware threads, and guest affinities are ignored by default: honouring them, with one host core per Xenon hardware thread, gave no consistent gain.
 
-A default-off session probe (`cs_session_mode`, `cs_session_path`) records
+A session probe (`cs_session_mode`, `cs_session_path`) in experimental builds
+(`REXGLUE_ENABLE_CS_PROBES=ON`, default OFF) records
 clock, input, wait, file and callback results in separate streams keyed by
 guest thread and sequence number. Round 2 fixed the original global-order
 capture failure. The desktop still diverges at a shared job-state poll:

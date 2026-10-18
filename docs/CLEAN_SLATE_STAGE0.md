@@ -10,6 +10,39 @@ the replay and fence interpretations and records the still-unresolved exact
 context gate. The original global-order capture failure and synchronous
 drain alone did not decide their premises.
 
+## Round 3
+
+### Probe build isolation
+
+The session pilot and both fence probes now require the SDK CMake flag
+`-DREXGLUE_ENABLE_CS_PROBES=ON`. It defaults **OFF**, including Release.
+Disabled builds omit the session implementation, cvars, PM4 capture state,
+fence virtual methods, timeline worker and feature request. Session hooks
+reduce to inline constants/no-ops; fence completion actions execute directly,
+without the diagnostic callback wrapper or cvar query. The public runtime
+definition also controls the application's audio and native hooks. An
+experiment must rebuild the runtime, GPU plugin and host together.
+
+On multivac (5800X/RTX 4080, NVIDIA 581.08), the default native Release
+build's **785 active project/SDK objects have zero probe symbol definitions
+or references**, checked with `llvm-nm --demangle` by
+`tools/cs/check-probes-disabled.py` (configure with
+`-DCMAKE_EXPORT_COMPILE_COMMANDS=ON` first). The session source is absent
+from the active compile commands; stale objects are not counted.
+
+The short before/after desktop A/A uses
+`tools/cs/routes/cs03-default-aa.fh1test`, private copies of the immutable
+`appdata-2026-09-27-winwarm` seed, Vulkan/1x, vsync off and 60 fps. Both
+60-second scripts stop normally, with free-roam captures at the pinned
+position. No builds ran during either route. Retaining all frames in the
+last 27..2 seconds (1,492 / 1,500 rows), mean frame time is
+**16.755 → 16.666 ms (−0.53%)**, p99 **18.500 → 17.336 ms**. This shows no
+observed frame-time regression in this short capped control. Process CPU
+is 30.831 → 29.354 ms/frame while draws change 3,880 → 3,685; scene variation
+prevents attributing that difference to the flag. Before source is parent
+`571e8c09` / SDK `200bfdb`; after is that source plus the guarded probe patch.
+Raw results, symbol check and binary fingerprints: `.local/codex-cs/round3/`.
+
 ## CS-0.2: observable context state
 
 **Gate not established, 2026-10-17.** The multivac analysis ran on the base
