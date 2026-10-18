@@ -3,6 +3,7 @@
 #include "auto_start.h"
 #include "pinyon_shift_init.h"
 #include "fh1_render_test.h"
+#include "fh1_guest_address.h"
 #include "audio_mix.h"
 #include "dlc/rally_audio_probe.h"
 #include "guest_native/retire_code.h"
@@ -1197,6 +1198,20 @@ void PinyonShiftApp::OnPostSetup() {
   // Owned DLC overlays do not activate mods or select the modded save tree.
   // Explicit mods remain ahead of the built-in assets in the overlay order.
   auto overlays = pinyon_shift::mod::OverlayRoots();
+  if constexpr (pinyon_shift::fh1::kTitleUpdateV4) {
+    auto updates = pinyon_shift::mod::OverlayRoots("update");
+    if (!updates.empty()) {
+      auto overlay = std::make_unique<pinyon_shift::mod::OverlayDevice>(
+          "\\Device\\Harddisk0\\PartitionUpdate",
+          pinyon_shift::diagnostics::StateRoot() / "title-update-v4", std::move(updates));
+      if (!overlay->Initialize() || !runtime()->file_system()->ReplaceDevice(std::move(overlay))) {
+        REXLOG_ERROR("Could not mount the title-update mod overlays");
+        pinyon_shift::diagnostics::RecordEvent("mod.update.overlay_error");
+      } else {
+        pinyon_shift::diagnostics::RecordEvent("mod.update.overlay_mounted");
+      }
+    }
+  }
   const bool builtin_rally = PinyonShiftUseBuiltinRallyAdapter();
   if (builtin_rally) overlays.push_back(PinyonShiftRallyAdapterRoot() / "game");
   // The audio mixer's copy of the levels, made from the mods' or the disc's.

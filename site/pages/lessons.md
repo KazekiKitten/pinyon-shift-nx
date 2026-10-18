@@ -143,6 +143,21 @@ A faster clock exposed one more console assumption: the simulation steps on the 
 - **Profiling code can be the hitch.** The first SQL profile checked every byte of each statement's text with `VirtualQuery`, which made the queries it timed look slower. Check readability once per page.
 - **Never quote one GPU's saving for another.** The same switch saved 8 % on one GPU and nothing on the next.
 
+## Follow title-update data independently
+
+A title update can replace a disc archive member with a different layout.
+FH1's v4 `update:/media.zip` has more chase-camera layers than the disc's
+`game:/media/camera.zip`; reusing a disc merge's layer count would truncate
+the result. Extract and compare both owned inputs, generate a patch for
+each layout, and mount the update patch separately. The verified update
+can remain unchanged. See [title-update member merges](modding.md#asset-mods).
+
+Live camera placement also has two sources: the loaded settings block and
+per-car offsets cached in the camera instance. Trace the readers and reset
+writers before treating a settings edit as a live control. Preserve the
+loaded baseline so resetting retains another mod's tuning. See
+[Collision and cameras](game-world.md#collision-and-cameras).
+
 ## What didn't pay off here
 
 Negative results, so they aren't retried without a new reason:

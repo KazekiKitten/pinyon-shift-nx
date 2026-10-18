@@ -5,6 +5,7 @@
 #include <functional>
 #include <initializer_list>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "pinyon_mod.h"
@@ -61,7 +62,7 @@ bool ModsShareSave(const std::filesystem::path& state_root, const std::string& e
 const std::vector<ModInfo>& Mods();
 bool AnyModLoaded();
 // Directories of loaded mods' game/ overrides, in priority order.
-std::vector<std::filesystem::path> OverlayRoots();
+std::vector<std::filesystem::path> OverlayRoots(std::string_view directory = "game");
 // Marketplace packages that loaded mods cannot run with (mod.toml
 // hide_dlc): the title neither lists nor opens them while those mods are on.
 std::vector<std::string> HiddenDlc();

@@ -44,9 +44,9 @@ pinyon = "Replacement textures up to 8 times larger, reloaded in game"
 
 [[original]]
 feature = "Camera"
-link = "playing.md#immersive-camera"
+link = "playing.md#camera-editor"
 xbox = "Stock cameras"
-pinyon = "Optional immersive camera: G-forces, lean, speed shake and head motion"
+pinyon = "Live chase height, distance, FOV and stiffness; optional immersive camera motion"
 
 [[original]]
 feature = "Music"

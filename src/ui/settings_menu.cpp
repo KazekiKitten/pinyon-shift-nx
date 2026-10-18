@@ -168,6 +168,7 @@ class SettingsPages : public std::enable_shared_from_this<SettingsPages> {
   bool BuiltinModInstalled(const std::string& name) const;
 
   std::unique_ptr<MenuScreen> Display();
+  std::unique_ptr<MenuScreen> CameraEditor();
   std::unique_ptr<MenuScreen> HdrCalibration();
   std::unique_ptr<MenuScreen> Graphics();
   std::unique_ptr<MenuScreen> Audio();
@@ -388,6 +389,7 @@ std::unique_ptr<MenuScreen> SettingsPages::Display() {
     }
     rows.push_back(Setting("FIELD OF VIEW", std::move(fov)));
   }
+  rows.push_back(Page("CAMERA EDITOR", &SettingsPages::CameraEditor));
   // G-forces, lean, speed shake and head motion layered on the game's own
   // camera physics (#419), from the built-in immersive_camera mod, which
   // always loads. Its effect groups scale while the game runs (#443): a
@@ -530,6 +532,55 @@ std::unique_ptr<MenuScreen> SettingsPages::Display() {
     return ResolutionLine();
   };
   return std::make_unique<MenuScreen>("DISPLAY", std::move(rows), std::move(note));
+}
+
+std::unique_ptr<MenuScreen> SettingsPages::CameraEditor() {
+  std::vector<MenuRow> rows;
+  for (const auto& [label, key, first, last] : {
+           std::tuple{"CHASE HEIGHT", "pinyon_shift_chase_height", -2, 6},
+           std::tuple{"CHASE DISTANCE", "pinyon_shift_chase_distance", -4, 12}}) {
+    std::vector<Choice> choices;
+    for (int step = first; step <= last; ++step) {
+      char value[16], text[24];
+      std::snprintf(value, sizeof(value), "%.2f", step * 0.25);
+      std::snprintf(text, sizeof(text), "%+.2f M", step * 0.25);
+      choices.push_back({step == 0 ? "DEFAULT" : text, {{key, value}}});
+    }
+    rows.push_back(Setting(label, std::move(choices)));
+  }
+  for (const auto& [label, key, first, last, increment] : {
+           std::tuple{"CHASE FIELD OF VIEW", "pinyon_shift_chase_fov", 80, 130, 5},
+           std::tuple{"CHASE STIFFNESS", "pinyon_shift_chase_stiffness", 50, 200, 25}}) {
+    std::vector<Choice> choices;
+    for (int percent = first; percent <= last; percent += increment) {
+      char value[16];
+      std::snprintf(value, sizeof(value), "%.2f", percent / 100.0);
+      choices.push_back({percent == 100 ? "DEFAULT" : std::to_string(percent) + "%", {{key, value}}});
+    }
+    rows.push_back(Setting(label, std::move(choices)));
+  }
+  rows.push_back(Setting("DRIVING VIEW",
+      {{"NORMAL", {{"pinyon_shift_drive_camera", "0"}}},
+       {"WHEEL", {{"pinyon_shift_drive_camera", "10"}}},
+       {"REPLAY", {{"pinyon_shift_drive_camera", "15"}}}}));
+  MenuRow reset;
+  reset.label = "RESET CAMERA EDITOR";
+  reset.activate = [this] {
+    for (const auto& [key, value] : {
+             std::pair{"pinyon_shift_chase_height", "0.0"},
+             std::pair{"pinyon_shift_chase_distance", "0.0"},
+             std::pair{"pinyon_shift_chase_fov", "1.0"},
+             std::pair{"pinyon_shift_chase_stiffness", "1.0"},
+             std::pair{"pinyon_shift_drive_camera", "0"}}) {
+      config_.Set(key, value);
+      rex::cvar::SetFlagByName(key, value);
+    }
+    Save();
+  };
+  rows.push_back(std::move(reset));
+  return std::make_unique<MenuScreen>("CAMERA EDITOR", std::move(rows), [] {
+    return std::string("APPLIES LIVE TO BOTH CHASE VIEWS. OFFSETS ARE RELATIVE TO CAMERA DATA.");
+  });
 }
 
 std::unique_ptr<MenuScreen> SettingsPages::HdrCalibration() {

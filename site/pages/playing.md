@@ -86,9 +86,22 @@ The generated frames include the HUD, so its text can smear when the camera move
 
 On an HDR display, turn on HDR in the system first (on Windows, **Settings > Display > Use HDR**), then **F6 > DISPLAY > HDR**. **HDR PAPER WHITE** sets the brightness of white menus and the HUD, **HDR HIGHLIGHTS** how far bright highlights reach, and **HDR CALIBRATION** provides paper-white and peak test patterns; HIGHLIGHTS controls how strongly scene highlights expand toward that peak. **HDR COMPARE** shows SDR and HDR side by side. Every HDR setting applies at once. HDR is tested on Windows and on Android (AYN Odin 2 Portal); on Linux and macOS it's offered when the driver provides an HDR output. On Android, keep brightness and the display mode fixed while calibrating. The Odin 2 Portal advertises about 420 nits; that is not a measurement of the current output. A tone-mapped path can keep the peak square visible at every setting: in that case keep the existing peak pending measurement. Astra calibration is still unqualified; see [Android HDR calibration](android.md#hdr-calibration). HDR COMPARE pauses while calibration patterns are shown and resumes afterwards.
 
+## Camera editor
+
+**F6 > DISPLAY > CAMERA EDITOR** adjusts both chase views while playing.
+Height and distance are offsets in metres from the current car's camera
+data. Field of view and stiffness are percentages; higher stiffness makes
+the yaw and height springs react faster. DEFAULT keeps the loaded camera
+values; RESET CAMERA EDITOR restores them and the normal driving view.
+The separate FIELD OF VIEW row continues to affect all cameras.
+DRIVING VIEW also offers the game's WHEEL and car-relative REPLAY cameras;
+NORMAL returns to your previous player view. These controls are qualified
+on the Windows disc and v4 builds with pinned saves; see the
+[camera editor notes](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/MODDING.md#camera-editor).
+
 ## Immersive camera
 
-**F6 > DISPLAY > IMMERSIVE CAMERA** makes the camera react to the car: it is pushed back under acceleration and thrown forward under braking, jolts when the throttle or brake goes on, leans into corners, shakes a little at speed and under hard braking, and moves with slow breathing and head sway in the cockpit. The cockpit view gets the full effect, the hood view a little less, and the chase and bumper views only the G-forces. Choose OFF, SUBTLE, DEFAULT or STRONG, or set G-force, lean, speed shake and head motion on their own rows (CUSTOM). Changes apply at once and keep your own save. On Android it comes with the mods the PC shares over Wi-Fi (not yet tried in a race there). It isn't available with the v4 title update yet.
+**F6 > DISPLAY > IMMERSIVE CAMERA** makes the camera react to the car: it is pushed back under acceleration and thrown forward under braking, jolts when the throttle or brake goes on, leans into corners, shakes a little at speed and under hard braking, and moves with slow breathing and head sway in the cockpit. The cockpit view gets the full effect, the hood view a little less, and the chase and bumper views only the G-forces. Choose OFF, SUBTLE, DEFAULT or STRONG, or set G-force, lean, speed shake and head motion on their own rows (CUSTOM). Changes apply at once and keep your own save. Disc and v4 use separate camera-data merges, qualified on Windows with pinned saves. On Android it comes with the mods the PC shares over Wi-Fi (not yet tried in a race there).
 
 ## Sound mix
 

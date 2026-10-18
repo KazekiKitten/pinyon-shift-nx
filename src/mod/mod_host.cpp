@@ -727,11 +727,11 @@ void RecordSave(uint32_t body_address, uint32_t body_size) {
 
 bool AnyModLoaded() { return !g_loaded.empty(); }
 
-std::vector<std::filesystem::path> OverlayRoots() {
+std::vector<std::filesystem::path> OverlayRoots(std::string_view directory) {
   std::vector<std::filesystem::path> roots;
   std::error_code error;
   for (const auto& mod : g_loaded) {
-    const auto root = mod->info.directory / "game";
+    const auto root = mod->info.directory / directory;
     if (std::filesystem::is_directory(root, error)) roots.push_back(root);
   }
   return roots;

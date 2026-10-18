@@ -227,8 +227,11 @@ target_include_directories(pinyon_shift_overlay_device_tests PRIVATE src)
 target_link_libraries(pinyon_shift_overlay_device_tests PRIVATE rex::runtime)
 
 # Every host-side test, for CI (PINYON_SHIFT_HOST_TESTS_ONLY) and local runs.
+add_executable(pinyon_shift_camera_tuning_tests tests/camera_tuning_tests.cpp)
+target_include_directories(pinyon_shift_camera_tuning_tests PRIVATE src)
 add_custom_target(pinyon_shift_host_tests)
 add_dependencies(pinyon_shift_host_tests
+    pinyon_shift_camera_tuning_tests
     pinyon_shift_fh1_ui_api_tests
     pinyon_shift_fh1_shader_pack_tests
     pinyon_shift_hostui_tests

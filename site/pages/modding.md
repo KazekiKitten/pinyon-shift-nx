@@ -86,6 +86,7 @@ A mod that only changes how the game looks or sounds, and never what it saves, c
 | New archive members (`add/<archive>/<member>`) | Appended to the rebuilt archive, for example a new colour grading map in `dynamicpost.zip`. A name the archive already has is refused, as is a `members/` name it lacks |
 | Strings (`strings/<language or ALL>/<Table>.toml`) | `IDS_` names with their text: existing names are changed, new ones added with their key, which the database refers to as `_&N` (`tools/fh1-strings.py`) |
 | Merged settings (`merge/`) | `.ini` keys and `.xml` elements are merged into the file, so several mods can change one settings file |
+| Title-update settings (`merge-update/`) | `.ini` and `.xml` member merges against the installed v4 update, such as `merge-update/media.zip/camera/cameraphysics.xml`. Built into the generated mod's `update/` overlay; inactive without the update. The verified update stays untouched |
 | Database (`db/*.sql`) | SQL scripts run in load order on a copy of `media/db/gamedb.slt`, or of the database an enabled mod replaces it with |
 | New cars (`tools/clone-fh1-car.py`) | A spec of cars that reuse an existing model with their own name, price, power and listed class becomes a `db/` script and `strings/` names. Once bought, the game rates a car from its physics, so a listed index should be the one the owned car shows. Clones upgrade and paint like any car; bought cars stay in the modded profile, which still loads if the mod is removed |
 | Textures (`textures/<hash>.dds`) | Find a texture's hash with `--texture_dump_dir`. A replacement keeps the format and may be 2, 4 or 8 times larger. **SETTINGS > MODS > RELOAD TEXTURES** reloads them in game. On a GPU without BC formats (most Android GPUs) only 8_8_8_8 replacements apply |
@@ -99,6 +100,16 @@ For example, a merge that removes free-roam traffic:
 ```
 
 Elements without a key attribute, such as the layers in `CameraPhysics.xml`, match by position; mark an element `pinyon-add="true"` to append it instead.
+
+The built-in immersive camera supplies separate disc and v4 merges because
+the update has more chase-camera layers. Regenerate both with
+`python tools/build-immersive-camera.py`. Live chase height, distance, FOV
+and spring stiffness are in [CAMERA EDITOR](playing.md#camera-editor);
+their defaults preserve the loaded tuning and per-car camera overrides.
+See [Camera editor](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/MODDING.md#camera-editor) for the
+data and runtime boundary.
+Update member merges also preserve the winning whole-archive override
+under a mod's `update/` directory.
 
 Nothing from the game disc may be distributed. A mod's install steps should build its files from the player's own copy, as `tools/install-sample-mod.py english_strings` does.
 

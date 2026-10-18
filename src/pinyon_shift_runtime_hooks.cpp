@@ -49,6 +49,7 @@
 
 #include "pinyon_shift_diagnostics.h"
 #include "fh1_guest_address.h"
+#include "camera_tuning.h"
 #include "platform/host_platform.h"
 #include "fh1_render_test.h"
 #include "auto_start.h"
@@ -123,6 +124,16 @@ REXCVAR_DEFINE_BOOL(
 REXCVAR_DEFINE_DOUBLE(pinyon_shift_fov_scale, 1.0, "Display",
                       "Multiply the cameras' vertical field of view (0.8 to 1.3)")
     .range(0.8, 1.3)
+    .lifecycle(rex::cvar::Lifecycle::kHotReload);
+REXCVAR_DEFINE_DOUBLE(pinyon_shift_chase_height, 0.0, "Display", "Chase height offset in metres")
+    .range(-0.5, 1.5).lifecycle(rex::cvar::Lifecycle::kHotReload);
+REXCVAR_DEFINE_DOUBLE(pinyon_shift_chase_distance, 0.0, "Display", "Chase distance offset in metres")
+    .range(-1.0, 3.0).lifecycle(rex::cvar::Lifecycle::kHotReload);
+REXCVAR_DEFINE_DOUBLE(pinyon_shift_chase_fov, 1.0, "Display", "Chase field of view multiplier")
+    .range(0.8, 1.3).lifecycle(rex::cvar::Lifecycle::kHotReload);
+REXCVAR_DEFINE_DOUBLE(pinyon_shift_chase_stiffness, 1.0, "Display", "Chase yaw and height spring stiffness multiplier")
+    .range(0.5, 2.0).lifecycle(rex::cvar::Lifecycle::kHotReload);
+REXCVAR_DEFINE_INT32(pinyon_shift_drive_camera, 0, "Display", "Driving view: 0 normal, 10 wheel, 15 car-relative replay")
     .lifecycle(rex::cvar::Lifecycle::kHotReload);
 // The built-in immersive camera's effect groups (#443), applied at once.
 REXCVAR_DEFINE_DOUBLE(pinyon_shift_camera_gforce, 1.0, "Display",
@@ -6818,6 +6829,101 @@ static void PinyonShiftApplyFreeCamera() {
   });
 }
 
+// Camera settings are parsed once. Edit their loaded data on the guest main
+// thread; always derive from the original merged data, never our last edit.
+static void PinyonShiftApplyCameraEditor() {
+  static uint32_t ticks = 0;
+  if (++ticks % 12 != 0) return;
+  static bool used = false;
+  const std::array<float, 4> values = {
+      float(REXCVAR_GET(pinyon_shift_chase_height)), float(REXCVAR_GET(pinyon_shift_chase_distance)),
+      float(REXCVAR_GET(pinyon_shift_chase_fov)), float(REXCVAR_GET(pinyon_shift_chase_stiffness))};
+  const int selected = REXCVAR_GET(pinyon_shift_drive_camera);
+  const uint32_t mode = selected == 10 || selected == 15 ? uint32_t(selected) : 0u;
+  if (!used && values == std::array<float, 4>{0, 0, 1, 1} && mode == 0) return;
+  used = true;
+  if (!std::all_of(values.begin(), values.end(), [](float v) { return std::isfinite(v); })) return;
+  pinyon_shift::mod::EnqueueHostGuestTask([values, mode] {
+    static uint32_t generation = 0;
+    static std::map<uint32_t, pinyon_shift::camera::Tuning> originals;
+    struct Placement {
+      uint32_t car = 0;
+      std::array<pinyon_shift::camera::Offset, 2> offsets;
+    };
+    static std::map<uint32_t, Placement> positions;
+    static std::map<uint32_t, uint32_t> previous_modes;
+    const uint32_t current = g_title_generation.load(std::memory_order_relaxed);
+    if (generation != current) {
+      // Tuning blocks are static title data and survive world teardown.
+      previous_modes.clear();
+      generation = current;
+    }
+    const uint32_t holder = LoadGuestU32(FH1_ADDR(0x832DF024u));
+    if (!holder || !PinyonShiftGuestRangeReadable(holder + 4, 4)) return;
+    const uint32_t handle = LoadGuestU32(holder + 4);
+    if (!handle || !PinyonShiftGuestRangeReadable(handle + 4, 4)) return;
+    const uint32_t world = LoadGuestU32(handle + 4);
+    if (!world) return;
+    const uint32_t count = pinyon_shift::mod::CallGuest(FH1_ADDR(0x82486C40u), {world});
+    for (uint32_t i = 0; i < std::min(count, 4u); ++i) {
+      const uint32_t controller = pinyon_shift::mod::CallGuest(FH1_ADDR(0x82486C70u), {world, i});
+      if (!controller || !PinyonShiftGuestRangeReadable(controller, 120)) continue;
+      // Both chase cameras point at the title's loaded 56-byte tuning blocks.
+      for (uint32_t chase = 0; chase < 2; ++chase) {
+        const uint32_t camera = LoadGuestU32(controller + 24 + 4 * chase);
+        if (!camera || !PinyonShiftGuestRangeReadable(camera + 192, 88)) continue;
+        const uint32_t tuning = LoadGuestU32(camera + 192);
+        if (!tuning || !PinyonShiftGuestRangeReadable(tuning, 56)) continue;
+        auto found = originals.find(tuning);
+        if (found == originals.end()) {
+          pinyon_shift::camera::Tuning stock;
+          for (size_t n = 0; n < stock.size(); ++n) stock[n] = LoadGuestF32(tuning + uint32_t(n * 4));
+          if (!std::all_of(stock.begin(), stock.end(), [](float v) { return std::isfinite(v); }) ||
+              stock[7] < 1 || stock[7] > 180) continue;
+          found = originals.emplace(tuning, stock).first;
+          pinyon_shift::diagnostics::RecordEvent("camera.editor.data",
+              {{"chase", std::to_string(chase)}, {"height", std::to_string(stock[0])},
+               {"distance", std::to_string(stock[1])}, {"fov", std::to_string(stock[7])},
+               {"yaw_k", std::to_string(stock[8])}, {"height_k", std::to_string(stock[12])}});
+        }
+        const auto adjusted = pinyon_shift::camera::Adjust(found->second, values[0], values[1], values[2], values[3]);
+        const float height = LoadGuestF32(camera + 268), distance = LoadGuestF32(camera + 276);
+        if (!std::isfinite(height) || !std::isfinite(distance)) continue;
+        auto& position = positions[camera];
+        const uint32_t car = LoadGuestU32(camera + 16);
+        if (position.car != car) position = Placement{car, {}};
+        StoreGuestF32(camera + 268, position.offsets[0].Apply(height, values[0]));
+        StoreGuestF32(camera + 276, position.offsets[1].Apply(distance, values[1]));
+        for (const uint32_t n : {3u, 4u, 7u, 8u, 9u, 12u, 13u}) {
+          StoreGuestF32(tuning + n * 4, adjusted[n]);
+        }
+        static std::array<float, 4> reported{0, 0, 1, 1};
+        if (reported != values) {
+          reported = values;
+          pinyon_shift::diagnostics::RecordEvent("camera.editor.applied",
+              {{"height", std::to_string(values[0])}, {"distance", std::to_string(values[1])},
+               {"fov", std::to_string(adjusted[7])}, {"stiffness", std::to_string(values[3])},
+               {"yaw_k", std::to_string(adjusted[8])}, {"height_k", std::to_string(adjusted[12])}});
+        }
+      }
+      const uint32_t active = LoadGuestU32(controller + 8);
+      const auto previous = previous_modes.find(controller);
+      // Leave photo mode, cutscenes, free camera and replay sequences alone.
+      if (mode && active <= 4) {
+        if (LoadGuestU32(controller + 24 + mode * 4)) {
+          previous_modes[controller] = active;
+          pinyon_shift::mod::CallGuest(FH1_ADDR(0x82858638u), {controller, mode});
+          pinyon_shift::diagnostics::RecordEvent("camera.editor.mode", {{"mode", std::to_string(mode)}});
+        }
+      } else if (previous != previous_modes.end() && (active == 10 || active == 15) && active != mode) {
+        pinyon_shift::mod::CallGuest(FH1_ADDR(0x82858638u), {controller, mode ? mode : previous->second});
+        if (!mode) previous_modes.erase(previous);
+        pinyon_shift::diagnostics::RecordEvent("camera.editor.mode", {{"mode", std::to_string(mode)}});
+      }
+    }
+  });
+}
+
 // The trainer's any car in any event (FB-12.3). sub_826087A0 reads an
 // event's EventRestrictions rows (r25 is the event id) and, for each, sets
 // up a restriction record at r1+176 with sub_825F3138 and decodes the row's
@@ -7451,6 +7557,7 @@ void PinyonShiftObserveSimulationDelta(PPCRegister& f31) {
   g_simulation_step_ns.fetch_add(int64_t(std::llround(seconds * 1e9)), std::memory_order_release);
   PinyonShiftHoldTimeOfDay(seconds);
   PinyonShiftApplyFreeCamera();
+  PinyonShiftApplyCameraEditor();
   PinyonShiftApplyCredits();
   PROFILE_SIMULATION_TIME_NS(
       static_cast<int64_t>(std::llround(seconds * 1'000'000'000.0)));

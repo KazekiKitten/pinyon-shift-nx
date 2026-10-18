@@ -115,9 +115,47 @@ its `SpringK` or `NoiseSeed`, and the game's per-frame layer update scales
 the group by `pinyon_shift_camera_gforce`, `_lean`, `_shake` and `_head`
 (0 to 2, applied at once). F6 > DISPLAY > IMMERSIVE CAMERA sets all four
 (OFF 0, SUBTLE 0.5, DEFAULT 1, STRONG 1.5), and the four CAMERA rows below it
-set each one (CUSTOM). On the v4 build the title update's own
-`media.zip` carries `camera/cameraphysics.xml`, which the game reads instead,
-so the layers do not load there yet.
+set each one (CUSTOM). The v4 update has a separate merge under
+`merge-update/media.zip/camera/cameraphysics.xml`: its chase cameras have
+80/75 stock layers rather than the disc's 74/69. The generator writes both
+variants. Update merges build into the generated mod's `update/` overlay;
+the v4 host mounts it ahead of the verified update on `update:`, leaving
+the installed update untouched. Without an installed update these merges
+are inactive. Misspelt update archive or member names fail the build.
+Merges apply over the winning enabled mod's whole-archive replacement under
+`update/`, when present, using the same load order as disc overrides.
+
+### Camera editor
+
+F6 > DISPLAY > CAMERA EDITOR (#487) edits both chase views live. Height
+(-0.5 to +1.5 m) and distance (-1 to +3 m) are offsets from the data loaded
+for the current car. FOV (80–130%) and stiffness (50–200%) multiply the
+loaded tuning; stiffness scales yaw and height spring K, and D by the
+square root of that multiplier to preserve the damping ratio. Defaults
+are zero offsets and 100%, so the editor makes no changes until used.
+RESET CAMERA EDITOR restores these values and the normal driving view.
+The existing FIELD OF VIEW setting still multiplies every view as well.
+
+`CameraSettings.ini` in `media/camera.zip` supplies the two chase tuning
+blocks, including when another mod merges that member. Per-car
+`CameraOverrides` can replace the instance's placement. The title parses
+this data once and exposes no qualified hot reload; the host applies the
+editor to its loaded blocks and instance offsets on the guest main thread.
+It retains the original values, detects replacement per-car offsets and
+never accumulates edits. No camera data from the game is distributed.
+The controller mode table also contains WheelCam (10) and CarRelativeCams
+(15). DRIVING VIEW selects these native wheel and car-relative replay
+views while driving, then NORMAL returns to the previous player view.
+Photo mode, free camera and cutscenes retain their own modes.
+
+Windows qualification uses `fh1-camera-editor` with pinned `i443-camera`
+and `i443-camera-v4` seeds on multivac. Captures show isolated height,
+distance and FOV changes and their restoration; driving exercises 50% and
+200% spring stiffness, both replay views and the return to normal. v4
+mounts the separate update overlay and reports all four tagged immersive
+groups in chase/cockpit views. Original archive layers and source hashes
+are unchanged by the generated merges. The UI/reset route is
+`fh1-camera-editor-ui`.
 
 `hidden_cars` (#484) is listed on F6 > MODS, off by default. Its
 `db/10-hidden-cars.sql` lists only the intro Corrado and showcase Mini,
