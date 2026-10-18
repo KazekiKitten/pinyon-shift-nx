@@ -43,6 +43,12 @@ backs up the complete encrypted profile and lets the title perform that
 change through its existing load hook. This exact recovery request selects
 the isolated profile without enabling the trainer or dormant cheat settings.
 
+The four newly purchased hidden player variants' `cxds` thumbnails inflate
+from byte 20 with raw DEFLATE. The word at byte 16 repeats the uncompressed
+size, 884,788 bytes. Decoding that result as `.xds` with the existing host UI
+texture decoder gives a 768x288 image; reviewing the pixels establishes
+that the intended model rendered, beyond merely checking file creation.
+
 {{findings:saves/Save files}}
 
 ## Encryption and loading

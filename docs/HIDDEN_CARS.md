@@ -70,6 +70,14 @@ helper made the purchases repeatable on the seven-car fixture. Removing
 that helper before fresh loading tested the shipping `hidden_cars` patch,
 without its class or price overrides.
 
+Each new thumbnail also decoded to a 768x288 image with the expected car,
+without the old striped-card corruption. On these four base saves, raw
+DEFLATE begins at byte 20 of `cxds`: the word at byte 16 repeats the
+884,788-byte uncompressed size. Inflating with window bits -15 and passing
+the resulting `.xds` through the existing `hostui::DecodeXds` decoder
+allowed visual review of the saved pixels, beyond the compression-ratio
+heuristic.
+
 Each fresh-load route drove the selected car in free roam for eight
 seconds and passed the runner's graphics diagnostics. The three showcase
 cars also rendered cockpit, hood, bumper and both chase views. The intro
