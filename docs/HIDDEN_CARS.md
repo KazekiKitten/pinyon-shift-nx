@@ -158,7 +158,12 @@ refund it or remove its parts; avoid selecting the unsupported car again.
 The request clears after it is applied. A fresh reload with no pending
 request reached free roam and car select with that Corrado on the private
 Windows Release build. The unmodded tree's 19 file hashes still matched
-the pinned seed. Continue using the modded profile
+the pinned seed. Integration repeated trainer-off backup, recovery, save and
+reload on the Windows base and v4 builds using separate private fixture
+copies (the title upgraded the v4 copy). Both retained the original cars,
+parts and credits, verified all 20 backup entries and preserved dormant
+cheat flags and the 19 unmodded hashes. This qualifies recovery on that
+fixture, not every hidden model or the reporter's loading block. Continue using the modded profile
 (keep a save-isolating mod or the trainer enabled); disabling all of them
 returns to the separate unmodded save.
 

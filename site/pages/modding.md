@@ -36,7 +36,9 @@ the game and run `python tools/fh1-profile.py recover-car --state-root "<state>"
 It backs up the selected modded profile and settings before requesting the
 title's starter-car fallback, preserving the trainer setting. Keep a
 save-isolating mod enabled after recovery. Use the same title version and let it save
-before restarting. [Audit, limits and restore instructions](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/HIDDEN_CARS.md).
+before restarting. Recovery/save/reload checks pass on private base and v4
+fixtures with the trainer disabled, preserving original cars, parts and
+credits. [Audit, limits and restore instructions](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/HIDDEN_CARS.md).
 
 The intro Corrado's Garage and Design Creator entry routes pass on Windows
 with the integrated livery resolve corrections. Paint editing, saving and
