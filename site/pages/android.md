@@ -64,8 +64,8 @@ Keep brightness and the display mode fixed, and turn adaptive brightness off
 while calibrating. **SETTINGS > DISPLAY > HDR CALIBRATION** shows the selected
 signal levels; Android and the display may tone-map them before they reach
 the panel. If the peak square never disappears, keep the existing peak
-pending a measured calibration. HDR COMPARE is suspended while patterns are
-shown and resumes when you leave calibration.
+pending a measured calibration. Patterns replace the guest image and HUD;
+HDR COMPARE is suspended while they are shown and resumes when you leave calibration.
 
 HDR10 presentation was checked on the Odin 2 Portal. The RedMagic Astra's
 calibration remains unqualified ([#566](https://github.com/arcanite24/pinyon-shift/issues/566));

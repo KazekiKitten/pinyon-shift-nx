@@ -243,8 +243,9 @@ keyboard; SETTINGS > CONTROLLER > PERFORMANCE PANEL changes the buttons
 the HDR10 presentation path. Paper white is the signal level of white menus
 and the HUD; peak is the target used by the highlight expansion. HIGHLIGHTS
 controls the strength of that expansion, independently of the calibration.
-The patterns temporarily suspend HDR COMPARE without changing its current
-choice; leaving calibration restores the comparison.
+The patterns replace the guest image and its HUD mask, so the minimap or a
+menu frame cannot cover the chart. They temporarily suspend HDR COMPARE
+without changing its current choice; leaving calibration restores the comparison.
 
 The pattern uses the selected peak, without substituting Android's advertised
 maximum; the advertised levels are used for HDR10 metadata. The peak pattern
@@ -293,6 +294,20 @@ Astra qualification gate. The AYN Odin 2 Portal reports 420 / 210.1615 /
 advertised values, not new measured limits. There is no established Astra
 peak or correction curve, so the shared 200-nit paper-white and 1000-nit
 peak defaults have not been replaced with a guessed device preset.
+
+Visibility baseline (2026-10-18): the Odin's installed v4 APK 0.5.1 completed
+this route through frame 1680 on both SYSTEM (0x802A4035) and Turnip
+(0x6802063). Each run used a private copy of `odin-graphics-20261006` plus
+verified pinned title-update-v4 files; a base-only state cannot boot that
+installed v4 APK. The raw brightness setting stayed at 141 in manual mode,
+and both refresh-rate settings at 120.00001 Hz. Both drivers used format 64,
+a 10-bit buffer marked PQ, pre-transform 2 and the same 420 / 210.1615 /
+0.323 metadata. Host-UI screenshots reproduce the guest menu image covering
+the paper-white chart; Turnip also reproduces it with compare off. This
+establishes the old renderer's chart contamination, not emitted luminance
+or a device check of the updated binary. The normal user trees retained all
+36 file hashes; the APK and settings were unchanged and private states removed.
+
 
 ## Troubleshooting
 
