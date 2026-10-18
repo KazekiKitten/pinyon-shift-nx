@@ -97,7 +97,7 @@ what = """A texture's fetch constants do not identify its current memory owner. 
 how = """Shared cache source analysis and a backend-independent unit regression exercising CPU-to-resolve-to-CPU transitions, an inactive binding, and an unrelated texture. The fixture uses synthetic allocations, not guest function addresses."""
 confidence = """confirmed"""
 issue = """#628"""
-note = """This establishes a renderer defect at scaled resolutions; the complete reported decal-save/travel/reload sequence needs separate gameplay qualification."""
+note = """This establishes a related renderer defect at scaled resolutions. The complete sequence is qualified separately at 1x and 2x with the compressed ownership correction; this memo correction alone did not remove the bad signs."""
 source = """docs/native-renderer/LIVERY_TEXTURE_OWNERSHIP.md; SDK tests/unit/graphics/texture_cache_test.cpp"""
 
 [[finding]]
@@ -109,6 +109,25 @@ confidence = """confirmed"""
 issue = """#628"""
 note = """The trace establishes the unsupported operation; it does not by itself establish the cause of the reported world corruption after saving."""
 source = """docs/native-renderer/LIVERY_TEXTURE_OWNERSHIP.md; SDK src/graphics/fh1_edram_resolve.cpp"""
+
+[[finding]]
+group = """Frame structure and views"""
+name = """livery-induced world corruption reproduction"""
+what = """Before the complete-ownership check for compressed textures, a stock MX5 with three saved white vinyl layers reproduces the reported world corruption. Reloading the private painted-car save starts with intact festival textures; entering Design Creator and returning makes barrier advertisements show coloured noise and can turn road surfaces black. Travelling to Race Central retains the damaged signs. Correcting scaled binding memo selection and supporting the editor's R8 resolves alone do not eliminate this reproduction."""
+how = """Scripted private-seed A/B on multivac (RTX 4080, Windows Vulkan, 2x). Both the old binding memo with R8 support and the corrected memo show the corrupt signs after painted-car editor re-entry; captures show the white three-layer design saved on the car."""
+confidence = """confirmed"""
+issue = """#628"""
+source = """docs/native-renderer/LIVERY_TEXTURE_OWNERSHIP.md"""
+
+[[finding]]
+group = """Frame structure and views"""
+name = """compressed texture source ownership"""
+what = """A compressed texture must have complete scaled-resolve ownership across every stored base and mip range before the whole fetch can use the scaled buffer. The old any-page check retained scaled DXT1 views after CPU asset data reused an old resolve allocation. Two 768x256 sampled identities remained scaled at payload generations 1 and 2; the complete-ownership check keeps them ordinary and restores the corrupted festival signs and road. Fully resolved compressed textures remain eligible, and uncompressed render targets retain partial-resolve handling."""
+how = """Private painted-MX5 re-entry A/B on multivac (RTX 4080, Windows Vulkan, 2x), texture allocation/payload identities and CPU/GPU invalidation ranges. A synthetic 768x256 DXT1 regression fails three of 27 assertions with the old selection and passes all 27 after the correction, including both mixed base/mip ownership directions."""
+confidence = """confirmed"""
+issue = """#628"""
+note = """The recorded texture bases are transient allocations, not static guest symbols. Disabling draw reuse, selective binding reset, partial row/layer reloads, direct resolve writes or one-off readbacks did not remove the bad signs; disabling readbacks also damaged the car."""
+source = """docs/native-renderer/LIVERY_TEXTURE_OWNERSHIP.md; SDK tests/unit/graphics/texture_cache_test.cpp"""
 
 [[finding]]
 group = """Frame structure and views"""

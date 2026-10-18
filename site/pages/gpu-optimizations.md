@@ -69,6 +69,17 @@ textures retain their bindings and contents. A backend-independent regression
 test covers both ownership transitions and an unrelated texture. See the
 [ownership analysis and gameplay checks](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/native-renderer/LIVERY_TEXTURE_OWNERSHIP.md).
 
+Compressed textures need every stored base and mip page to belong to resolves
+before selecting the scaled buffer. After the livery editor reuses an
+allocation, an old resolved mip or padding page can coexist with CPU asset
+data; selecting the whole scaled buffer then decodes unrelated render output
+as compressed blocks. A private three-layer MX5 route on multivac (RTX 4080,
+Windows Vulkan, 2x) reproduced noisy festival signs and black road surfaces.
+Requiring complete ownership restores those textures while retaining fully
+resolved compressed textures and the partial-resolve path for uncompressed
+render targets. The regression fails three of 27 assertions before the fix
+and passes all 27 after it.
+
 On 2026-10-13 (RTX 4080, `fh1-race-sync`, last 600 frames, three runs) the frames with more than 5,000 draws, about half of them at about 6,500 draws, have a median of 8.5-9.0 ms. In them the decoder does 6.4-7.1 ms of work besides 1.6 ms of waiting for the title, and the recorder 7.6-8.0 ms, so both threads sit at the 8.33 ms budget: making either one alone faster leaves the frame where it is. A sampled profile of the decoder with a PDB: 22-27 % waiting, about 25 % applying register runs, 18 % packet dispatch, 2 % hashing shader microcode on load.
 
 **Tried and dropped.**

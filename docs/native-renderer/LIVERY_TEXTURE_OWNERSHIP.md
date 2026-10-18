@@ -2,8 +2,39 @@
 
 Issue [#628](https://github.com/arcanite24/pinyon-shift/issues/628) reports world
 texture corruption after saving decals or opening Design Creator with an
-existing design. Entering the editor with a stock car clears it. Investigation
-found a reproducible ownership defect in the shared texture binding memo.
+existing design. Entering the editor with a stock car clears it. The world
+corruption reproduces at 2x on multivac with a private MX5 save containing three
+white vinyl layers. The failure is a compressed texture selecting the scaled
+buffer even though only part of its guest allocation still belongs to resolves.
+
+## Mixed ownership of compressed textures
+
+The old texture selection rule treated any resolved page in either the base or
+mip range as sufficient to select the scaled buffer for the whole texture. The
+livery path reuses physical memory also used by world assets. CPU writes return
+part of that allocation to ordinary shared memory, while some mip or padding
+pages retain old resolve ownership. Reloading a compressed world texture from
+the scaled buffer then decodes unrelated render output as compressed blocks.
+
+Two sampled DXT1 identities illustrate the transition: 768x256 textures at
+transient physical bases `0E0DA000` and `0E095000`, with mip pages `E0F2` and
+`E0AD`. Before the correction they remained scaled at payload generations 1 and
+2. After it they use ordinary memory at both generations. These are per-run
+allocation identities, not static guest symbols. Captures after painted-car
+editor re-entry change from coloured noise on festival advertisements and black
+road surfaces to intact logos and road textures.
+
+Compressed textures now require every page of every stored base/mip range to
+belong to resolves before selecting the scaled buffer. A fully resolved
+compressed texture remains eligible. Uncompressed render targets keep their
+partial-resolve handling. This changes source selection; it does not flush
+texture contents or clear unrelated textures.
+
+The regression models a 768x256 DXT1 allocation transitioning between full GPU
+ownership, CPU base with old GPU mips, and GPU base with CPU mips. Against the
+pre-correction cache it fails three of 27 assertions; the corrected cache passes
+all 27, including the binding memo regression below. The full SDK suite passes
+298 tests (four skipped), with 2,465 assertions.
 
 ## The cache defect
 
@@ -36,8 +67,7 @@ payload generation never changes.
 On multivac (Windows x64, 2026-10-18), the standalone fixture fails two of its
 14 assertions with the original cache: the resolved texture is still the
 original unscaled object. With the patch all 14 assertions pass. The regression
-also passes in the SDK unit suite built entirely from the worktree sources
-(296 tests passed, four skipped, 2,436 assertions passed).
+also passes in the SDK unit suite built entirely from the worktree sources.
 
 ## Single-channel editor resolves
 
@@ -58,9 +88,7 @@ reload mechanism rather than the optional direct-to-32-bit-texture optimization.
 Both DXBC and SPIR-V resolve variants were rebuilt using the SDK shader script's
 compiler options. All 12 SPIR-V variants pass `spirv-val`. A unit regression
 passes the observed destination register through the real resolve planner at
-1x and 4x MSAA, checking support, byte size, destination extent, and base. With
-both corrections the full SDK suite passes 297 tests (four skipped), with 2,452
-assertions.
+1x and 4x MSAA, checking support, byte size, destination extent, and base.
 
 The first editor-entry ownership trace recorded 278,506 invalidation ranges,
 of which 259,069 came from GPU writes, and 84 sampled texture reload attempts.
@@ -71,9 +99,11 @@ corrupt after a saved design; that needs the acceptance checks below.
 
 ## Gameplay acceptance
 
-The unit regression establishes the cache defect independently of menu timing.
-Qualifying the complete issue additionally requires a private pinned save and
-the following visual checks at both 1x and a scaled resolution:
+The unit regression establishes the cache defects independently of menu timing.
+The functional routes use a pinned private stock-MX5 save at Race Central with
+the first-time design tips still enabled, then a second pinned snapshot of the
+saved three-layer design. They never use a writable AppData or source seed.
+The captures must show these actions, not merely a route result of `pass`:
 
 1. Enter Paint Shop and Design Creator with a stock car, add decals, and save.
 2. Exit to free roam; check the design, road surfaces, and roadside signs.
@@ -86,3 +116,65 @@ Use `fh1_texture_reload_probe` to correlate texture allocation IDs, physical
 base/mip ranges, scaled variants, and CPU/GPU invalidation reasons. A route
 result marked `pass` proves that the script completed; its captures must also
 show that it actually reached and saved in the editor.
+
+`config/render-tests/fh1-livery-save.fh1test` selects a white shape, stamps three
+layers, saves to the current car, accepts the Paint Shop exit confirmation,
+and captures the world. `fh1-livery-reentry.fh1test` reloads that design, enters
+Design Creator without editing, exits, and travels to Race Central. Both use
+a 60 Hz wall clock with a 30 fps game cap for the short map-cursor pulse:
+
+```powershell
+python tools/run-fh1-render-test.py config/render-tests/fh1-livery-save.fh1test `
+  --state-root .local/private-seeds/livery-stock --output .local/livery-save `
+  --hidden --no-performance-gate `
+  --game-argument=--resolution_scale=2 `
+  --game-argument=--pinyon_shift_fh1_render_fps_limit=30
+```
+
+Pin the resulting private `.local/livery-save.state` directory before running
+the re-entry route; it needs the three shader catalogs copied from the original
+pinned seed into its `cache` directory. In a fleet worktree, use an explicit
+private destination rather than writing through the shared `render-seeds`
+junction:
+
+```python
+from pathlib import Path
+import runpy
+seed = runpy.run_path("tools/create-render-seed.py")["create_seed"]
+seed(Path(".local/livery-save.state"), Path(".local/private-seeds/livery-painted"),
+     "private saved three-layer design")
+```
+
+The fixture profile and generated livery data are private test inputs, not
+repository artifacts.
+
+Diagnostic exclusions retained the corrupted signs with draw reuse disabled,
+selective binding reset disabled, row/layer reloads disabled, and direct
+resolve-to-texture writes disabled. Disabling one-off readbacks retained the
+sign corruption and also damaged the car, so those readbacks remain enabled.
+That exclusion used a private diagnostic executor build: the retained
+`fh1_native_readback_new_resolves` cvar is only consumed by legacy D3D12.
+
+## Verified result
+
+On multivac (RTX 4080, Windows Release, Vulkan, 2026-10-18), visual checks of
+private per-run copies gave these results:
+
+| Check | 1x | 2x |
+| --- | --- | --- |
+| Place three white layers and save to the current MX5 | Passed | Passed |
+| Exit the shop and inspect road and festival advertisements | Passed | Passed |
+| Restart from a pinned copy of that saved design | Passed | Passed |
+| Re-enter Design Creator, exit, and travel to Race Central | Passed | Passed |
+| Inspect the white door design and world textures after travel | Passed | Passed |
+| Stock car: enter Add Decals and back out without adding a layer | Not run | Passed |
+
+The complete-ownership correction restores the reproduced signs and roads;
+the earlier memo and R8 corrections alone did not. The full tools suite passes
+531 tests (nine skipped), with 100 subtests passed. The site builds 37 pages and
+the new documentation links resolve.
+
+The source-ownership range trace was collected at 2x. A 1x diagnostic run with
+the startup range probe enabled timed out before its first capture (240 s);
+the normal 1x boot, save, reload and travel checks passed with that probe off.
+This diagnostic startup behavior needs separate investigation.

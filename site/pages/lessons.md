@@ -29,6 +29,13 @@ needing a GPU or an editor save; an unrelated texture stayed loaded throughout.
 Re-derive affected entries when ownership may have changed, and keep gameplay
 qualification separate from that unit proof ([GPU optimizations](gpu-optimizations.md#the-recorder-thread)).
 
+Ownership must also cover the data a fetch actually reads. One old resolve page
+in a mip range redirected an entire compressed texture, including its CPU base,
+to the scaled buffer. The livery editor made this visible as noisy world signs
+after memory reuse. Requiring all stored base and mip pages to belong to resolves
+fixed the reproduced corruption; a synthetic mixed-ownership test failed before
+the change. A valid cache key needs a valid source for every stored subresource.
+
 ## Waits are performance
 
 The largest CPU savings outside the renderer came from how the host waits, not from translated code:
