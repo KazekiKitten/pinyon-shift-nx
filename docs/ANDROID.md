@@ -237,6 +237,63 @@ Clicking both sticks (LS + RS) shows or hides the performance panel, F3 on a
 keyboard; SETTINGS > CONTROLLER > PERFORMANCE PANEL changes the buttons
 (`pad_chord_debug_overlay`).
 
+## HDR calibration
+
+**SETTINGS > DISPLAY > HDR CALIBRATION** sends known signal levels through
+the HDR10 presentation path. Paper white is the signal level of white menus
+and the HUD; peak is the target used by the highlight expansion. HIGHLIGHTS
+controls the strength of that expansion, independently of the calibration.
+The patterns temporarily suspend HDR COMPARE without changing its current
+choice; leaving calibration restores the comparison.
+
+The pattern uses the selected peak, without substituting Android's advertised
+maximum; the advertised levels are used for HDR10 metadata. The peak pattern
+compares a square at the selected peak with a 10,000-nit
+reference field. It finds a clipping threshold only when the display path
+clips those signals. A compositor which tone-maps them can keep the square
+visible throughout the range. In that case, do not keep raising the peak
+until it looks right: keep the existing value pending a measured calibration.
+Reported HDR capabilities are desired content levels, not a measurement of
+what the panel emits at the current brightness or display mode. Neither
+HDR10 metadata nor a PQ swapchain guarantees an unmodified signal at the
+panel ([Android HDR](https://source.android.com/docs/core/display/hdr),
+[Vulkan HDR metadata](https://docs.vulkan.org/refpages/latest/refpages/source/VkHdrMetadataEXT.html)).
+
+For a device qualification or an incorrect calibration report:
+
+1. Use a private copy of a pinned render seed. Keep the installed save and
+   normal configuration intact, and retain the installed APK before replacing
+   it so it can be restored. Keep the device cool and the room lighting fixed.
+2. Record the device/ROM, display color mode, refresh rate, brightness and
+   adaptive-brightness setting. Disable adaptive brightness, night light and
+   optional display enhancements for the comparison; restore them afterwards.
+3. Repeat with SYSTEM and the bundled Turnip driver after restarting each
+   time. Use identical paper white, peak, gamma and highlight settings.
+   Record all three calibration steps with HDR COMPARE both on and off.
+   [fh1-android-hdr-calibration.fh1test](../config/render-tests/fh1-android-hdr-calibration.fh1test)
+   cycles the steps at fixed 200-nit white and 1000-nit peak signal levels;
+   it does not derive or approve those settings for the device.
+4. Retain `runtime.log`: `Android display environment` records the launch
+   brightness/mode snapshot (`brightness_mode=0` is manual, `1` automatic),
+   `Android display HDR` the advertised luminance, `Vulkan device` the actual
+   driver, and `Created ... swapchain` its format, color space and transform.
+   `HDR10 metadata` records the submitted levels, and `HDR calibration pattern`
+   records the tested signal values when the step, white, peak or gamma changes.
+   The launch snapshot does not track later system setting changes.
+5. While the pattern is visible, save `adb shell dumpsys display` and
+   `adb shell dumpsys SurfaceFlinger`. Inspect the game's layer data space,
+   composition path and display HDR mode for both drivers. A screenshot is
+   tone-mapped and cannot establish panel luminance. Measure black, paper
+   white and clipping with a luminance meter at the same patch size and
+   brightness/mode; retain those conditions with the readings.
+
+Issue [#566](https://github.com/arcanite24/pinyon-shift/issues/566) remains an
+Astra qualification gate. The AYN Odin 2 Portal reports 420 / 210.1615 /
+0.323 cd/m² (maximum / average / minimum) in `dumpsys display`; these are
+advertised values, not new measured limits. There is no established Astra
+peak or correction curve, so the shared 200-nit paper-white and 1000-nit
+peak defaults have not been replaced with a guessed device preset.
+
 ## Troubleshooting
 
 | Symptom | Cause |

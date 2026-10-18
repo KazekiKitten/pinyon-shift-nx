@@ -58,6 +58,22 @@ On Adreno 7xx and 8xx the bundled Mesa Turnip driver (Gen8 V37) is chosen automa
 
 Where a phone's fastest cores form their own cluster of two or more (the Snapdragon 8 Elite's two 4.32 GHz cores), the GPU command decoder thread is pinned to them. Left to the scheduler it spent whole stretches on the slower cores: in an in-run A/B on the Astra at the 60 fps limit, 25 % of frames took over 17.5 ms and the decoder 16.2 ms of CPU a frame, against 2 % and 10.2 ms pinned, with the same GPU time. Phones with a single fastest core, such as the 8 Gen 2 and 8 Gen 3, are left alone. The `android_thread_cores` setting overrides it (`NAME=CORES` entries separated by semicolons, `off` to disable).
 
+## HDR calibration
+
+Keep brightness and the display mode fixed, and turn adaptive brightness off
+while calibrating. **SETTINGS > DISPLAY > HDR CALIBRATION** shows the selected
+signal levels; Android and the display may tone-map them before they reach
+the panel. If the peak square never disappears, keep the existing peak
+pending a measured calibration. HDR COMPARE is suspended while patterns are
+shown and resumes when you leave calibration.
+
+HDR10 presentation was checked on the Odin 2 Portal. The RedMagic Astra's
+calibration remains unqualified ([#566](https://github.com/arcanite24/pinyon-shift/issues/566));
+there is no measured Astra preset. The reported luminance is not a panel
+measurement. The [Android reference](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/ANDROID.md#hdr-calibration)
+describes the driver comparison, display diagnostics and measurements needed
+to qualify it.
+
 ## Measured devices
 
 | Device | SoC and GPU | Driver | SMOOTH 60 |

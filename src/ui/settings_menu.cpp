@@ -583,7 +583,11 @@ std::unique_ptr<MenuScreen> SettingsPages::HdrCalibration() {
       case 2:
         return std::string("THE WHITE SQUARE SHOULD LOOK LIKE WHITE PAPER");
       default:
+#if defined(__ANDROID__)
+        return std::string("RAISE UNTIL SQUARE DISAPPEARS; IF IT STAYS VISIBLE, KEEP YOUR PEAK");
+#else
         return std::string("RAISE THE PEAK UNTIL THE SQUARE DISAPPEARS");
+#endif
     }
   };
   auto screen = std::make_unique<MenuScreen>("HDR CALIBRATION", std::move(rows), std::move(note));
