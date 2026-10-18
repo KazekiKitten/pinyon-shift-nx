@@ -28,6 +28,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <random>
 #include <string>
 #include <unordered_map>
@@ -261,7 +262,7 @@ int Usage() {
   std::fprintf(stderr,
                "usage: pinyon_shift_thread_sampler --process <exe name> --thread <description> "
                "[--thread <description>...] [--interval-us N] [--lines 1] "
-               "[--output <directory>]\n");
+               "[--output <directory>] [--ips 1]\n");
   return 2;
 }
 
@@ -273,6 +274,7 @@ int wmain(int argc, wchar_t** argv) {
   uint32_t interval_us = 2000;
   std::filesystem::path output = L".";
   bool lines = false;
+  bool ips = false;
   for (int i = 1; i < argc; ++i) {
     const std::wstring arg = argv[i];
     if (i + 1 >= argc) {
@@ -286,6 +288,8 @@ int wmain(int argc, wchar_t** argv) {
       interval_us = uint32_t(std::wcstoul(argv[++i], nullptr, 10));
     } else if (arg == L"--lines") {
       lines = std::wcstoul(argv[++i], nullptr, 10) != 0;
+    } else if (arg == L"--ips") {
+      ips = std::wcstoul(argv[++i], nullptr, 10) != 0;
     } else if (arg == L"--output") {
       output = argv[++i];
     } else {
@@ -340,12 +344,23 @@ int wmain(int argc, wchar_t** argv) {
   std::filesystem::create_directories(output);
   std::ofstream samples(output / "samples.csv", std::ios::binary);
   samples << "t_ms,thread,cycles,stack_id\n";
+  std::ofstream instructions;
+  if (ips) {
+    instructions.open(output / "instructions.csv", std::ios::binary);
+    instructions << "t_ms,thread,cycles,rva,function_rva,function_size,module,symbol,"
+                    "rax,rbx,rcx,rdx,rsi,rdi,rbp,rsp,r8,r9,r10,r11,r12,r13,r14,r15\n";
+  }
   std::unordered_map<std::string, uint32_t> stack_ids;
   std::vector<const std::string*> stacks;
 
   HANDLE timer = CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,
                                         TIMER_ALL_ACCESS);
   const auto start = std::chrono::steady_clock::now();
+  if (ips) {
+    std::ofstream epoch(output / "instructions-epoch-ms.txt");
+    epoch << std::chrono::duration_cast<std::chrono::milliseconds>(
+                 std::chrono::system_clock::now().time_since_epoch()).count() << '\n';
+  }
   std::vector<DWORD64> frames;
   std::string stack;
   uint64_t sample_count = 0;
@@ -387,7 +402,8 @@ int wmain(int argc, wchar_t** argv) {
       const ULONG64 used = cycles - thread.cycles;
       thread.cycles = cycles;
       if (frames.empty()) {
-        continue;
+        if (ips && captured) frames.push_back(context.Rip);
+        else continue;
       }
       stack.clear();
       for (size_t i = frames.size(); i-- > 0;) {
@@ -405,6 +421,28 @@ int wmain(int argc, wchar_t** argv) {
       const double t_ms =
           std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start)
               .count();
+      if (ips) {
+        IMAGEHLP_MODULEW64 module{sizeof(module)};
+        alignas(SYMBOL_INFO) char storage[sizeof(SYMBOL_INFO) + MAX_SYM_NAME]{};
+        auto* symbol = reinterpret_cast<SYMBOL_INFO*>(storage);
+        symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+        symbol->MaxNameLen = MAX_SYM_NAME;
+        DWORD64 displacement = 0;
+        const bool found_module = SymGetModuleInfoW64(process, context.Rip, &module);
+        const bool found_symbol = SymFromAddr(process, context.Rip, &displacement, symbol);
+        instructions << t_ms << ',' << thread.id << ',' << used << ',' << std::hex
+                     << (found_module ? context.Rip - module.BaseOfImage : 0) << ','
+                     << (found_module && found_symbol ? symbol->Address - module.BaseOfImage : 0)
+                     << ',' << symbol->Size << std::dec << ','
+                     << (found_module ? Narrow(module.ModuleName) : "?") << ','
+                     << std::quoted(found_symbol ? std::string(symbol->Name, symbol->NameLen) : "?", '"', '"');
+        for (DWORD64 reg : {context.Rax, context.Rbx, context.Rcx, context.Rdx,
+                            context.Rsi, context.Rdi, context.Rbp, context.Rsp,
+                            context.R8, context.R9, context.R10, context.R11,
+                            context.R12, context.R13, context.R14, context.R15})
+          instructions << ',' << std::hex << reg;
+        instructions << std::dec << '\n';
+      }
       char line[96];
       std::snprintf(line, sizeof(line), "%.3f,%lu,%llu,%u\n", t_ms, thread.id,
                     (unsigned long long)used, it->second);

@@ -121,14 +121,15 @@ On the race route with every call verified, 192 sampled functions were run 31,10
 
 ## Building the output
 
-The clean-slate observable-state probe currently provides conservative
-read-before-write sets, with unresolved indirect calls reading every context
-slot. Its counts of stores that could be published later are not counts of
-instructions removed: a later observer still needs the value, and keeping
-it in a local may spill. Historical global function counts also cannot
-attribute shared callees to individual threads. The proposed 15% gate for
-an IR recompiler remains unestablished. See the
-[Stage 0 method and limitations](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/CLEAN_SLATE_STAGE0.md#cs-02-observable-context-state).
+The clean-slate observable-state probe's first conservative deferral counts
+could not decide its 15% instruction gate. A second probe uses matched
+retired-instruction samples per hot thread on the Odin. Its optimistic
+ceilings are 23.72% render, 25.44% simulation and 29.59% mixer, granting
+unknown calls only ABI inputs and charging no spills. The exact census is
+still in progress; these are potential deletions, not measured savings.
+Desktop suspend-PC samples were biased by blocked waits and are excluded
+from that instruction gate.
+[Stage 0 method and limitations](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/CLEAN_SLATE_STAGE0.md#cs-02-optimistic-traffic-ceiling).
 
 Output is split into files of at most 1 MiB, with the function-to-file assignment kept stable between runs (`codegen.partition.json`) so a regeneration doesn't rebuild everything. CMake runs the generator with a depfile covering the manifest, the analysis files, the three images and the SDK version, then builds the main image as an object library with a precompiled header and the facades as shared libraries.
 

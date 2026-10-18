@@ -415,3 +415,76 @@ additional experimentally observed mismatches after the first failure:
 Stage 0 does not implement that scheduler, memory oracle or reference
 interpreter. Failing this pilot rejects the cheap ordered-value replay
 premise, not the feasibility of a deliberately deterministic runtime.
+
+
+## Round 2
+
+### CS-0.2: optimistic traffic ceiling
+
+The broader all-context ceiling does **not** reject the 15% gate. On the
+Odin, `r2-ctx-regs4`, a pinned-seed 60 fps Vulkan/1x race, the optimistic
+ABI ceiling estimates are **23.72% render, 25.44% simulation, 29.59% hot
+FMOD mixer**. Their sampling-only one-sided 99.95% upper limits are
+24.24%, 25.90%, 30.62%. These are deliberately generous deletion ceilings,
+not achieved savings or permission to start CS-2. The exact census remains
+to be completed; the lower round-one deferral numbers cannot reject it.
+
+The recording has 592,415 retired `instructions:u` samples, period 500,000,
+zero reported losses, over 55.0011 s beginning after `gauntlet-driving`.
+Per-thread hot samples: render TID 5178 75,042; simulation 5168 95,174;
+mixer 5189 21,916. Three other `82FB4AF8` threads have 178, 9 and 5 samples
+and are retained separately, not averaged into the mixer. Start/end captures
+show the race HUD. Total identified ctx traffic plus unknown instructions
+is about 31–33%; the ABI model removes part of that ceiling.
+
+The profile's source is parent `2aa969a4`, SDK `39a5bcf` (full source SHA in
+`round2/cs02-measured-source.json`). The final SDK `430a065` only corrects
+the diagnostic's explicit native TID: Android's `Thread::system_id()` was
+a pthread value, so this recording is attributed by the correct native TID
+already present in the runtime log prefix. No behavior or codegen changed.
+Use the archived `cs02-debug-probe.apk` and its extracted libraries under
+`round2/cs02-measured-libs`, not a later rebuilt shared library. The matched
+`libmain.so` SHA-256 is
+`3c3777d890fe644a9a751fd91867e890632adcd528e2e7c3dea15ffc98ff0da0`.
+
+`tools/cs/ctx-traffic-ceiling.py` decodes each sampled instruction with its
+captured user registers and tests effective memory addresses against all
+logged `PPCContext` ranges. Android top-byte tags are removed. Unknown
+binaries/operands, literal loads and adjacent 64-byte accesses are all
+granted as removable. `context-layout.cpp`, compiled on Windows and Odin,
+agrees on size 2688, f0 offset 344 and v0 offset 608. No game memory or
+instruction listings are emitted by the analysis.
+
+`ctx-abi-model.py` solves transitive read-before-write sets for 76,764
+emitted functions including named save/restore helpers. Unresolved calls
+read r1–r10, r13, f1–f13 and v1–v13. Known bodies supply their own reads;
+the existing ABI-poison r6 dependency is included, with r6 also treated as
+an output of `823F2ED8`. Returns demand r3/r4, f1–f4, v1–v3 and preserved
+GPR/FPR/VR/CR/FPSCR state. This ceiling additionally grants full kills for
+partial assignments, volatile kills at unresolved calls, and non-register
+state elision. A may-cache CFG analysis grants ambiguous branch/loop cases
+as deleted; only proven required imports/publications are retained. Pairs
+count as one host instruction and retain that instruction if a demanded
+component survives. There is no spill charge. These relaxations can enlarge
+the ceiling, never establish an achieved saving. Sampling uncertainty does
+not cover skid, model error or platform transfer.
+
+The desktop `desktop-ctx-regs-route` also completed the same race with
+per-thread register/PC snapshots (`thread_sampler --ips 1`). Its EXE hash
+matches the recorded build. However, SuspendThread PCs repeatedly land in
+blocked waits while cycle deltas describe earlier work. The apparent
+4.77/6.94/9.21% cycle-weighted ctx shares (mixer/simulation/render) are **not
+retired-instruction ceilings** and are excluded from the gate. Native WPR
+capture requires an elevated process, unavailable to this session. Raw
+samples and the failed attribution are kept rather than presented as proof.
+
+Evidence: `.local/codex-cs/round2/cs02-odin-abi-cfg.json`, raw perf data and
+dump, matched library hashes, HUD checks and `cs02-model-debug.json`.
+Earlier `*-abi-*` outputs without the CFG/opaque-call corrections and outputs
+using rebuilt libraries are exploratory and not gate evidence. The reader
+and ABI-model self-tests cover r6, partial writes, an escape after an earlier
+store, TBI, repeated imports and a paired store with one demanded component.
+Android's profiling wrapper rejected `--no-unwind`; the accepted run uses
+`run-as` with a debuggable APK and an 8-byte stack capture. A realtime-clock
+attempt failed; the accepted instruction recording uses the default
+monotonic clock. Both failures are retained. No live save was used.

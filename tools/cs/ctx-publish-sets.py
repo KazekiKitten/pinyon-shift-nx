@@ -59,7 +59,8 @@ class Function:
     writes: int = 0
 
 
-def parse(body: str) -> Function:
+def parse(body: str, escape_read: int = ALL, escape_write: int = ALL,
+          escape_kill: int = 0) -> Function:
     blocks = [Block()]
     labels = {}
     loads = stores = indirect = opaque = 0
@@ -78,6 +79,7 @@ def parse(body: str) -> Function:
         for s in slots:
             read |= BITS.get(s, ALL)
         write = kill = 0
+        escaped = False
         lhs = re.match(r"^ctx\.(\w+)(?:\.[\w\[\]]+)*\s*(?:[+&|^*/-]?=)(?!=)", line)
         if lhs:
             write = BITS.get(lhs[1], ALL)
@@ -98,7 +100,8 @@ def parse(body: str) -> Function:
         elif ("REX_CALL_INDIRECT" in line or "REX_TAIL_CALL" in line
               or re.search(r"\bctx\b(?!\.)", line)
               or "switch" in line or "case " in line):
-            read = write = ALL
+            read, write, kill = escape_read, escape_write, escape_kill
+            escaped = True
             indirect += int("REX_CALL_INDIRECT" in line)
             opaque += 1
         b.read |= read & ~b.kill
@@ -111,12 +114,13 @@ def parse(body: str) -> Function:
         terminal = line == "return;" or line.startswith("REX_TAIL_CALL")
         if terminal:
             b.fallthrough = False
-        if call or goto or terminal or read == ALL:
+        if call or goto or terminal or escaped or read == ALL:
             blocks.append(Block())
     for i, b in enumerate(blocks):
         b.successors = [labels[t] for t in b.targets if t in labels]
         if len(b.successors) != len(b.targets):
-            b.read = b.write = ALL  # unrecognised control flow
+            b.read, b.write = escape_read, escape_write  # unrecognised control flow
+            b.kill |= escape_kill
         if b.fallthrough and i + 1 < len(blocks):
             b.successors.append(i + 1)
     return Function(blocks, loads, stores, indirect, opaque)
