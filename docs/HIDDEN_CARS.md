@@ -90,9 +90,34 @@ The Mini, Abarth and 205 purchase routes passed. The intro Corrado purchase
 completed and saved, but that run also logged an indirect GPU ring-buffer
 packet error; it began with the unsupported bus selected, so the error is
 not attributed to the newly purchased model. Its separate fresh-load drive
-passed. Full garage entry/change-away/change-back, paint-shop editing and
-v4 qualification remain pending. Showroom color selection alone does not
-qualify the paint shop.
+passed. A separate base route fast-traveled to Dak's Garage with the intro
+Corrado, rendered its full car view and opened the responsive garage car
+selector. Native Get In Car then changed from garage ID 8 to the owned
+Mustang at ID 2; decrypted load/save snapshots kept the credit balance.
+The repeatable entry route is
+`config/render-tests/fh1-hidden-car-garage.fh1test`; its map input is
+calibrated for the pinned native purchase fixture at Gauntlet.
+Garage entry for the three showcase variants, complete changes away and
+back for all four, paint-shop editing and v4 qualification remain pending.
+Showroom color selection alone does not qualify the paint shop.
+
+The intro Corrado also reached the paint shop and Design Creator with its
+body rendered. That entry run failed the graphics gate: Vulkan logged
+unsupported resolve destination-format conversions and backend draw
+failures with EDRAM mode 6. This is distinct from the purchase run's
+indirect-ring-buffer error. Editing, saving and reloading paint remain
+unqualified; the failure has not been isolated to the car's metadata.
+`config/render-tests/fh1-hidden-car-paint-entry.fh1test` reproduces the
+entry path and stops before changing paint.
+
+The pinned bus-selected base fixture also fast-traveled to Dak's Garage
+and displayed the bus in its garage view. Its large body clipped the
+garage camera. Native car selection changed away to the owned Lancer and
+Audi (garage IDs 7 to 3 to 5), preserving credits. The reported loading
+block was not reproduced by those paths on this Windows configuration.
+The attempted return-selection route picked different cars, so selecting
+the bus again, painting, v4 and the reporter's GPU remain separate checks;
+the report has no diagnostic attachment or title version.
 
 ## Recover an existing modded selection
 

@@ -202,7 +202,7 @@ cells = ["yes", "yes", "yes", "partly: DXT texture replacements need a GPU with 
 [[platform]]
 feature = "Hidden player-car variants"
 link = "playing.md#traffic-and-showcase-cars"
-cells = ["partly: base purchase, reload and driving checked; garage/paint and v4 pending", "partly: the same database mod; not qualified", "partly: the same database mod; not qualified", "partly: shared from the PC with its mods; not qualified"]
+cells = ["partly: base purchase, reload and driving checked; intro garage entry checked; remaining garage/paint and v4 pending", "partly: the same database mod; not qualified", "partly: the same database mod; not qualified", "partly: shared from the PC with its mods; not qualified"]
 
 [[platform]]
 feature = "Wider photo camera limits"
