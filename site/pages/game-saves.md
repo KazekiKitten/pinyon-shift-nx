@@ -40,7 +40,8 @@ checks that the title kept the existing cars, tunes and parts, beyond
 merely reaching free roam. The selection itself is the profile body's
 `Main/CareerCar` garage instance ID. The [recovery tool](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/HIDDEN_CARS.md)
 backs up the complete encrypted profile and lets the title perform that
-change through its existing load hook.
+change through its existing load hook. This exact recovery request selects
+the isolated profile without enabling the trainer or dormant cheat settings.
 
 {{findings:saves/Save files}}
 

@@ -177,6 +177,11 @@ add_executable(pinyon_shift_profile_body_tests EXCLUDE_FROM_ALL
 )
 target_include_directories(pinyon_shift_profile_body_tests PRIVATE src)
 
+add_executable(pinyon_shift_car_recovery_tests EXCLUDE_FROM_ALL
+    tests/save/car_recovery_test.cpp src/cheats.cpp src/save/profile_body.cpp)
+target_include_directories(pinyon_shift_car_recovery_tests PRIVATE src)
+target_link_libraries(pinyon_shift_car_recovery_tests PRIVATE rex::runtime)
+
 add_executable(pinyon_shift_rally_progress_tests EXCLUDE_FROM_ALL
     tests/dlc/rally_progress_test.cpp
     src/dlc/rally_progress.cpp src/platform/host_platform.cpp)
@@ -229,6 +234,7 @@ add_dependencies(pinyon_shift_host_tests
     pinyon_shift_hostui_tests
     pinyon_shift_host_config_tests
     pinyon_shift_profile_body_tests
+    pinyon_shift_car_recovery_tests
     pinyon_shift_rally_progress_tests
     pinyon_shift_rally_pace_tests
     pinyon_shift_car_cards_tests

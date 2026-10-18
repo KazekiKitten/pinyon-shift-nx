@@ -565,16 +565,20 @@ void PinyonShiftApp::OnConfigurePaths(rex::PathConfig& paths) {
   }
   // Mods play a separate profile (NP-7.5), started from a copy of the
   // player's own the first time, so the unmodded save is never touched.
-  // Cheats may come from the command line as well as the config file.
-  bool cheats = pinyon_shift::cheats::Requested();
+  // Recovery needs isolation too, without enabling dormant trainer settings.
+  bool isolated_profile = pinyon_shift::cheats::Requested() ||
+      pinyon_shift::cheats::CarRecoveryRequested();
   if (host_config_->Load()) {
     enabled_mods_ = host_config_->Get("enabled_mods").value_or("");
-    cheats = cheats || host_config_->Get("pinyon_shift_cheats").value_or("false") == "true";
+    isolated_profile = isolated_profile ||
+        host_config_->Get("pinyon_shift_cheats").value_or("false") == "true" ||
+        host_config_->Get("cheat_set_profile_fields").value_or("") ==
+            pinyon_shift::cheats::kCarRecoveryFields;
   }
   // Mods that only change how the game looks (shares_save) keep it.
   if ((!enabled_mods_.empty() &&
        !pinyon_shift::mod::ModsShareSave(state_root, enabled_mods_)) ||
-      cheats) {
+      isolated_profile) {
     // A mod that cannot share a save (the XE mod) plays its own profile,
     // which starts new instead of as a copy of the player's.
     const std::string own_profile =

@@ -199,7 +199,6 @@ def recover_car(state: Path) -> dict:
     finally:
         if staging.exists():
             shutil.rmtree(staging)
-    text = config.set_value(text, "pinyon_shift_cheats", "true")
     text = config.set_value(text, "cheat_set_profile_fields", '"Main/CareerCar=0"')
     config.write_config(path, text)
     return {"backup": str(backup), "profile": str(source),

@@ -45,7 +45,8 @@ REXCVAR_DEFINE_BOOL(cheat_any_car_events, false, "Cheats",
 REXCVAR_DEFINE_STRING(cheat_set_profile_fields, "", "Cheats",
                       "Set these profile fields when it next loads, once, as "
                       "Path/Name=value pairs separated by commas (for example "
-                      "Main/XP=450000); \"\" leaves them")
+                      "Main/XP=450000); \"\" leaves them. Main/CareerCar=0 alone "
+                      "recovers the isolated profile without enabling the trainer")
     .lifecycle(rex::cvar::Lifecycle::kRequiresRestart);
 REXCVAR_DEFINE_INT32(cheat_set_credits, -1, "Cheats",
                      "Set the profile's credits to this, once: at once while it is loaded, "
@@ -88,6 +89,10 @@ void StoreBe32(uint8_t* bytes, uint32_t value) {
 }  // namespace
 
 bool Requested() { return REXCVAR_GET(pinyon_shift_cheats); }
+
+bool CarRecoveryRequested() {
+  return REXCVAR_GET(cheat_set_profile_fields) == kCarRecoveryFields;
+}
 
 void SetProfileIsolated() { g_profile_isolated.store(true, std::memory_order_release); }
 
@@ -197,7 +202,10 @@ bool SetProfileField(uint8_t* body, size_t size, std::string_view path, std::str
 // Sets cheat_set_profile_fields on a decrypted profile, once.
 static void EditLoadedProfileFields(uint8_t* body, size_t size) {
   const std::string fields = REXCVAR_GET(cheat_set_profile_fields);
-  if (!Enabled() || fields.empty() || g_fields_applied.load(std::memory_order_acquire)) {
+  const bool recovery = fields == kCarRecoveryFields &&
+      g_profile_isolated.load(std::memory_order_acquire);
+  if ((!Enabled() && !recovery) || fields.empty() ||
+      g_fields_applied.load(std::memory_order_acquire)) {
     return;
   }
   // Other secure files pass through here too; only the profile has Main.

@@ -86,6 +86,8 @@ class Fh1ProfileTests(unittest.TestCase):
     def test_recovery_backs_up_all_selected_profile_files_and_config(self, _):
         with tempfile.TemporaryDirectory() as directory:
             state, config = self.recovery_state(directory)
+            CONFIG.write_config(config, CONFIG.read_config(config) +
+                                'pinyon_shift_cheats = false\ncheat_set_credits = 12345\ncheat_time_scale = 2.0\n')
             before = {p.relative_to(state): p.read_bytes() for p in state.rglob("*") if p.is_file()}
             result = MODULE.recover_car(state)
             backup = Path(result["backup"])
@@ -96,7 +98,9 @@ class Fh1ProfileTests(unittest.TestCase):
                     self.assertEqual(data, (state / relative).read_bytes())
             text = CONFIG.read_config(config)
             self.assertEqual("Main/CareerCar=0", CONFIG.get_value(text, "cheat_set_profile_fields", None))
-            self.assertEqual("true", CONFIG.get_value(text, "pinyon_shift_cheats", None))
+            self.assertEqual("false", CONFIG.get_value(text, "pinyon_shift_cheats", None))
+            self.assertEqual("12345", CONFIG.get_value(text, "cheat_set_credits", None))
+            self.assertEqual("2.0", CONFIG.get_value(text, "cheat_time_scale", None))
             self.assertEqual("hidden_cars", CONFIG.get_value(text, "enabled_mods", None))
             self.assertTrue((backup / "manifest.json").is_file())
             manifest = json.loads((backup / "manifest.json").read_text())

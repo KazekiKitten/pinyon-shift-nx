@@ -59,6 +59,7 @@ try {
             'pinyon_shift_hostui_tests',
             'pinyon_shift_host_config_tests',
             'pinyon_shift_profile_body_tests',
+            'pinyon_shift_car_recovery_tests',
             'pinyon_shift_rally_progress_tests',
             'pinyon_shift_rally_pace_tests',
             'pinyon_shift_car_cards_tests',

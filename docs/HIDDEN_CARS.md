@@ -101,14 +101,18 @@ saved the profile: v4 saves require v4.
 
 The command copies the selected XUID's entire `user-modded` profile and the
 settings into a new `backups/before-car-recovery-<time>-<id>` directory, with
-a SHA-256 manifest. Only after the copy is verified does it enable the
-trainer and queue `Main/CareerCar=0` through the existing one-time
-`cheat_set_profile_fields` load hook. No encrypted file is edited. A missing
+a SHA-256 manifest. Only after the copy is verified does it queue
+`Main/CareerCar=0` through the one-time `cheat_set_profile_fields` load hook.
+This exact request uses the isolated profile with the trainer off, so
+dormant credit, speed or other cheat settings stay disabled. The trainer
+setting is preserved. No encrypted file is edited. A missing
 modded profile, an existing pending field edit or a mod with its own named
 profile stops the operation without changing settings. It never writes
 `user` or shared DLC installations.
 
-Start the game, let it finish loading and saving, then restart. Zero is an
+Keep a save-isolating mod such as `hidden_cars` enabled to continue that
+profile after the one-time request clears. Start the game, let it finish
+loading and saving, then restart. Zero is an
 invalid garage ID; the title's missing-car path supplies a starter Corrado.
 On the pinned seven-car bus save, the base build added that fallback as
 garage ID 8 and returned to free roam. Decrypted load/save snapshots kept
