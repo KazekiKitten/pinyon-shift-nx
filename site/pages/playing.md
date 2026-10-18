@@ -23,6 +23,11 @@ Most settings live in the game, on <kbd>F6</kbd>, and apply at once. MSAA and th
 
 On a Mac, where the F-keys are media keys, use <kbd>Cmd</kbd>+<kbd>,</kbd> for the settings, <kbd>Ctrl</kbd>+<kbd>Cmd</kbd>+<kbd>F</kbd> for fullscreen, <kbd>Cmd</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> for a photo, <kbd>Cmd</kbd>+<kbd>T</kbd> for the trainer and <kbd>Cmd</kbd>+<kbd>Q</kbd> to quit.
 
+Mac fullscreen uses a borderless window on the current desktop. If an older
+build turns black when changing fullscreen, rebuild; the presenter now keeps
+the Metal drawable at the window's swapchain size. The visible result still
+needs checking on other Macs ([macOS qualification](platforms.md#macos-on-apple-silicon)).
+
 On a controller, hold **Back + Start** together (View + Menu on a Steam Deck) to open the settings, and **LS + RS** for the performance panel; both chords can be changed in **F6 > CONTROLS > CONTROLLER**.
 
 ### Driving on a keyboard
@@ -51,6 +56,11 @@ Keys can be rebound in **F6 > CONTROLS**, and **RESET KEYS** returns to this lay
 | Balanced 40 | 1x | Off | Bilinear | 40 | As Low-spec 60 at a third of the CPU work of 120. Paces evenly on 120 Hz and 40 Hz displays. Recommended below 4 CPU cores |
 | Performance 120 | 1x | Off | FSR 1 | 120 | The default on a discrete GPU with 6 GB or more, 6 or more CPU threads and a 120 Hz display |
 | Quality 60 | 2x | 4x | Bilinear | 60 | |
+
+On the M4 Pro Mac mini, the current free-roam qualification averages about
+60 fps at 1x, but 40 fps with QUALITY 60. Start with LOW-SPEC 60 and raise
+scale or MSAA separately; [the measured matrix](platforms.md#macos-on-apple-silicon) gives
+the limits of that test.
 
 Where the sun's shadows are off (Ultra Low 30, and the Android presets that turn them off), the game still draws them from 18:50 to 08:02 game time: the same passes light the road in front of the headlights.
 

@@ -23,7 +23,17 @@ A native build for Apple silicon. The game's Vulkan renderer runs on Metal throu
 4. Choose your disc image, confirm ownership and choose **Verify and build**.
 5. Choose **Play**. Press **F6** in game for settings.
 
-On an M4 Pro, free roam holds 120 fps on a 120 Hz display at the default 1x resolution. Other busy apps on the Mac cause most of the slow frames that remain.
+On the M4 Pro Mac mini, the 2026-10-18 free-roam qualification averaged
+about 60 fps at 1x with a 60 fps limit, but about 40 fps with QUALITY 60
+(2x, 4x MSAA). Start with LOW-SPEC 60, then raise scale or MSAA separately;
+the [platform measurements](platforms.md#macos-on-apple-silicon) explain
+the tested workload and its limits. The older 120 Hz result used a different
+optimization route.
+
+Fullscreen uses a borderless window on the current desktop. The presenter
+keeps the Metal drawable at the swapchain size through fullscreen changes;
+scripted transitions passed, while the OS-visible result still needs an
+interactive check on the affected Macs.
 
 The launcher's **DLC** panel imports your own DLC packages ([DLC and title update](dlc.md)), and **Import a save** brings a save from another install or from Xenia. On the M4 Pro all 21 packages imported and their 84 car rows loaded and could be driven in a scripted route, and the v4 build ran the 1000 Club challenges and reached the Horizon Rally entry.
 

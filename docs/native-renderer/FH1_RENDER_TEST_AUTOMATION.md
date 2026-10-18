@@ -264,17 +264,32 @@ MB`) and transfer statistics every 600 swaps. With
 `readback_resolve = none`, large resolves to ranges no resolve wrote in the
 last few frames are copied back to guest memory before the next command the
 guest CPU can observe; this is how the game's saved car thumbnails get real
-images. Resolves repeated every frame are not read back.
+images. Completed `32_FLOAT` resolves of at most 4 KiB also use the native
+readback queue for CPU exposure reads (`fh1_readback_small_float_resolves`).
+At scales above 1x, both paths first write the guest-size GPU copy.
 
 ## Frame dumps and offline replay
 
 A frame dump records one frame's command packets, starting registers, bin
 state, shaders and every guest range it reads. Record one from a normal or
-render-test run at 1x:
+render-test run at 1x with split GPU recording disabled:
 
 ```text
---fh1_frame_dump_frame=<frame> --fh1_frame_dump_path=<file.fh1frame>
+--gpu_record_thread=false --fh1_frame_dump_frame=<frame> --fh1_frame_dump_path=<file.fh1frame>
 ```
+
+The frame is the executor's swap number, not the render-test clock. On
+Vulkan, to
+capture gameplay after verifying a route reached it, set only the path on
+the command line, then use `cvar <script-frame> fh1_frame_dump_frame -1`
+in the route. A negative request records the next complete executor frame;
+the request resets to zero when armed, so it records once. Another request
+can be armed after the previous dump completes. With `gpu_record_thread`
+enabled, the request is consumed and rejected with a warning: the packet
+recorder otherwise races the decoder. The parked-car example is
+`config/render-tests/fh1-macos-fixed-frame.fh1test`.
+These runtime requests are implemented on Vulkan; D3D12 still consumes the
+command-line request when creating its executor.
 
 `tools/replay-fh1-frame.py <dump> --state-root <seed>` replays it with the
 title suspended and compares the front buffer; `--write-golden` stores the
@@ -290,5 +305,8 @@ with the other backend's (the front buffer is tiled, little-endian
 2_10_10_10 with red in the high bits; the two backends differ only in sparse
 edge samples on the four goldens, and by at most 8 of 1023 per channel on a
 Vulkan-recorded free-roam frame replayed on D3D12). A Vulkan dump replays on
-Vulkan with no differing words; D3D12 dumps of 3D scenes differ from their
-own recorded front buffer in about 2 % of words (edge samples).
+Vulkan with no differing words on those four goldens; a 2026-10-18 Mac
+gameplay dump differed from its own MoltenVK replay in 12,338 of 942,080
+words, so a recording is not a universal bit-exact replay reference.
+Keep a replay golden for regression checks. D3D12 dumps of 3D scenes differ
+from their own recorded front buffer in about 2 % of words (edge samples).

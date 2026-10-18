@@ -160,7 +160,7 @@ The same frame replayed on every device. The results differ enough that no savin
 
 ## Apple silicon
 
-The M4 Pro is shading-bound in free roam, so the shader switches the Adreno GPUs use pay off there too. The table gives medians of a 40 s scripted drive at 1x, two runs each, with pipelines prewarmed and untiled predicated tiling on (its own saving was measured by toggling it inside one run):
+The M4 Pro is shading-bound in free roam, so the shader switches the Adreno GPUs use pay off there too. The table gives medians of a 40 s scripted drive at 1x with MSAA off, two runs each, with pipelines prewarmed and untiled predicated tiling on (its own saving was measured by toggling it inside one run). QUALITY 60 instead selects 2x, 4x MSAA and untiled predicated tiling off; these 1x numbers do not qualify that preset:
 
 | Switch, M4 Pro | Median frame |
 | --- | ---: |
@@ -176,6 +176,24 @@ The M4 Pro is shading-bound in free roam, so the shader switches the Adreno GPUs
 With all four on, the GPU frame is 5.6–5.7 ms against 12.3–12.7 ms, and the title waits on GPU fences 6 times a frame instead of 26. Mean luma over the drive is 114.6 against 114.7 on Windows.
 
 The window is hidden in these runs, but Core Animation still hands out drawables at the display rate. MoltenVK takes the drawable while it encodes the present, on the thread that submits everything else, so no run goes past 120 fps on a 120 Hz display. MoltenVK also stamps timestamps at Metal encoder boundaries, so per-pass GPU timing doesn't work there; whole frames do.
+
+These are historical optimization measurements. On 2026-10-18, the current
+base-game qualification on the M4 Pro (24 GiB, macOS 26.3), with a pinned
+Miata seed and a 60 fps limit, averaged 59.6–59.9 fps at 1x across off/2x/4x
+MSAA. At 2x it averaged 59.8/53.6/39.6 fps respectively. QUALITY 60's
+2x/4x cell had median/p95/p99 23.16/34.53/38.69 ms and mean whole-frame
+GPU time 24.01 ms. Its heap usage was 3671 MiB and peak native surfaces
+467 MiB; RSS is not total Metal memory. These are single runs over 36.6–36.7 s,
+not an A/B speedup claim ([method and all resource columns](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/MACOS.md#renderer-qualification)).
+
+The 1x untiled-predicated-tiling saving did not qualify a quality-mode gain:
+an unpaired 2x/4x live control returned 34.1 fps against 43.5 with it off,
+and surfaces 848 against 467 MiB. Varying car poses limit the timing
+comparison. QUALITY 60 keeps its existing off setting. A separate uncapped
+1x/MSAA-off run with it on reached 105.5 fps, median 9.30 ms, on this seed.
+The small-float exposure readback complements 4 KiB GPU tracking; no
+measured gain justifies removing that tracking or changing fast math or
+pipeline waiting to address the remaining restart-dependent sky tint.
 
 ## MSAA, scale and memory
 
