@@ -57,8 +57,34 @@ complete garage/paint qualification is still pending. Do not reintroduce a
 traffic entry without a private
 profile test of purchase, thumbnail creation, garage entry and exit,
 changing away and back, paint, driving and a saved reload. A v4 run is a
-separate qualification. Never fix missing models by copying another game's
-assets or by renaming a lower-detail traffic model as a player model.
+separate qualification. Independently authored compatibility metadata can
+reopen an excluded entry once it passes those checks using the player's
+own assets.
+
+## Base Windows runtime checks
+
+All four retained variants were bought through the native Autoshow,
+created `Thumbnail_8.xdc`, saved as garage instance 8 with the expected
+model ID, and loaded again. A private recommendation/one-credit price
+helper made the purchases repeatable on the seven-car fixture. Removing
+that helper before fresh loading tested the shipping `hidden_cars` patch,
+without its class or price overrides.
+
+Each fresh-load route drove the selected car in free roam for eight
+seconds and passed the runner's graphics diagnostics. The three showcase
+cars also rendered cockpit, hood, bumper and both chase views. The intro
+Corrado's first drive did not include the camera cycle. The repeatable
+view route is
+`config/render-tests/fh1-hidden-car-views.fh1test`; its captures and native
+saved model IDs need review as well as its exit status.
+
+The Mini, Abarth and 205 purchase routes passed. The intro Corrado purchase
+completed and saved, but that run also logged an indirect GPU ring-buffer
+packet error; it began with the unsupported bus selected, so the error is
+not attributed to the newly purchased model. Its separate fresh-load drive
+passed. Full garage entry/change-away/change-back, paint-shop editing and
+v4 qualification remain pending. Showroom color selection alone does not
+qualify the paint shop.
 
 ## Recover an existing modded selection
 
