@@ -5,7 +5,7 @@ from pathlib import Path
 import re
 import subprocess
 
-PROBES = re.compile(r'session_probe::|cs_scheduler::|cs_schedule_|cs_session_(?:mode|path)|gpu_(?:true_fence_completion|async_fence)|'
+PROBES = re.compile(r'Fh1FrameCensus::(?:Ordered|ObserveOrdered)|fh1_frame_census_ordered|session_probe::|cs_scheduler::|cs_schedule_|cs_session_(?:mode|path)|gpu_(?:true_fence_completion|async_fence)|'
                     r'(?:AwaitGuestGpuCompletion|PublishGuestCompletion|StartCompletionWorker|'
                     r'StopCompletionWorker|CompletionWorkerMain)')
 
@@ -18,11 +18,13 @@ def check(build, nm):
         if '/thirdparty/shiftglue-sdk/thirdparty/' in row['file'].replace('\\', '/'):
             continue
         obj = Path(row['output'])
+        if not obj.is_absolute():
+            obj = Path(row['directory']) / obj
         if obj.suffix not in ('.obj', '.o'):
             continue
         if obj.exists():
             objects.append(obj)
-        if row['file'].replace('\\', '/').endswith(('/session_probe.cpp','/cs_scheduler.cpp')):
+        if row['file'].replace('\\', '/').endswith(('/session_probe.cpp','/cs_scheduler.cpp','/fh1_frame_order.cpp')):
             raise ValueError('a probe implementation is in the active build')
     found = []
     for start in range(0, len(objects), 40):

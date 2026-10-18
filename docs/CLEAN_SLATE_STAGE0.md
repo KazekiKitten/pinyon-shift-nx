@@ -297,6 +297,31 @@ and native-worker lock contention, and rejection of changed points,
 truncation and overwrite. A GPU-stream end comparison prevents accepting a
 replay that leaves trailing PM4 frames unread.
 
+### CS-0.3: ordered pipeline runs on the Deck
+
+The optional Vulkan census (`REXGPU_FH1_ORDERED_CENSUS=ON`, default OFF;
+`fh1_frame_census_ordered=true` and an exclusive
+`fh1_frame_census_ordered_path`) retains selected pipeline-cache-entry
+identity per emitted guest draw and actual host rendering instance.
+`REXGLUE_ENABLE_CS_PROBES` stays OFF; the options are independent. Pipeline
+IDs are process-local, auxiliary draws are excluded, the first pipeline
+in a rendering is not a switch, and pass/frame boundaries close a run.
+The native LLVM 20.1.8 / x86-64-v3 build runs `cs01-race.fh1test` through
+Steam on the reference Deck LCD, using the read-only Stage 0 `warm-seed`,
+Vulkan/1x and a 60 fps cap. Both endpoint HUD images qualify; race-window
+GPU samples are 990–1,476 MHz, not the SSH-only 200 MHz state. Over
+**59.999757 s / 3,560 frames**, there are **11,756,744 draws** and 273
+selected pipeline identities: **1,147.42 switches/frame** (median 1,039,
+p95 1,786) and **2.5165 draws/run** (median **1**, p95 **6**, maximum 242).
+**72.43%** of the 4,671,838 runs contain one draw. All output mappings are
+present and unique, with zero overflow. `tools/cs/analyze-frame-order.py`
+checks those properties; local evidence is `round3/deck-order-race2/`
+(including the compressed raw stream and hashes). The first attempt
+stopped before game launch because the older seed lacked Vulkan storage;
+it contributes no census data. These are adjacency counts, not literal
+Vulkan bind-call counts or proof of legal batching or a performance gain.
+No batching was implemented; CS-3 graphics DGC remains on hold.
+
 ## CS-0.2: observable context state
 
 **Gate not established, 2026-10-17.** The multivac analysis ran on the base
