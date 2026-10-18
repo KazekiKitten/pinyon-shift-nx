@@ -593,6 +593,7 @@ shared-memory value, rather than a missing boundary. The classes found:
 | Contended lock implementation | Per-object acquisition grants replace a global ticket that deadlocked. Probe-only Rtl critical sections use a CAS wait and preserve ownership/recursion while avoiding private waiter-event allocation differences. This changes enabled-probe bookkeeping; it is not a performance result or an unchanged scheduler. |
 | Files and input | Feed file read bytes, status/count/position, query/directory metadata and controller state/capabilities/keystrokes. Check write payloads and feed write status/count. File-open side effects, arbitrary devices, network and entropy are not claimed exhaustively captured. |
 | Host hooks and audio | Capture camera/crowd scaling, render-job throttle result, step-backpressure decisions, native voice state, audio pump/callback selection and built PCM. Other optional host-clock features are off in the seed. XMA direct-memory completion remains a coverage limitation. |
+| Other observed startup boundary drift | Some iterations reach a vblank signal where replay reaches the next timebase read (for example `r2-boot20`); the precise shared queue/capture cause was not established. Do not label these all fixed or proven races. `session-iterations.json` retains each first failure. |
 | Ordinary shared job-state poll | **Scheduling required.** The final first value mismatch is a guest load, with matching prior per-thread boundaries. Read/write evidence below identifies the completion transition crossing the poll. |
 
 The first value divergence in `r2-race1-replay` is render thread `0x13`,
@@ -616,7 +617,11 @@ not a missing external I/O or clock return that can simply be fed back.
 Replacing the load's value would be memory-order replay and must also
 order its dependent accesses; it would no longer test external-event
 capture alone. This does not establish what the original console scheduler
-did, nor prove that every possible later divergence is known.
+did, nor prove that every possible later divergence is known. The observer
+stops at the differing load before a PM4 comparison: it does not prove
+that tolerating this polling drift would necessarily change PM4. It does
+show that strict per-thread event streams do not determine that poll or
+the subsequent clock-call count without shared-memory/execution ordering.
 
 CS-1 must choose deterministic guest execution quanta (instruction/basic
 block or a reference interpreter), or record and enforce shared-memory
