@@ -172,6 +172,11 @@ The four variants were bought, saved, reloaded and driven on the base Windows bu
 
 Saves are in the install's state folder, `%LOCALAPPDATA%\PinyonShift\source\<version>\.local\preview\user` (under `data` for a portable install).
 
+Post-race gameplay replays cannot yet be saved and reopened after quitting,
+or exported to video. F8 saves a single PNG. The replay persistence work and
+its verification gates are described in the
+[gameplay replay research](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/GAMEPLAY_REPLAYS.md).
+
 - **Backups.** After each save, the save files are copied to `backups\saves`. The last 10 are kept. Restore one from **SETTINGS > PROFILE > SAVE BACKUPS**.
 - **Photos.** <kbd>F8</kbd> writes PNGs to the `photos` folder in the state folder. Press <kbd>F2</kbd> first for a photo without the HUD.
 - **A save from another install.** On Linux and macOS, the launcher's **Import a save** takes another Pinyon Shift install folder or a ZIP of one; the current save is backed up first, and a save from the cheats or mods tree stays in that tree. From a terminal on any system: `python3 tools/pinyon.py import-save <folder-or-zip>`.

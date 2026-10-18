@@ -187,6 +187,28 @@ source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Developer options and lefto
 
 [[finding]]
 group = """Debug and developer features"""
+base = """0x834B35E4, vtables 0x82249498, 0x822493EC, 0x8222C55C and 0x8222B5AC, sub_82E42F50, sub_82E42E20, sub_82632368, sub_8262C048, sub_82E3D3B0, sub_82E41288, sub_82E41358, sub_82E3BF20, sub_82E3B598, sub_82E3B5F8; immutable vtable first entries 0x82E42F00 and 0x82E3DED8"""
+v4 = """Candidate mappings only: manager pointer 0x835A8FF4, manager vtable 0x8225C6E8, stream vtable 0x8225C63C, constructor 0x82F048D8. No live v4 qualification."""
+name = """gameplay replay stream registry and lifetime"""
+what = """The manager owns a registry of stream IDs, not a single replay byte buffer. `CRecordReplayComponent` creates a `Replay` root from `replay_stream` (kind 0) and an attached child from `replaydata` (kind 2); its +8/+12 fields hold their IDs. On cleanup it stops and unregisters both streams and clears those IDs. A private base-disc race-retire run observed root/child IDs 3/4, separate `FullRaceGhost` ID 5, windowed backing during the race and replacement IDs 6/7 with circular backing on return to free roam. Stream +8 is a start-time anchor, not a playback clock. Capturing object pointers or one stream is not evidence of a persistent replay; packet framing, initialization, wrapping and reload equivalence remain unqualified."""
+how = """Base generated-code call/field analysis at root fe0dcf1d / SDK 3bb29938; RTTI vtable identification; 133 valid read-only process samples on multivac during the null-GPU race-retire route with existing preview SHA-256 FC46C811D0970C419FD34EF9151216BDD50CDC6E3584E66AF001F4F85A551704 (stale sidecar, host build provenance unqualified). No post-race playback or images were tested. Candidate v4 pairs from tools/map-fh1-v4-addresses.py (data references and an exact constructor match), not a live replay test."""
+confidence = """probable"""
+note = """Registry observations and backing types confirmed on this base route; the full replay persistence contract remains probable and incomplete."""
+issue = """#492"""
+source = """docs/GAMEPLAY_REPLAYS.md; tools/inspect-fh1-gameplay-replay.py"""
+
+[[finding]]
+group = """Debug and developer features"""
+base = """sub_825A2D40, sub_825A56E0, sub_825563B8, sub_8260E8E8, sub_82C82A58, sub_82C83AC0; launch-options +3208 and +4877"""
+name = """gameplay replay initialization and native packaging"""
+what = """The replay-loading path reads initialization as well as stream data: `ReplayInitData` is handled by `sub_825A2D40` and `sub_825A56E0`, and the replay loader passes initialization and stream data to `sub_8260E8E8`. The native combine/extract pair joins two IOSys streams with two length words and can reconstruct views of them; it is not a qualified private host format. `savereplaytodevkit` (+3208) influences recording backing selection, and `savewmvtodevkit` (+4877) belongs to the old WMV path. These strings do not establish persistence or fixed-cadence FFmpeg export. Full restart equivalence and exact output cadence are still open gates."""
+how = """String xrefs, launch-option visitor, generated-code callers and stream ownership analysis; no restored replay or offline video has been qualified."""
+confidence = """probable"""
+issue = """#492"""
+source = """docs/GAMEPLAY_REPLAYS.md"""
+
+[[finding]]
+group = """Debug and developer features"""
 base = """CTelemetryHud, IDS_Telemetry, 968_TELEMETRY, 827AC92C, 827ACC7C, 827B892C"""
 name = """telemetry pages"""
 what = """Forza's car telemetry screens survive as a HUD class, a string and a scene. Their data sources should lead to RPM, gear, slip and suspension values."""

@@ -29,6 +29,14 @@ Pinyon Shift sets three of these flags itself (the skippable voice-over, the idl
 
 ## Debug and developer features
 
+The gameplay replay manager records a main stream and an attached secondary
+stream. Its loader also needs initialization for the event and cars; keeping
+an in-memory stream pointer cannot restore this after a restart. A read-only
+Windows probe now exposes the base-disc registry for research. Saved gameplay
+replays and fixed-cadence video export remain unimplemented; the
+[contract and acceptance gates](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/GAMEPLAY_REPLAYS.md)
+separate this work from whole-session deterministic replay and GPU frame replay.
+
 {{findings:systems/Debug and developer features}}
 
 ## Online services
