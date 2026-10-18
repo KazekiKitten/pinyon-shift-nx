@@ -54,6 +54,14 @@ With **F6 > DISPLAY > VSYNC** on, the game presents without tearing on both Vulk
 
 The renderer supports 1x, 2x, 3x and 4x, the same horizontally and vertically. Pick a supported scale in the launcher, or delete `pinyon_shift.toml` to reset.
 
+## A hang after changing display or graphics settings
+
+VSYNC and fullscreen changes rebuild the Vulkan swapchain. Retirement waits for drawing and drains the presentation queue before releasing its semaphores. Image acquisition uses a 50 ms timeout per attempt so an occluded window can keep processing events. These safeguards address unsafe lifetime handling; they do not establish that every reported hang has the same cause.
+
+If a change still hangs, attach the launcher's diagnostic ZIP and name the setting, its old and new values, and whether the window lost focus. For VSYNC, also compare a launch with it already off against switching it off during play. Leaving VSYNC on is a workaround for the reported RX 580 hang ([#572](https://github.com/arcanite24/pinyon-shift/issues/572)); the GTX 1660 Ti report also includes a hang switching it on ([#680](https://github.com/arcanite24/pinyon-shift/issues/680)). Intel [#606](https://github.com/arcanite24/pinyon-shift/issues/606) still needs its own diagnostic ZIP. Exit code `0xCFFFFFFF` alone does not identify a renderer fault.
+
+A `graphics.device_lost` event with a failed Vulkan command-buffer submit is a different failure. It can occur at 1x, as in the GTX 1050 Ti report ([#686](https://github.com/arcanite24/pinyon-shift/issues/686)); neither that event nor exit code `0x51D` identifies a particular driver defect. Submit errors now include their Vulkan result number, and a device loss during presenter submission follows the GPU-loss reporting path. Include the ZIP and the preceding output-scaling changes when reporting it.
+
 ## A controller isn't recognized
 
 Connect it before starting the game. Close Steam or other remapping software, reconnect and relaunch. When reporting an unsupported controller, include its exact name, USB vendor and product IDs, and a screenshot from a gamepad tester.
