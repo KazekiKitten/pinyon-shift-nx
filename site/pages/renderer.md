@@ -28,19 +28,20 @@ coherent Vulkan allocation mapped at a reserved fixed address, and a
 compute shader verified every CPU-written word with zero mismatches.
 Turnip's type was device local; RADV's selected type was system/GTT memory.
 This establishes placement support. Guest aliases remain untested, and the
-completion-latency result below holds the shared-arena proposal.
+completion-latency result below rejects the shared-arena proposal at its gate.
 [CS-0.5 records the method and negative controls](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/CLEAN_SLATE_STAGE0.md#cs-05-placed-device-memory-mapping).
 
-The subsequent true-completion probe failed its latency gate. Waiting for
-the full host queue prefix before guest fence and interrupt completion
-raised the Odin's race mean from 16.68 to 20.27 ms and the Deck's from
-16.77 to 48.21 ms, with worse p99 on both. Free roam lost too. The cvar
-`gpu_true_fence_completion` is a default-off diagnostic; the mirror remains
-in use. A separate default-off asynchronous probe now ends the submission
-at a fence, signals a timeline value behind it, and publishes the guest
-result from a completion thread. Its producer never waits on that semaphore.
-[Round 2 measurements](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/CLEAN_SLATE_STAGE0.md#cs-04-asynchronous-timeline-completion)
-are required before this design can decide the shared-arena gate.
+The asynchronous completion probe failed the latency gate too. A default-off
+mode (`gpu_async_fence_probe` at startup, `gpu_async_fence_completion` hot)
+ends the submission at each guest fence and signals a timeline value behind
+it. A completion thread waits and publishes the guest result; the producer
+never waits on that semaphore. On the same pinned race/free-roam routes at
+1x, Odin means rise 16.666→20.942 /16.692→21.885 ms; Deck
+16.800→38.162 /16.875→37.462 ms. All p99s worsen. A/A mean shifts stay under
+0.57%. This rejects CS-4 at its stated 3%/unchanged-p99 gate; placed mapping
+support does not compensate for this cost. The earlier synchronous drain
+is separate historical evidence. The mirror remains in use.
+[Builds, timeline counts and controls](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/CLEAN_SLATE_STAGE0.md#cs-04-asynchronous-timeline-completion).
 
 The first step was a census of what the game actually sends the GPU, taken over 17,580 frames of scripted routes and later extended by 10,980 more ([NATIVE_FRAME_CONTRACT.md](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/native-renderer/NATIVE_FRAME_CONTRACT.md)):
 

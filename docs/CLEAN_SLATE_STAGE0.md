@@ -5,6 +5,11 @@ not changes to the default runtime. Unestablished gates are not passes.
 Local counts and device output are in `.local/codex-cs/`; they contain no
 committed game code. No remote was pushed.
 
+The first sections preserve Round 1 evidence. [Round 2](#round-2) supersedes
+the replay and fence interpretations and records the still-unresolved exact
+context gate. The original global-order capture failure and synchronous
+drain alone did not decide their premises.
+
 ## CS-0.2: observable context state
 
 **Gate not established, 2026-10-17.** The multivac analysis ran on the base
@@ -656,8 +661,116 @@ silently reporting early completion. This is a diagnostic, not a shared
 arena implementation.
 
 SDK `200bfdb`, parent checkpoint accompanying this text. Native Windows
-Release builds and a 12-second pinned desktop smoke route complete with
-the worker armed and completion enabled (`round2/async-smoke1`). This is
+Release builds pass. The earlier 12-second pinned desktop smoke route
+completes with the worker armed and completion enabled
+(`round2/async-smoke1`, root `9d7d9d07`/SDK `67bb7fb` plus the archived
+working changes; this predates the mode-counter log added in `200bfdb`). This is
 only a smoke check, not the latency gate. Handheld race/free-roam A/B and
 A/A measurements follow with the separate `cs04a-*` routes. The synchronous
 Round 1 drain results above remain historical and cannot decide this mode.
+
+
+**Round 2 timing verdict: FAIL; CS-4 rejected at its Stage 0 gate.** The
+asynchronous mode also exceeds +3% mean frame time and worsens p99 on both
+yardsticks. No gate, cutoff, outlier rule or route input was changed to
+obtain this outcome. The probe remains off.
+
+Matched source: parent `e98117f4`, SDK main `200bfdb`, frozen base generated
+tree (local diagnostic patches restored), native Release Android and
+Linux-amd64-v3. Odin uses the installed Turnip V37/Adreno 740 driver (SHA
+`b6d445f512d15bb94be3d46bb2e2d27f604f161bf7400f32ed6008de59844c7f`);
+Deck uses RADV 24.3-devel under Steam/game mode at its normal power settings.
+Both use Vulkan, 1x, vsync off, a 60 fps cap, the same pinned
+`appdata-2026-09-27` profile and private warm states as Round 1. The Deck
+uses its prior private warm derivative of that seed. No measured route
+ran during a build. Exact APK `round2/cs04a-probe.apk` SHA-256
+`0811b0e55682b2f6684ff00123822463889d7f4164eab1aa5f2cdf148ceac12b`;
+its library hashes are in `cs04a-probe.json`. The Linux executable is
+`37bdfd278d4fbd20218dee3087e03715dffa935d7f284e8d60fecafda1044b43`,
+retained with corrected source/hash sidecar in `round2/async-linux-build`.
+Windows secondary coverage is the smoke route described above, not a
+latency measurement.
+
+Runs: `.local/codex-cs/{odin,deck}/r2-async-{race,free}-{ab,aa}1`.
+A = immediate completion; B = asynchronous timeline retirement. Each
+process is armed at startup, so both sides share worker/feature setup.
+Hot windows alternate every five wall seconds after race/free-roam entry.
+The unchanged NN summarizer drops the first window, discards 30 settling
+frames per window, requires 60 retained rows, and retains every subsequent
+frame, including hitches. Five paired race windows and six free-roam pairs;
+pooled means/p99 also retain the final eligible unpaired window. Frame
+counts differ because B runs slower. Counts are actual perf rows, not
+60 Hz route ticks. These are within-process comparisons, with same-binary
+A/A marker controls; no cross-build improvement is claimed.
+
+| Device / route | Mean A → B (ms) | Change | p99 A → B (ms) | Frames >18 ms A → B | Samples A / B |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| odin / race | 16.666 → 20.942 | +25.66% | 17.046 → 28.296 | 0.148% → 92.754% | 1349 / 1242 |
+| odin / free | 16.692 → 21.885 | +31.11% | 17.068 → 27.421 | 0.494% → 99.639% | 1618 / 1385 |
+| deck / race | 16.800 → 38.162 | +127.16% | 21.830 → 47.591 | 3.723% → 100.000% | 1343 / 605 |
+| deck / free | 16.875 → 37.462 | +122.00% | 21.542 → 50.118 | 5.587% → 99.861% | 1593 / 720 |
+
+Paired per-window B−A mean ± standard error (ms): Odin race
+**4.511 ± 0.892**, free **5.238 ± 0.190**; Deck race **21.505 ± 0.429**,
+free **20.438 ± 0.276**. A/A pooled mean changes, race/free: Odin
+**−0.00087% / −0.01109%**, Deck **+0.56121% / +0.03889%**. A/A p99 changes
+are +0.477/−0.267 ms and +1.745/−0.323 ms respectively; p99 has ordinary
+scene noise, far below the B increases. Draw counts also vary with the
+scene: race A→B averages 2524→2736 on Odin and 3227→3376 on Deck;
+free 3592→3522 and 3745→3667. These differences are retained, not normalized
+away to change the frame-time gate.
+
+Runtime logs confirm actual asynchronous work. At a Deck race transition,
+8,464 timeline signals were issued and retired over one B interval, with
+zero pending callbacks at the off switch. `CS_ASYNC` mode-transition lines
+retain issued/retired/pending counts for the other windows. The B mean
+`gpu_thread_fence_wait_ns` counter is zero in all four routes; the new
+completion path has no producer wait on its timeline. Existing resource
+reuse/readback synchronization is not redefined by that observation.
+The submitted signals and additional submission splits are part of this
+specified design's cost; this is not a measurement of a hypothetical
+zero-overhead completion mechanism.
+
+Every timing script reaches its stop and the game exits normally; all
+race HUD assertions checked separately on Odin and by the Deck runner.
+The Deck free A/B outer runner correctly fails its generic present floor
+(48.476 Hz <55); free A/A instead fails its legacy simulation floor
+(58.088 Hz outside 80..500), despite near-60 fps rendering. Those failures
+are retained and are not called generic QA passes. Android's direct app
+runner does not apply the Python cadence validator. The measured 3%/p99
+gate above fails independently of those generic checks. Extra enabled
+correctness runs are excluded from this timing table.
+
+Detailed rows, >20 ms shares, pairs and frame counts:
+`round2/cs04a-summary.json` and `cs04a-{odin,deck}-{race,free}-{ab,aa}.json`.
+
+
+Correctness-only repeats `r2-async-{race,free}-on1` on both devices enable
+the mode after world entry and leave it on. All four reach the script stop.
+Their final race/free-roam captures were inspected with completion still
+enabled: no new corruption observed. All six race runs' driving and end
+captures pass the race-HUD check (12 images), and all 12 app scripts report
+completion (`round2/cs04a-correctness.json`). The enabled free Deck repeat
+also fails the outer cadence validator; it is not a generic QA pass.
+No hangs or corruption were seen on these routes; this is bounded route
+coverage, not a proof about every game mode. These extra runs are excluded
+from the A/B table.
+
+Validation/restoration: native Windows, Android and Linux Release builds
+pass; tools tests **534 pass, 6 skip, 111 subtests**; runtime replay positive
+and negative controls and analysis self-tests pass. The original Odin APK
+is restored by exact SHA-256, all 17 player-user files have identical
+hashes, both pinned seed profile hashes are unchanged, and all seven local
+generated patches match their original backups. Hash lists are compared
+by filename (their raw traversal orders differ). The Deck's normal
+PinyonShift entry has the SDK `200bfdb` build; only the owned CSStage0
+shortcut/link/metadata were removed. Private evidence states remain.
+`round2/restoration.json` and `restoration-deck.txt` retain the checks.
+AppData was never used as a writable run root. No pushes; no Stage 1 work.
+
+Round 2 recommendations: **CS-1 redesign** around execution/shared-memory
+order before claiming an oracle; **CS-2 HOLD** because its exact 15% count
+is still unestablished (the ceiling does not reject it); **CS-3 HOLD** its
+graphics DGC architecture on these drivers, with per-pipeline batching
+unmeasured; **CS-4 reject** at the asynchronous completion latency gate,
+despite accepted placed-mapping support. CS-0.3 and CS-0.5 stand as accepted.
