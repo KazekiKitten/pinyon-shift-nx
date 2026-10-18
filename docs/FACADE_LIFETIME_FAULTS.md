@@ -59,7 +59,19 @@ Verified base-to-v4 mappings, using function/context and paired data loads:
 | `0x82CBC390` | `0x82D7DE88` | current thread's allocation override |
 | `0x82CBC348` | `0x82D7DE40` | registry search by guest thread ID |
 | `0x8349F978` | `0x835950C8` | registry entries (ID, object pairs) |
-| `0x8349FDB4` | `0x83595504` | override selection gate |
+| `0x8349FDB4` | `0x83595504` | active override scope count |
+| `0x82CBD4F0` | `0x82D7EF70` | enter an allocator override scope |
+| `0x82CBD598` | `0x82D7F018` | restore the preceding override |
+
+The scope entry takes a save slot and a new allocator. Under the registry
+critical section it finds or adds the current guest thread ID, saves that
+thread's previous allocator in the slot, installs the new allocator, and
+increments the active-scope count. Scope exit restores the saved allocator
+for the current thread and decrements that count. The count is not a
+loaded-module reference count, and changing facade unload ordering without
+identifying the active scope would not establish correct ownership. These
+contracts and the two exact base/v4 function matches come from static analysis;
+they do not prove a mismatched scope in the reported run.
 
 The LANGUAGE row saves `user_language` and `user_country` to the private
 state's configuration and requires a process restart. It does not update the
