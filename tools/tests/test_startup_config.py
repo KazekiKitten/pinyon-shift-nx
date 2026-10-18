@@ -26,9 +26,9 @@ class StartupConfigTests(unittest.TestCase):
         cls.root = Path(cls.temporary.name)
         app = (ROOT / 'src/pinyon_shift_app.cpp').read_text(encoding='utf-8')
         start = app.index('bool EnsureSupportedConfig(')
-        end = app.index('\n}  // namespace', start)
+        end = app.index('\n}', start) + 2
         cls.schema = int(re.search(r'constexpr uint32_t kConfigSchema = (\d+);', app)[1])
-        source = '#include <filesystem>\n#include <fstream>\n#include <sstream>\n#include <regex>\n#include <string>\n#include <cstdint>\n#include <iostream>\n#include "platform/host_platform.h"\n#include "config/host_config.h"\n'
+        source = '#include <filesystem>\n#include <fstream>\n#include <sstream>\n#include <regex>\n#include <string>\n#include <cstdint>\n#include <iostream>\n#include "platform/host_platform.h"\n#include "config/host_config.h"\n#include "config/default_keys.h"\n'
         source += f'constexpr uint32_t kConfigSchema = {cls.schema};\n' + app[start:end]
         source += '\nint main(int argc,char** argv) { bool created=false,migrated=false; bool valid=EnsureSupportedConfig(argv[1],created,migrated); std::cout<<valid<<" "<<created<<" "<<migrated; return valid?0:2; }\n'
         cpp = cls.root / 'gate.cpp'
@@ -71,12 +71,24 @@ class StartupConfigTests(unittest.TestCase):
         self.assertEqual((again.returncode, again.stdout), (0, '1 0 0'))
         self.assertEqual(path.read_bytes(), updated)
 
-    def test_unsupported_or_missing_schema_stays_untouched(self):
-        for body in (f'pinyon_shift_config_schema = {self.schema + 1}\n',
-                     'pinyon_shift_config_schema = 0\n',
-                     'pinyon_shift_config_schema = "invalid"\n', 'vsync = false\n'):
+    def test_invalid_schema_stays_untouched(self):
+        for body in ('pinyon_shift_config_schema = 0\n',
+                     'pinyon_shift_config_schema = "invalid"\n'):
             data = ('\ufeff' + body).encode()
             path, result = self.run_gate(data)
             self.assertEqual((result.returncode, result.stdout), (2, '0 0 0'))
             self.assertEqual(path.read_bytes(), data)
             self.assertEqual(list(path.parent.iterdir()), [path])
+
+    def test_future_schema_is_preserved(self):
+        data = f'pinyon_shift_config_schema = {self.schema + 1}\nvsync = false\n'.encode()
+        path, result = self.run_gate(data)
+        self.assertEqual((result.returncode, result.stdout), (0, '1 0 0'))
+        self.assertEqual(path.read_bytes(), data)
+
+    def test_missing_schema_keeps_settings_and_exact_backup(self):
+        data = b'vsync = false\ncustom_value = 77\n'
+        path, result = self.run_gate(data)
+        self.assertEqual((result.returncode, result.stdout), (0, '1 0 1'))
+        self.assertEqual(Path(str(path) + '.noschema.bak').read_bytes(), data)
+        self.assertIn(data, path.read_bytes())
