@@ -628,19 +628,24 @@ def prepare_shiftglue(progress: Progress, config: dict) -> Path:
             rexglue["submodule_path"])
         return sdk
     sdk = ROOT / rexglue["fallback_path"]
-    head = subprocess.run(["git", "-C", str(sdk), "rev-parse", "HEAD"],
-                          capture_output=True, text=True)
-    if head.returncode == 0 and head.stdout.strip() == rexglue["revision"]:
-        # --force restores a dependency that lost its files while its commit
-        # still matches, which a plain update skips (#580).
-        git("submodule", "update", "--init", "--recursive", "--force", "--jobs", "8", cwd=sdk)
-        return sdk
-    if sdk.exists():
-        shutil.rmtree(sdk)
-    git("clone", "--no-checkout", "--no-tags", rexglue["repository"], str(sdk))
-    git("fetch", "--depth", "1", "origin", rexglue["revision"], cwd=sdk)
-    git("checkout", "--detach", rexglue["revision"], cwd=sdk)
-    git("submodule", "update", "--init", "--recursive", "--jobs", "8", cwd=sdk)
+    head = git_output("rev-parse", "HEAD", cwd=sdk) if (sdk / ".git").exists() else ""
+    if head:
+        dirty = subprocess.run(["git", "-C", str(sdk), "status", "--porcelain",
+                                "--ignore-submodules=dirty"], capture_output=True, text=True)
+        if dirty.returncode or dirty.stdout.strip():
+            raise SetupError(f"The managed ShiftGlue checkout has local changes: {sdk}", "tools")
+    else:
+        if sdk.exists():
+            shutil.rmtree(sdk)
+        git("clone", "--no-checkout", "--no-tags", rexglue["repository"], str(sdk))
+    # Retain unchanged dependency sources, objects and CMake's toolchain/flag
+    # checks when updating a managed checkout to another exact revision.
+    if head != rexglue["revision"]:
+        git("fetch", "--depth", "1", "origin", rexglue["revision"], cwd=sdk)
+        git("checkout", "--detach", rexglue["revision"], cwd=sdk)
+    git("submodule", "sync", "--recursive", cwd=sdk)
+    # Repair missing dependency files too (#580), without discarding build trees.
+    git("submodule", "update", "--init", "--recursive", "--force", "--jobs", "8", cwd=sdk)
     return sdk
 
 

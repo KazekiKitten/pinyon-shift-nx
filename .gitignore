@@ -21,6 +21,7 @@ sdk/
 private/
 /docs/*
 !/docs/BUILDING.md
+!/docs/LOCAL_BUILD_COST.md
 !/docs/REVERSE_ENGINEERING.md
 !/docs/LEGAL.md
 !/docs/FACADE_LIFETIME_FAULTS.md
