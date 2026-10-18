@@ -34,8 +34,11 @@ the full host queue prefix before guest fence and interrupt completion
 raised the Odin's race mean from 16.68 to 20.27 ms and the Deck's from
 16.77 to 48.21 ms, with worse p99 on both. Free roam lost too. The cvar
 `gpu_true_fence_completion` is a default-off diagnostic; the mirror remains
-in use. A different asynchronous retirement design needs a new probe
-before a shared arena is justified.
+in use. A separate default-off asynchronous probe now ends the submission
+at a fence, signals a timeline value behind it, and publishes the guest
+result from a completion thread. Its producer never waits on that semaphore.
+[Round 2 measurements](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/CLEAN_SLATE_STAGE0.md#cs-04-asynchronous-timeline-completion)
+are required before this design can decide the shared-arena gate.
 
 The first step was a census of what the game actually sends the GPU, taken over 17,580 frames of scripted routes and later extended by 10,980 more ([NATIVE_FRAME_CONTRACT.md](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/native-renderer/NATIVE_FRAME_CONTRACT.md)):
 

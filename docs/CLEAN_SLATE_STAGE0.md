@@ -579,3 +579,27 @@ order/hash negative controls and existing-path protection pass
 (`session-unit-final.json`, exits 0/0/0/86/86/86). Reader and instrumentation
 self-tests pass. Seven locally patched generated partitions were restored
 byte-for-byte using their guarded backups before performance builds.
+
+### CS-0.4: asynchronous timeline completion
+
+The Round 2 probe is separate from the synchronous drain. Arm it at start
+with `gpu_async_fence_probe=true`; hot-toggle
+`gpu_async_fence_completion`. Both default false. Vulkan timeline support
+is enabled before device creation only when armed. At a guest fence or
+scratch write and command interrupt, the command processor ends the current
+submission without waiting and enqueues a timeline signal after that work
+in the submission worker FIFO. A dedicated host thread waits on the
+semaphore, then performs the guest write or interrupt. It has guest thread
+TLS for interrupt dispatch. The producer never waits on that semaphore.
+Off transitions preserve callback FIFO order until older delayed writes
+retire. Existing resolve-readback synchronization is retained on both sides.
+A backend without the armed timeline worker refuses hot mode rather than
+silently reporting early completion. This is a diagnostic, not a shared
+arena implementation.
+
+SDK `200bfdb`, parent checkpoint accompanying this text. Native Windows
+Release builds and a 12-second pinned desktop smoke route complete with
+the worker armed and completion enabled (`round2/async-smoke1`). This is
+only a smoke check, not the latency gate. Handheld race/free-roam A/B and
+A/A measurements follow with the separate `cs04a-*` routes. The synchronous
+Round 1 drain results above remain historical and cannot decide this mode.
