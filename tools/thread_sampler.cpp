@@ -260,7 +260,7 @@ void WalkStack(HANDLE process, HANDLE thread, CONTEXT context, std::vector<DWORD
 
 int Usage() {
   std::fprintf(stderr,
-               "usage: pinyon_shift_thread_sampler --process <exe name> --thread <description> "
+               "usage: pinyon_shift_thread_sampler (--process <exe name> | --pid <pid>) --thread <description> "
                "[--thread <description>...] [--interval-us N] [--lines 1] "
                "[--output <directory>] [--ips 1]\n");
   return 2;
@@ -270,6 +270,7 @@ int Usage() {
 
 int wmain(int argc, wchar_t** argv) {
   std::wstring process_name;
+  DWORD target_process_id = 0;
   std::vector<std::wstring> thread_names;
   uint32_t interval_us = 2000;
   std::filesystem::path output = L".";
@@ -282,6 +283,8 @@ int wmain(int argc, wchar_t** argv) {
     }
     if (arg == L"--process") {
       process_name = argv[++i];
+    } else if (arg == L"--pid") {
+      target_process_id = DWORD(std::wcstoul(argv[++i], nullptr, 10));
     } else if (arg == L"--thread") {
       thread_names.push_back(argv[++i]);
     } else if (arg == L"--interval-us") {
@@ -296,7 +299,9 @@ int wmain(int argc, wchar_t** argv) {
       return Usage();
     }
   }
-  if (process_name.empty() || thread_names.empty() || interval_us < 100) {
+  const bool select_by_name = !process_name.empty();
+  const bool select_by_pid = target_process_id != 0;
+  if (select_by_name == select_by_pid || thread_names.empty() || interval_us < 100) {
     return Usage();
   }
 
@@ -313,10 +318,14 @@ int wmain(int argc, wchar_t** argv) {
     if (process && WaitForSingleObject(process, 0) == WAIT_OBJECT_0) {
       CloseHandle(process);
       process = nullptr;
+      if (target_process_id) {
+        std::fprintf(stderr, "target process exited before the requested threads were ready\n");
+        return 1;
+      }
       Sleep(500);
     }
     if (!process) {
-      while (!(process_id = FindProcess(process_name))) {
+      while (!(process_id = target_process_id ? target_process_id : FindProcess(process_name))) {
         Sleep(50);
       }
       process = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ | SYNCHRONIZE, FALSE,

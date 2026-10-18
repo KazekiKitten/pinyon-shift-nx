@@ -1,3 +1,4 @@
+#include <rex/cs_scheduler.h>
 // FMOD's output played from its ring on the host (NEAR_NATIVE_RESEARCH NN-4.4).
 //
 // FMOD Ex's Xenon output creates the title's one XAudio2 engine and one float
@@ -85,6 +86,13 @@ REXCVAR_DECLARE(bool, pinyon_shift_guest_native);
 extern "C" REX_FUNC(PINYON_GUEST_NATIVE_JOIN(__imp__sub_, PINYON_GUEST_NATIVE_PICK(830B0A38,
                                                                                   83171D10)));
 
+// Verification uses the scheduler's clock for host features that affect guest state.
+static inline __attribute__((always_inline)) std::chrono::steady_clock::time_point CsSemanticNow() {
+  if (rex::cs_scheduler::InActor())
+    return std::chrono::steady_clock::time_point(std::chrono::nanoseconds(rex::cs_scheduler::Now()));
+  return std::chrono::steady_clock::now();
+}
+
 namespace pinyon_shift::guest_native {
 namespace {
 
@@ -114,7 +122,7 @@ constexpr uint64_t kMaxAlignBlocks = 64;
 using Clock = std::chrono::steady_clock;
 
 int64_t NowNs() {
-  return std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now().time_since_epoch())
+  return std::chrono::duration_cast<std::chrono::nanoseconds>(CsSemanticNow().time_since_epoch())
       .count();
 }
 

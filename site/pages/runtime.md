@@ -53,6 +53,20 @@ object allocation only while enabled; it is not a performance build.
 [The Round 2 evidence](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/CLEAN_SLATE_STAGE0.md#cs-01-per-thread-replay-and-shared-memory-order)
 records the capture gaps fixed, writer evidence and remaining limits.
 
+A Windows-only scheduling experiment in probe builds admits guest threads
+and service actors one at a time, with call budgets, explicit waits and
+logical clocks. It still fails before racing: a native shader-prewarm
+completion can deadlock schedule replay, and an unobserved repeat reaches
+a different guest boot helper. No 60-second oracle is accepted. Its
+trace-free desktop race costs 144.567 ms mean frame time versus 16.666 ms
+normally (8.67x), with 157.381 versus 22.007 CPU ms per output frame.
+Different cadence and draws/frame prevent treating the CPU ratio as pure
+scheduler overhead. Default Release compiles these hooks out: 785 active
+objects have zero probe symbols.
+[The scheduling gate and cost controls](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/CLEAN_SLATE_STAGE0.md#cs-1-deterministic-scheduling-probe)
+record the prototype's native-completion gap, unresolved guest-path split,
+CPU rate, route qualification and measurement limits.
+
 The job workers run the game's jobs on XAPI fibers. The game's five fiber functions (`ConvertThreadToFiber`, `ConvertFiberToThread`, `CreateFiber`, `DeleteFiber`, `SwitchToFiber`) are served by the runtime's host fibers (Windows fibers; a stack switch of the runtime's own on Linux and Android; `ucontext` on macOS), so a guest fiber switch never leaves the host call chain. Before that mapping the switch went through the kernel's stack-switch call, and every generated function needed an entry for each return address ([why that mattered](recompiler.md#what-the-generator-emits)).
 
 **The global critical region.** The console disables interrupts for short sections; the runtime turns that into one process-wide recursive mutex, also taken for every guest event and wait (for the handle lookup) and by the vblank interrupt. On the desktop it is contended about 260 times a frame and blocks for about 0.34 ms of a race frame, so it was left alone there. On Android it caused visible hitches ([#416](https://github.com/arcanite24/pinyon-shift/issues/416)): a hold log (`critical_region_hold_log_ms`) and a watchdog that names the holder, matched with `simpleperf`, showed file system path lookups and AAudio stream opens running under the lock, blocking the game's thread for up to 39 ms behind I/O. Most of the guest's interrupts-off sections only wrap one load-reserve/store-conditional pair, which the generated code already turns into a host compare-exchange; the generator marks those (1,001 of 1,062) and they run without the lock (`guest_reservation_sections_unlocked`). On the Odin race that took about 5,000 lock entries a frame off it, cut its contentions from 132-160 to 22-25 a frame and the render thread's CPU by 0.36 ms a frame.

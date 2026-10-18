@@ -19,6 +19,11 @@ Deck LCD; fidelity is "good enough and playable", checked as in
 [NN Verification](NEAR_NATIVE_RESEARCH.md#verification); the desktop is
 secondary.
 
+Current Stage 0 decisions are in [Progress](#progress): Round 3 rejects
+CS-2 at its conservative context gate; the serialized CS-1 prototype still
+fails replay. CS-3 graphics DGC stays on hold and CS-4 remains rejected.
+The estimates below preserve the original proposal, not accepted gains.
+
 ## Summary
 
 - **A rewrite only pays where the current architecture blocks a gain.**
@@ -254,6 +259,7 @@ current recorder, so the Odin may get none of CS-3.
 | ID | Project | Premise to prove | Gate | Size |
 | --- | --- | --- | --- | --- |
 | CS-0.1 | Record and replay a 60 s race with the existing build: log the inputs, timebase reads and sync order, replay, and compare PM4 hashes per frame | The title's nondeterminism is limited to what can be logged | Same PM4 stream for 60 s on desktop and Odin | M |
+| CS-1 | **Round 3 FAIL: zero racing seconds replayed identically.** One permit, 128-call budgets, logical clocks and external-input capture record a qualified race; unobserved replay takes another guest boot path at grant 850,145 / 11.67161 s. A sampled repeat identifies an unrecorded native shader-prewarm completion deadlock. The upstream guest-path state change remains unlocalized. Trace-free prototype: 144.567 vs 16.666 ms mean frame time (8.67x); 157.381 vs 22.007 CPU ms/output frame, with different draw counts. No oracle accepted. | [Scheduler, gate and cost method](CLEAN_SLATE_STAGE0.md#cs-1-deterministic-scheduling-probe); SDK `c44fe44`; `.local/codex-cs/round3/schedule-{race14,cost}-*` |
 | CS-0.2 | Count, from the generated tree, the `ctx` loads and stores an exact observable-state set would delete | The bookkeeping is removable once the publish sets are exact | 15 % or more of host instructions on the hot threads, static | S |
 | CS-0.3 | Check DGC support (`VK_EXT_device_generated_commands`, indirect execution sets) on Turnip V37, RADV on the Deck, NVIDIA and the Mac's Metal ICBs | The yardstick devices can run CS-3 | Supported on the Deck at least; recorded per device | S |
 | CS-0.4 | Report fence completion at real GPU completion instead of at decode, and measure frame time and frame pacing | The game tolerates true fence latency | Frame time within 3 % and p99 unchanged on Odin and Deck | S |
@@ -309,10 +315,11 @@ PM4 stream, not only within the frame and audio thresholds.
   that is deterministic per thread at sync points only, which is weaker
   as an oracle.
 - **The CS-2 ceiling is not large.** Guest code is half the Odin process,
-  and the measured elasticity halves an instruction cut. CS-2 is worth
-  doing for the end state, not as the first gain.
+  and the measured elasticity halves an instruction cut. Round 3 rejects
+  CS-2 at the conservative context gate (0.903% net versus 15%); a new
+  target/escape proof must reopen the census before implementation.
 - **Driver support decides CS-3 and CS-4 per device.** The Odin may get
-  neither, which leaves it with CS-2 and CS-6.
+  neither. CS-2 also fails its current gate; CS-6 remains unmeasured.
 - **True fence latency** may cost frame time on a GPU-bound device such
   as the Odin, where the GPU already takes 15.3 of 16.7 ms.
 - **Scale.** CS-1, CS-2 and CS-3 are each larger than any NN project.
@@ -330,3 +337,4 @@ PM4 stream, not only within the frame and audio thresholds.
 | CS-0.5 | **Pass 2026-10-17.** RADV on the Deck and the Odin's installed Turnip each mapped a coherent 512 MiB allocation at reserved address `0x200000000`; compute checked all 134,217,728 CPU-written words, 0 mismatches. Negative-control shaders returned exactly 1 mismatch and exit 2 on both devices. RADV memory flags `0x6` (system/GTT), Turnip `0x7` (device local). NVIDIA and MoltenVK lack the extension; Astra absent. This proves placement, not guest aliases, performance or fence correctness. | [Allocation/check method and D3D12 caveat](CLEAN_SLATE_STAGE0.md#cs-05-placed-device-memory-mapping); `tools/cs/{placed-map.h,placed-check.comp}`; `.local/codex-cs/placed-*.json` |
 | CS-0.4 | **Round 2 FAIL; CS-4 rejected.** Default-off asynchronous timeline completion ends work at each guest fence and publishes results from a completion thread; its producer never waits on that semaphore. Race/free means A→B: Odin 16.666→20.942 /16.692→21.885 ms (+25.66/+31.11%); Deck 16.800→38.162 /16.875→37.462 (+127.16/+122.00%). All four p99s worsen by 10.35–28.58 ms. A/A mean shifts −0.011..+0.561%; five race/six free pairs. The synchronous drain above was not the deciding test. | Parent `e98117f4`, ShiftGlue `200bfdb`; [async method, controls and limits](CLEAN_SLATE_STAGE0.md#cs-04-asynchronous-timeline-completion); `.local/codex-cs/{odin,deck}/r2-async-{race,free}-{ab,aa}1`; `round2/cs04a-summary.json` |
 | CS-0.1 | **Round 2 FAIL for strict external-event replay; schedule control required.** Per-thread capture fixes the global-order pilot. The final desktop 60 s race repeat, with all memory observers removed, records 9,546 PM4 frames including startup; replay expects the job lock but makes another timebase read from the polling/work-selection path (render sequence 8,511), zero PM4 frames equal. Watched repeats identify job +40 crossing worker publication (3 versus 4, and inverse). Earlier iterations matched at most one frame. CS-1 needs execution/shared-memory ordering or a deliberately weaker replay contract; later causes remain untested. Odin retry was conditional on desktop success and was not attempted. | Parent `ce7580fb`, ShiftGlue `200bfdb`; [capture fixes, final repeat and limitations](CLEAN_SLATE_STAGE0.md#cs-01-per-thread-replay-and-shared-memory-order); `.local/codex-cs/round2/r2-{race1,boot21,race-no-watch}-*`; `tools/cs/{read-session.py,instrument-session-clock.py,instrument-session-observation.py}` |
+| CS-1 | **Round 3 FAIL: zero racing seconds replayed identically.** One permit, 128-call budgets, logical clocks and external-input capture record a qualified race; unobserved replay takes another guest boot path at grant 850,145 / 11.67161 s. A sampled repeat identifies an unrecorded native shader-prewarm completion deadlock. The upstream guest-path state change remains unlocalized. Trace-free prototype: 144.567 vs 16.666 ms mean frame time (8.67x); 157.381 vs 22.007 CPU ms/output frame, with different draw counts. No oracle accepted. | [Scheduler, gate and cost method](CLEAN_SLATE_STAGE0.md#cs-1-deterministic-scheduling-probe); SDK `c44fe44`; `.local/codex-cs/round3/schedule-{race14,cost}-*` |

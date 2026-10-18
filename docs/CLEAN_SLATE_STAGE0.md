@@ -1,7 +1,8 @@
 # Clean-slate Stage 0 evidence
 
 These are probes of the premises in [CLEAN_SLATE_RESEARCH.md](CLEAN_SLATE_RESEARCH.md),
-not changes to the default runtime. Unestablished gates are not passes.
+with experimental modes off by default. Default builds omit the probes.
+Unestablished gates are not passes.
 Local counts and device output are in `.local/codex-cs/`; they contain no
 committed game code. No remote was pushed.
 
@@ -139,6 +140,162 @@ $py = '.local/codex-cs/round2/analysis-venv/Scripts/python.exe'
   --layout .local/codex-cs/round3/context-layout.json `
   --output .local/codex-cs/round3/ctx-net-census.json
 ```
+
+### CS-1 deterministic scheduling probe
+
+The Round 3 desktop experiment serializes guest execution with one permit.
+Guest entries have a 128-call budget, kernel boundaries share that budget,
+waits yield explicitly, and 64 repeated timebase reads yield from polling
+loops. The GPU decoder, audio pump, XMA worker, virtual timers and vblank
+also acquire the permit before affecting guest state. Every grant advances
+the logical clock by 10 microseconds; when every actor is delayed, it jumps
+to the next deadline. Registered signals shorten waits; opaque native
+completions have a one-logical-millisecond polling fallback. Host wall time
+is used for profiling, presentation pacing and the watchdog, not the guest
+clock. The timestamp bundle, timebase, uptime, system time and native guest
+clock hooks use logical time. The initial host epoch is an external input.
+
+Preflight found two native waits that needed explicit scheduler yields:
+GPU WAIT_REG_MEM polling and the render hook's GPU-write notification wait.
+The base XMediaFacade movie workers also self-suspend with NtSuspendThread
+(the observed continuation is 881EC61C). These use cooperative suspension
+in the probe; initial CREATE_SUSPENDED still uses the native startup gate.
+The media observation extends the existing executable finding. No v4
+mapping was inferred from this base run.
+
+The recording contains the schedule and external controller, I/O and audio
+pump inputs. PM4 hashes and word counts are comparisons, not substituted
+guest state. Internal clocks, lock grants, allocations and guest-memory
+loads are not replay values. In serialized traces the v2 record's host_ns
+field contains logical nanoseconds. The render script's clock also uses
+logical time. At its completed stop the private verification process flushes
+the traces, schedule and perf CSV, then terminates without UI teardown.
+That is a bounded diagnostic capture, not coverage of normal shutdown.
+The mutex adapter retries an unset MSVC owner natively: owner publication
+and SRW acquisition/release are separate operations. Treating that
+transient state as a guest wait introduces uncontrolled host timing.
+The earlier build disagrees at grant 139,779 (`schedule-race6-replay`,
+logical 4.35063 s): a cooperative global-lock wait versus a call-budget
+point. That trace establishes native lock arbitration, not a PM4 mismatch;
+it does not identify the recorded owner. The revised adapter closes the
+unset-owner gap and is used for subsequent attempts.
+
+The prototype is Windows-only. Global-region contention against a parked
+actor yields cooperatively; contention against a native backend worker waits
+natively without advancing the guest clock. Distinguishing these uses the
+pinned MSVC STL 14.44.35207 mutex-owner layout, checked for size and alignment.
+This is an experimental portability limit, compiled out of default builds.
+Host producers of the GPU work queue also enter the permit. The GPU idle
+loop uses a fixed logical wait instead of its host spin-count heuristic.
+The lock control varies a foreign worker's hold from 5 to 15 ms and replays
+the same five grants / 50 microseconds, while separately checking an actor
+that yields with the global lock held.
+
+Fixed-delay attempts are retained as failed route qualification, not race
+results. They include missed confirmations during loading, free-roam
+captures, an unbounded movement wait and a car that drifted out of the
+entry trigger. Brake input then drove the stopped car backwards; the final
+route holds the handbrake after the fresh-vehicle startup anchor. It does
+not teleport a car or change the seed. Movie opening and fresh free-roam
+pose anchor startup; confirmations precede throttle, then a fresh movement
+anchor precedes the race window. The driving and end HUD captures are the
+qualification, not the script's exit status or game mode 3 (which includes
+entry and results too). Script ticks pause at anchors; watchdogs count
+output frames. No waits or confirmation inputs occur within the 60-second
+window. Capture `logical_ns` bounds the PM4 interval; perf CSV times and
+process CPU remain host measurements.
+
+**Gate (a): FAIL, zero racing seconds replayed identically.** The qualified
+`schedule-race14-record` stops successfully with both race-HUD captures:
+4,846 PM4 frames including startup, 24,732,250 grants, final logical time
+250.551870063 s. The 638-output-frame capture window spans 59.98244 logical
+seconds / 91.187411 host seconds; the complete tape extends another five
+logical seconds, so it covers more than 60 seconds after the first capture.
+The visible race timer advances 13.461 to 73.780 s.
+
+The **unobserved** replay fails at grant **850,145**, logical **11.67161 s**,
+on guest thread 8: expected call-budget site **82C01D08**, actual
+**824E5100**. This is guest control-flow drift, before racing, not an
+observed PM4-hash mismatch. The helpers' static call edges are recorded in
+the executable findings; they do not prove a changed XAM privilege result.
+The upstream state change is not localized by this trace.
+
+A separately sampled repeat fails earlier, at grant **8,461**, logical
+**3.212016539 s**, waiting for host/main actor 8000000000000100 to attach.
+All-thread native stacks identify a concrete uncontrolled dependency:
+the UI is blocked in `GraphicsSystem::InitializeShaderStorage` on its
+fence; the GPU actor is parked in `VulkanPipelineCache::InitializeShaderStorage`
+waiting for native prewarm workers. Replay expects the UI's next scheduler
+entry before granting the GPU another completion poll. Native backend
+completion is not an input on this tape. This is an external-completion
+coverage failure / scheduler deadlock; serializing guest and service actors
+alone does not control it. It is separate from the unobserved guest-path
+split. No full oracle is accepted, and the experiment does not refute a
+scheduler that also controls those external completions.
+
+**Cost (b): the serialized prototype is much slower, as expected for a
+verification experiment.** `schedule-cost-serial2` uses mode 3, session
+mode 0: no schedule file, external-input tape or PM4 hashing. Its same-input
+normal control is `schedule-cost-normal2`, the default Release with probes
+compiled out. Both use the pinned warm seed, Vulkan/1x, vsync off, a 60 fps
+cap, `gpu_record_thread=false` and `vulkan_async_submission=false`. These
+match the prototype's supported topology; this is not a comparison against
+every shipping renderer configuration. No builds, tests or sampling run
+during the timing windows.
+
+| Desktop race control | Retained rows | Mean / p99 frame ms | Process CPU ms/output frame | Draws/output frame | Average process cores |
+|---|---:|---:|---:|---:|---:|
+| Default Release | 3,594 | 16.666 / 17.380 | 22.007 | 2,467.7 | 1.320 |
+| Serialized, trace-free | 594 | 144.567 / 222.919 | 157.381 | 3,805.0 | 1.089 |
+
+This is **8.67x mean frame time** and **7.15x raw CPU per output frame**.
+Output cadence and trajectories differ; serialized draws/frame are 54.2%
+higher, so the CPU ratio is not an isolated scheduler-overhead estimate or
+an intrinsic bound on serialized execution. CPU rate actually falls from
+1.320 to 1.089 cores. The retained windows consume 79.094 / 93.484 CPU
+seconds over 59.899 / 85.873 host seconds. The full capture spans are
+60.007668 host seconds normally and 60.03764 logical / 86.595386 host
+seconds serialized. CPU is the CSV's process user+kernel time delta, summed
+across threads. Frame and CPU means retain every row except two at each
+capture boundary, excluding readback/PNG disturbance; there is no outlier
+trim. Both runs stop successfully and their driving/end images show the
+race HUD. `schedule-cost-comparison.json` retains values and frame bounds.
+
+Timing uses a longer handbraked prelude and one late race-start press to
+keep the fast control from starting earlier. The normal boot file anchor
+is frame 20 rather than 370: the fast build had already passed the
+file-wait lookback at 370. Racing inputs and measurement frames are
+identical; the startup-anchor difference is outside the measured window.
+Every run saves its scenario and binary fingerprints. The hash gate uses
+its own frozen `schedule-race14-record-scenario.fh1test`, not a later edit.
+The `max_active=1` log describes the single-permit invariant, not an
+independent detector of every host access to guest state. This probe
+establishes neither a correctness oracle nor a shipping performance mode.
+
+Reproduction (frozen local generated trees; backups refuse overwrite):
+
+```powershell
+cmake -S . -B out/build/win-amd64-release -DREXGLUE_ENABLE_CS_PROBES=ON
+# Run instrument-schedule-budget.py for default, xmedia and speech, with
+# separate --backup directories, before building. It journals originals.
+cmake --build out/build/win-amd64-release --target pinyon_shift pinyon_shift_stage_rexruntime
+# Run cs01-serialized-race.fh1test from the pinned warm seed, privately copied.
+# Record: cs_schedule_mode=1, cs_session_mode=1, exclusive schedule/trace paths.
+# Replay: the same binary, cs_schedule_mode=2, cs_session_mode=2, those paths.
+# Timing: cs_schedule_mode=3, cs_session_mode=0 (no tape or PM4 hashing).
+# Both builds: Vulkan, vsync off, 60 fps cap, gpu_record_thread=false,
+# vulkan_async_submission=false. Never build during timing runs.
+```
+
+Budget instrumentation covers **86,245** non-reference generated bodies in
+326 partitions across all three modules; reference execution counters are
+zero. Use `--restore` on each instrumentation backup before returning to a
+default build. `read-schedule.py` validates grant identities, monotone time,
+record count and truncation. The scheduler controls cover reversed native
+arrival order, ordinary shared-memory updates, self-suspension, parked-actor
+and native-worker lock contention, and rejection of changed points,
+truncation and overwrite. A GPU-stream end comparison prevents accepting a
+replay that leaves trailing PM4 frames unread.
 
 ## CS-0.2: observable context state
 

@@ -5,7 +5,7 @@ from pathlib import Path
 import re
 import subprocess
 
-PROBES = re.compile(r'session_probe::|cs_session_(?:mode|path)|gpu_(?:true_fence_completion|async_fence)|'
+PROBES = re.compile(r'session_probe::|cs_scheduler::|cs_schedule_|cs_session_(?:mode|path)|gpu_(?:true_fence_completion|async_fence)|'
                     r'(?:AwaitGuestGpuCompletion|PublishGuestCompletion|StartCompletionWorker|'
                     r'StopCompletionWorker|CompletionWorkerMain)')
 
@@ -22,8 +22,8 @@ def check(build, nm):
             continue
         if obj.exists():
             objects.append(obj)
-        if row['file'].replace('\\', '/').endswith('/session_probe.cpp'):
-            raise ValueError('session_probe.cpp is in the active build')
+        if row['file'].replace('\\', '/').endswith(('/session_probe.cpp','/cs_scheduler.cpp')):
+            raise ValueError('a probe implementation is in the active build')
     found = []
     for start in range(0, len(objects), 40):
         result = subprocess.run([str(nm), '--demangle', *map(str, objects[start:start+40])],
