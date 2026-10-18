@@ -26,6 +26,28 @@ The estimates below preserve the original proposal, not accepted gains.
 
 ## Summary
 
+- **Stage 0 closed the plan (2026-10-18).** All four structural changes
+  failed their gates; detail in
+  [CLEAN_SLATE_STAGE0.md](CLEAN_SLATE_STAGE0.md) and
+  [Progress](#progress):
+  - CS-1: replay diverged even with guest threads serialised under a
+    logical clock (11.7 s into a race, and a deadlock on an untaped
+    native completion), at 8.7x the frame time.
+  - CS-2: the exact, sound count of removable `ctx` traffic is 0.9 % of
+    hot-thread instructions against 15 %. The 24-30 % ceiling needs
+    proven targets for 48,101 indirect calls, which no current tooling
+    gives; that is the only reason to reopen it.
+  - CS-3: the Deck's DGC binds compute pipelines only, the Odin has no
+    DGC, and Deck draws run 2.5 to a pipeline (72 % singletons), so
+    per-pipeline indirect batching has nothing to batch.
+  - CS-4: fixed-address mapping works on Turnip and RADV, but the game
+    waits on its own fences: real completion cost +26-31 % frame time
+    on the Odin and +122-127 % on the Deck, even fully asynchronous.
+
+  The current architecture stays. The probes are compiled only with
+  `REXGLUE_ENABLE_CS_PROBES` and `REXGPU_FH1_ORDERED_CENSUS`.
+- The rest of this page is the plan as written before Stage 0.
+
 - **A rewrite only pays where the current architecture blocks a gain.**
   NL, NN and DL already measured most single techniques on the current
   base, and many lost: PGO (NN-1.4, -0.13 to -0.72 %), devirtualisation
