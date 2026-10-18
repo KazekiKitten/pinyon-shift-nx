@@ -532,6 +532,17 @@ and is exploratory only. Keep the accepted optimistic ceiling separate
 from this stricter, incomplete attempt. Completing a compiler or a session
 scheduler to validate these assumptions would be Stage 1 and was not begun.
 
+### CS-0.3: optional pipeline-run census
+
+The existing frame census does not preserve draw order: it aggregates
+configurations and their counts into windows. Pipeline-switch count and
+draw-run length are therefore **unavailable from that census**. No Deck
+per-pipeline batching saving is inferred from the extension query or from
+distinct shader pairs. An ordered stream of final pipeline IDs at each
+draw would answer the optional question; no new census run was added.
+See [native frame contract](native-renderer/NATIVE_FRAME_CONTRACT.md#gaps-and-unknowns).
+
+
 ### CS-0.1: per-thread replay and shared-memory order
 
 **Round 2 result: external-event capture does not decide shared-memory

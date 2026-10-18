@@ -18,7 +18,9 @@ binding supports compute only. The Odin's installed Turnip V37 exposes
 neither EXT nor NV DGC. NVIDIA 581.08 supports graphics execution sets;
 the M4 Pro accepts a native Metal render ICB with per-command pipelines,
 but MoltenVK 1.4.1 exposes neither Vulkan DGC extension. This leaves the
-proposed graphics front end blocked on the yardstick drivers. See the
+proposed graphics front end blocked on the yardstick drivers. Per-pipeline
+indirect draws remain unmeasured: the existing frame census aggregates
+configurations and discards the order needed to count pipeline runs. See the
 [Stage 0 device table and method](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/CLEAN_SLATE_STAGE0.md#cs-03-driver-capabilities).
 
 The separate placed-mapping probe succeeded on both yardsticks: a 512 MiB
