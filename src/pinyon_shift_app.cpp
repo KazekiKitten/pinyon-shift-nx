@@ -64,6 +64,9 @@
 #include "save_backups.h"
 #include "ui/achievements_menu.h"
 #include "ui/photo_export.h"
+#if !defined(__ANDROID__)
+#include "ui/frame_inspector.h"
+#endif
 #include "ui/xam_dialogs.h"
 #include "ui/settings_menu.h"
 #include "ui/touch_pad.h"
@@ -73,6 +76,19 @@
 
 #ifdef PINYON_SHIFT_PGO_GENERATE
 extern "C" int __llvm_profile_dump(void);
+#endif
+
+#if !defined(__ANDROID__)
+REXCVAR_DEFINE_BOOL(fh1_frame_inspector, false, "GPU",
+                    "Open the desktop frame inspector on startup (Ctrl+F8 toggles it)")
+    .lifecycle(rex::cvar::Lifecycle::kRequiresRestart);
+REXCVAR_DEFINE_BOOL(fh1_frame_inspector_replay, false, "GPU",
+                    "Start a desktop frame-dump workspace with the title suspended")
+    .lifecycle(rex::cvar::Lifecycle::kRequiresRestart);
+REXCVAR_DEFINE_INT32(fh1_frame_inspector_view, 0, "GPU",
+                     "Initial replay inspector view: 0 color, 1 wireframe, 2 overdraw")
+    .range(0, 2)
+    .lifecycle(rex::cvar::Lifecycle::kRequiresRestart);
 #endif
 
 REXCVAR_DEFINE_BOOL(pinyon_shift_touch_controls, REX_PLATFORM_ANDROID, "Pinyon Shift",
@@ -1032,7 +1048,27 @@ void PinyonShiftApp::ApplyMapView(bool open) {
   pinyon_shift::diagnostics::RecordEvent("display.hor_plus_view", {{"wide", open ? "0" : "1"}});
 }
 
+#if !defined(__ANDROID__)
+void PinyonShiftApp::ToggleFrameInspector() {
+  if (frame_inspector_ && frame_inspector_->is_open()) {
+    frame_inspector_.reset();
+    return;
+  }
+  auto* graphics = runtime() ? runtime()->graphics_system() : nullptr;
+  if (!graphics || !imgui_drawer() || !immediate_drawer()) return;
+  frame_inspector_ = std::make_unique<pinyon_shift::ui::FrameInspector>(
+      *imgui_drawer(), *immediate_drawer(), *graphics,
+      REXCVAR_GET(fh1_frame_inspector_replay));
+}
+#endif
+
 void PinyonShiftApp::OnPostSetup() {
+#if !defined(__ANDROID__)
+  rex::ui::RegisterBind("bind_frame_inspector", "Ctrl+F8", "Toggle the desktop frame inspector",
+                        [this] { ToggleFrameInspector(); });
+  if (REXCVAR_GET(fh1_frame_inspector) || REXCVAR_GET(fh1_frame_inspector_replay))
+    ToggleFrameInspector();
+#endif
   // Launcher DLC selection is shared by normal and isolated modded profiles.
   // Saved games still use the active user root chosen in OnConfigurePaths.
   runtime()->kernel_state()->content_manager()->SetMarketplaceRoot(
@@ -1397,6 +1433,9 @@ void PinyonShiftApp::OnPostLaunchModule(rex::system::XThread* thread) {
 }
 
 bool PinyonShiftApp::ShouldStartModuleThread() {
+#if !defined(__ANDROID__)
+  if (REXCVAR_GET(fh1_frame_inspector_replay)) return false;
+#endif
   // A frame replay drives the GPU on its own; the title stays suspended.
   return rex::cvar::GetFlagByName("fh1_frame_replay").empty();
 }
@@ -1428,6 +1467,10 @@ bool PinyonShiftApp::OnWindowCloseRequested() {
 }
 
 void PinyonShiftApp::OnShutdown() {
+#if !defined(__ANDROID__)
+  rex::ui::UnregisterBind("bind_frame_inspector");
+  frame_inspector_.reset();
+#endif
   pinyon_shift::mod::NotifyShutdown();
   rex::ui::UnregisterBind("bind_game_menu");
   rex::cvar::UnregisterChangeCallbacks("pinyon_shift_hor_plus");

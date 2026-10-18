@@ -86,6 +86,10 @@ set(PINYON_SHIFT_HOST_SOURCES
     src/native_renderer/shader_capture.cpp
 )
 
+if(NOT ANDROID)
+    list(APPEND PINYON_SHIFT_HOST_SOURCES src/ui/frame_inspector.cpp)
+endif()
+
 if(PINYON_SHIFT_HOST_TESTS_ONLY)
     # No game target; the tests and tools below still build.
 elseif(WIN32)
@@ -139,6 +143,16 @@ add_executable(pinyon_shift_fh1_ui_api_tests EXCLUDE_FROM_ALL
     src/ui/fh1_ui_api.cpp
 )
 target_include_directories(pinyon_shift_fh1_ui_api_tests PRIVATE src)
+
+add_executable(pinyon_shift_frame_inspector_tests EXCLUDE_FROM_ALL
+    tests/ui/frame_inspector_test.cpp)
+target_include_directories(pinyon_shift_frame_inspector_tests PRIVATE ${REXSDK_DIR}/include)
+find_package(Threads REQUIRED)
+target_link_libraries(pinyon_shift_frame_inspector_tests PRIVATE Threads::Threads)
+
+add_executable(pinyon_shift_frame_inspector_input_tests EXCLUDE_FROM_ALL
+    tests/ui/frame_inspector_input_test.cpp)
+target_link_libraries(pinyon_shift_frame_inspector_input_tests PRIVATE rex::ui rex::runtime)
 
 add_executable(pinyon_shift_fh1_shader_pack_tests EXCLUDE_FROM_ALL
     tests/native_renderer/fh1_shader_pack_test.cpp
@@ -247,6 +261,8 @@ add_custom_target(pinyon_shift_host_tests)
 add_dependencies(pinyon_shift_host_tests
     pinyon_shift_camera_tuning_tests
     pinyon_shift_fh1_ui_api_tests
+    pinyon_shift_frame_inspector_tests
+    pinyon_shift_frame_inspector_input_tests
     pinyon_shift_fh1_shader_pack_tests
     pinyon_shift_hostui_tests
     pinyon_shift_host_config_tests

@@ -200,6 +200,11 @@ link = "modding.md"
 cells = ["yes", "yes", "yes", "partly: DXT texture replacements need a GPU with BC formats ([#516](https://github.com/arcanite24/pinyon-shift/issues/516))"]
 
 [[platform]]
+feature = "Frame inspector"
+link = "modding.md#frame-inspector"
+  cells = ["partly: desktop Vulkan; color, resolve-source previews and replay diagnostics", "partly: desktop Vulkan implementation; device qualification pending", "partly: desktop Vulkan implementation; diagnostic views depend on device capabilities; qualification pending", "n/a"]
+
+[[platform]]
 feature = "Hidden player-car variants"
 link = "playing.md#traffic-and-showcase-cars"
 cells = ["partly: base purchase, reload and driving checked; intro garage entry checked; remaining garage/paint and v4 pending", "partly: the same database mod; not qualified", "partly: the same database mod; not qualified", "partly: shared from the PC with its mods; not qualified"]

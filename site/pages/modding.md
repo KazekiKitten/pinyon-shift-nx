@@ -137,6 +137,34 @@ on the target GPU. Only independently authored code may be distributed;
 translated guest bytecode stays local.
 [Authoring contract and capture commands](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/MODDING.md#shader-replacements).
 
+## Frame inspector
+
+On desktop Vulkan, **Ctrl+F8** opens a frame inspector. **Capture next frame**
+freezes surface sizes, formats, draw counts and previews, resolve source
+rectangles, and texture identities. Hover a texture row for its base-level
+XXH3 hash, which uses the texture replacement filename's byte domain.
+GPU-written or unavailable payloads have no CPU hash. The inspector is off
+by default and captures only on request; capturing waits for the GPU.
+
+To open a local `.fh1frame` dump, restart with
+`--fh1_frame_inspector_replay=true`, paste its path and choose **Open dump**.
+The title stays suspended in this workspace. **Color** reports the replay's
+front-buffer comparison; **Wireframe** needs `fillModeNonSolid`, and
+**Overdraw** adds red per fragment on blend-capable attachments while keeping
+render-pass clears. Diagnostic views are restricted to replay.
+
+Previews are at most 256 pixels along their longest side. Resolve previews
+show the source before destination packing and sample selection; depth is
+grayscale. The [inspector contract and limits](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/native-renderer/FRAME_INSPECTOR.md)
+describe image lifetimes and how to record and compare a dump. Dumps contain
+game data: keep them local.
+
+Windows verification on an RTX 4080 covered live capture, dump recovery and
+diagnostic views. Inspected Color output matched plain replay byte for byte;
+the tested recording still differed from its live frame. Disabled frame-time
+measurements varied too much to establish a no-regression result. The linked
+contract records the method, numbers and remaining qualification work.
+
 ## Custom radio stations
 
 `tools/build-fh1-radio.py` builds a mod that adds a folder of music to Radio1, Radio2 or Radio3, or replaces a station's playlist with it. It needs [FFmpeg](https://ffmpeg.org/) and uses your own game files:

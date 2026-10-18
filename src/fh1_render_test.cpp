@@ -429,7 +429,7 @@ void LoadScript(const std::filesystem::path& path) {
       HostKeyStep step{ParseUnsigned(frame, 10, "cvar_frame")};
       step.cvar_name = name;
       step.cvar_value = value;
-      if (!g_test.host_keys.empty() && step.frame <= g_test.host_keys.back().frame) {
+      if (!g_test.host_keys.empty() && step.frame < g_test.host_keys.back().frame) {
         Fail("script_hostkey_order");
       }
       g_test.host_keys.push_back(step);

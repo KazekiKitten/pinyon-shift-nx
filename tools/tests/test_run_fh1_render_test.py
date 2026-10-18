@@ -938,6 +938,23 @@ class Fh1RenderTestRunnerTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     MODULE.parse_scenario(script)
 
+    def test_accepts_same_frame_cvars_for_aligned_captures(self):
+        header = MODULE.HEADER + "\ninput 0 0000 0 0 0 0 0 0\n"
+        tail = "capture 20 shot\nstop 30\n"
+        with tempfile.TemporaryDirectory() as directory:
+            script = Path(directory) / "route.fh1test"
+            script.write_text(header + "cvar 5 fh1_frame_dump_frame -1\n"
+                              "cvar 5 fh1_inspector_capture true\n" + tail, encoding="utf-8")
+            self.assertEqual([(20, "shot")], MODULE.parse_scenario(script)[0])
+            for steps in ("cvar 6 a true\ncvar 5 b true\n",
+                          "cvar 5 a true\nhostkey 5 enter\n",
+                          "cvar 5 a true\naudiocapture 5\n"):
+                script.write_text(header + steps + tail, encoding="utf-8")
+                with self.assertRaises(ValueError):
+                    MODULE.parse_scenario(script)
+        route = MODULE_PATH.parents[1] / "config/render-tests/fh1-frame-inspector.fh1test"
+        self.assertEqual(2, len(MODULE.parse_scenario(route)[0]))
+
     def test_accepts_memory_snapshots_and_pokes(self):
         header = MODULE.HEADER + "\ninput 0 0000 0 0 0 0 0 0\n"
         tail = "capture 20 shot\nstop 30\n"

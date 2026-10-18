@@ -434,7 +434,9 @@ def parse_scenario(
             # cvar <frame> <name> <value>: a settings change at run time;
             # audiocapture <frame>: eight seconds of the native mix to
             # rally-audio-probe.wav.
-            if int(fields[1]) <= previous_hostkey:
+            if int(fields[1]) < previous_hostkey or (
+                fields[0] != "cvar" and int(fields[1]) == previous_hostkey
+            ):
                 raise ValueError(f"line {number}: host keys must be in increasing frame order")
             previous_hostkey = int(fields[1])
         elif (fields[0] == "mark" and len(fields) == 2) or (

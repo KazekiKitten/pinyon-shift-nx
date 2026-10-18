@@ -56,6 +56,8 @@ try {
     $failed = @()
     foreach ($test in @(
             'pinyon_shift_fh1_ui_api_tests',
+            'pinyon_shift_frame_inspector_tests',
+            'pinyon_shift_frame_inspector_input_tests',
             'pinyon_shift_hostui_tests',
             'pinyon_shift_host_config_tests',
             'pinyon_shift_profile_body_tests',
