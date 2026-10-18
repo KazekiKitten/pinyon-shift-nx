@@ -90,6 +90,16 @@ A built-in, Bluetooth or USB controller works as on the PC. On a touch screen, o
 
 ## Troubleshooting
 
+On older Linux kernels, including the Pixel 3 XL's reported 4.9.337 kernel,
+the runtime now checks that a fixed allocation actually maps the requested
+address. This prevents a relocated mapping from leaving a reused guest stack's
+guard inaccessible. A native ARM64 probe on the Odin 2 Portal's 4 KB pages
+reproduced the failure with old-kernel mapping behavior simulated and passed
+with the fix. A current Pixel 3 XL launch is still needed to qualify that
+device. The stack fault in issue #556
+does not by itself show GPU memory exhaustion. The investigation is recorded
+in [facade lifetime faults](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/FACADE_LIFETIME_FAULTS.md).
+
 | Symptom | Cause |
 | --- | --- |
 | The app doesn't find the PC | Different networks, a network that blocks broadcasts, or Windows Firewall. Enter the address the launcher shows and allow the launcher on private networks |

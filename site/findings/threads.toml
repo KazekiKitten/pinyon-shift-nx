@@ -3,6 +3,17 @@
 # ---------------------------------------------------------------- Thread map
 
 [[finding]]
+group = "Thread map"
+base = "0x881ED4F0, 0x881ED538"
+v4 = "0x881ED4F0, 0x881ED538"
+name = "XMedia facade thread creation and stack reuse fault"
+what = "The wrapper at 0x881ED4F0 calls ExCreateThread; 0x881ED538 is its return address. The Pixel 3 XL report in issue #556 faults in memset on the parent thread at that LR while a guest stack is initialized, not while a child fiber executes. The POSIX backend accepted relocated mmap results when old kernels ignored MAP_FIXED_NOREPLACE, leaving reused guard pages inaccessible. Exact-address validation and cleanup now preserve the requested stack commit. The reported GPU budget warning does not establish OOM as this fault's cause."
+how = "Import call analysis and normalized base/v4 function matching; report registers and runtime log; production POSIX allocator regression with the NOREPLACE flag stripped to simulate Linux before 4.17."
+confidence = "confirmed"
+note = "The wrapper and allocator bug are confirmed; a current launch on the reporter's Linux 4.9.337 Pixel is still needed to confirm that this fixes their crash."
+source = "docs/FACADE_LIFETIME_FAULTS.md; thirdparty/shiftglue-sdk/tests/unit/core/memory_posix_test.cpp; issue #556"
+
+[[finding]]
 group = """Thread map"""
 base = """8255AE10, 825A6320, 82FB4AF8, 82C0C8C8"""
 v4 = """825CEC88, 8261E318, 83075D18, 82CCC368"""

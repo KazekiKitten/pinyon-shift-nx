@@ -9522,3 +9522,21 @@ bool PinyonShiftArrayReleaseWalk(PPCContext& ctx, [[maybe_unused]] uint8_t* base
   ctx.cr6.compare<uint32_t>(ctx.r11.u32, ctx.r10.u32, ctx.xer);
   return true;
 }
+
+// Observe the selected allocator before its virtual call (#674), without reading
+// the object again or changing allocation behavior.
+void PinyonShiftTraceAllocationOverride(PPCRegister& r3, PPCRegister& r4,
+                                        PPCRegister& r5, PPCRegister& r11) {
+  static const bool enabled =
+      pinyon_shift::platform::EnvironmentFlag("PINYON_SHIFT_FACADE_LIFETIME_TRACE");
+  if (!enabled) return;
+  static thread_local uint32_t previous_object = 0, previous_target = 0;
+  if (r3.u32 == previous_object && r11.u32 == previous_target && r4.u32 < 0x100000u) return;
+  previous_object = r3.u32;
+  previous_target = r11.u32;
+  const auto* thread = rex::runtime::ThreadState::Get();
+  pinyon_shift::diagnostics::RecordEvent("facade.allocation_override",
+      {{"thread", fmt::format("{:08X}", thread ? thread->thread_id() : 0)},
+       {"object", fmt::format("{:08X}", r3.u32)}, {"target", fmt::format("{:08X}", r11.u32)},
+       {"size", fmt::format("{:08X}", r4.u32)}, {"attributes", fmt::format("{:08X}", r5.u32)}});
+}

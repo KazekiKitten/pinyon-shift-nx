@@ -1568,9 +1568,41 @@ def rally_pace_retry_summary(events: list[dict], state: Path, initial_progress: 
                 completed_retry_qualified=False)
 
 
+def facade_transition_summary(runtime: str, events: list[dict], cycles: int) -> dict:
+    """Require real facade teardown/reload and settings changes, not just survival."""
+    modules = {name: dict(loads=0, unloads=0) for name in
+               ("speechfacade_default.xex", "xmediafacade_default.xex")}
+    loaded = set()
+    for action, name in re.findall(
+            r"\b(Registering|Unregistering) module: (speechfacade_default\.xex|xmediafacade_default\.xex)\b",
+            runtime, re.IGNORECASE):
+        name = name.lower()
+        if action.lower() == "registering":
+            if name in loaded:
+                raise RuntimeError(f"facade registered twice without unloading: {name}")
+            loaded.add(name)
+            modules[name]["loads"] += 1
+        else:
+            if name not in loaded:
+                raise RuntimeError(f"facade unloaded without loading: {name}")
+            loaded.remove(name)
+            modules[name]["unloads"] += 1
+    changes = sum(event.get("event") == "settings.changed" and event.get("row") == "LANGUAGE"
+                  for event in events)
+    if changes < 5:
+        raise RuntimeError("facade transition route requires five LANGUAGE settings changes")
+    if any(count["loads"] < cycles or count["unloads"] < cycles for count in modules.values()):
+        raise RuntimeError(f"facade transition route did not complete {cycles} load/unload cycles")
+    return dict(modules=modules, language_changes=changes)
+
+
 def run(args: argparse.Namespace) -> dict[str, object]:
     scenario = args.scenario.resolve()
     scenario_lines = scenario.read_text(encoding="utf-8").splitlines()
+    facade_cycles = [int(line.split()[2]) for line in scenario_lines
+                     if line.startswith("# expect-facade-transitions ")]
+    if len(facade_cycles) > 1 or any(count < 1 for count in facade_cycles):
+        raise ValueError("expect-facade-transitions requires one positive cycle count")
     audio_languages = [line.split()[2] for line in scenario_lines if line.startswith("# expect-rally-audio ")]
     if len(audio_languages) > 1 or any(language not in {"EN", "MX"} for language in audio_languages):
         raise ValueError("expect-rally-audio requires one language: EN or MX")
@@ -1845,6 +1877,8 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         environment["PINYON_SHIFT_RALLY_TRACE"] = "1"
     if expect_rally_progress or retirements or hub_retirements or resumes or reloads or stage_reloads or audio_languages or pace_languages:
         environment["PINYON_SHIFT_RALLY_PROGRESS"] = "1"
+    if facade_cycles:
+        environment["PINYON_SHIFT_FACADE_LIFETIME_TRACE"] = "1"
     if audio_languages:
         environment["PINYON_SHIFT_RALLY_AUDIO_PROBE"] = audio_languages[0]
     if pace_languages:
@@ -1942,6 +1976,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             stream.seek(runtime_offset)
             runtime_slice = stream.read().decode("utf-8", errors="replace")
     lowered = runtime_slice.lower()
+    facade_transitions = facade_transition_summary(runtime_slice, events, facade_cycles[0]) if facade_cycles else None
     forbidden = (
         "device_removed",
         "device_hung",
@@ -2147,6 +2182,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "event_log": str(event_log),
         "performance_log": str(perf_csv),
         "captures": image_results,
+        "facade_transitions": facade_transitions,
         "fh1_pass_families": pass_families,
         "pass_inventory_enabled": args.collect_pass_inventory,
         "shader_capture_dir": (

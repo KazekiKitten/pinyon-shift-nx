@@ -57,4 +57,11 @@ Pinyon Shift's **AI OPPONENTS** setting ([Playing](playing.md#ai-opponents)) rew
 
 ## Crash guards and helpers
 
+The facade-transition investigation separates a thread-stack mapping fault
+from an allocation-override crash after unload/reload. A return address alone
+does not identify which object was freed. The transition route requires both
+facades to load and unload twice and changes LANGUAGE through the host menu;
+those choices are saved for restart. Evidence and remaining validation are in
+[facade lifetime faults](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/FACADE_LIFETIME_FAULTS.md).
+
 {{findings:systems/Crash guards and helpers}}

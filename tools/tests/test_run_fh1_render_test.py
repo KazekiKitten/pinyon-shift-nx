@@ -18,6 +18,20 @@ SPEC.loader.exec_module(MODULE)
 
 
 class Fh1RenderTestRunnerTests(unittest.TestCase):
+    def test_facade_transitions_require_ordered_cycles_and_language_changes(self):
+        events = [dict(event="settings.changed", row="LANGUAGE")] * 5
+        cycle = "\n".join(f"{action} module: {name}" for name in
+                          ("speechfacade_default.xex", "xmediafacade_default.xex")
+                          for action in ("Registering", "Unregistering"))
+        result = MODULE.facade_transition_summary(cycle + "\n" + cycle, events, 2)
+        self.assertEqual(result["modules"]["speechfacade_default.xex"]["unloads"], 2)
+        self.assertEqual(result["language_changes"], 5)
+        for runtime, changes in ((cycle, events), (cycle * 2, events[:4]),
+                                 ("Unregistering module: speechfacade_default.xex", events),
+                                 ("Registering module: speechfacade_default.xex\n" * 2, events)):
+            with self.assertRaises(RuntimeError):
+                MODULE.facade_transition_summary(runtime, changes, 2)
+
     def test_rally_test_ai_requires_native_controller_and_stays_diagnostic(self):
         driver = dict(event="fh1.render_test.rally_ai_driver", route="2", race_serial="49",
                       car="41000000", control_mode="0")

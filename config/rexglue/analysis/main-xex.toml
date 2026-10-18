@@ -1822,3 +1822,10 @@ registers = ["r26", "r27", "r30"]
 address = 0x824167EC
 name = "PinyonShiftD3dDrawExit"
 registers = ["r31"]
+
+# Diagnostic-only allocation override target, immediately before the virtual
+# call whose return address is reported in #674. See FACADE_LIFETIME_FAULTS.md.
+[[midasm_hook]]
+address = 0x82CC1B58
+name = "PinyonShiftTraceAllocationOverride"
+registers = ["r3", "r4", "r5", "r11"]

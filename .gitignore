@@ -23,6 +23,7 @@ private/
 !/docs/BUILDING.md
 !/docs/REVERSE_ENGINEERING.md
 !/docs/LEGAL.md
+!/docs/FACADE_LIFETIME_FAULTS.md
 !/docs/TROUBLESHOOTING.md
 !/docs/LAUNCHER_DEFENDER_659.md
 !/docs/INSTALLING.md

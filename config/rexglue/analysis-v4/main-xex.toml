@@ -2239,3 +2239,9 @@ size = 0x10
 
 [functions."82FEF0E8"]
 size = 0x14
+
+# Base 82CC1B58: normalized allocation call context, unchanged register roles.
+[[midasm_hook]]
+address = 0x82D835D8
+name = "PinyonShiftTraceAllocationOverride"
+registers = ["r3", "r4", "r5", "r11"]

@@ -551,6 +551,17 @@ source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Developer options and lefto
 # ------------------------------------------------------ Crash guards and helpers
 
 [[finding]]
+group = "Crash guards and helpers"
+base = "0x82CC1B10, 0x82CC1B58, 0x82CC1B60, 0x82CBC390, 0x82CBC348, 0x8349F978, 0x8349FDB4"
+v4 = "0x82D83590, 0x82D835D8, 0x82D835E0, 0x82D7DE88, 0x82D7DE40, 0x835950C8, 0x83595504"
+name = "thread-specific allocation override at facade transition crash"
+what = "0x82CC1B10 obtains an allocation override for the current guest thread through 0x82CBC390 and calls its first virtual method; 0x82CC1B60 is the return address of that call. 0x82CBC348 searches ID/object pairs beginning at 0x8349F978; 0x8349FDB4 gates selection of an override. Issue #674 reports this LR after facade unload/reload, but does not identify the object's lifetime or the faulting instruction. LANGUAGE changes in the host PROFILE menu are saved for process restart and do not reload assets live, so their presence in the log does not prove a speech-job cancellation fault."
+how = "Allocation call and thread-ID registry analysis; base/v4 normalized function/context matches and paired data loads; inspection of SettingsPages::Setting and the 0.6.0 crash report."
+confidence = "confirmed"
+note = "The allocation path and mappings are confirmed. The crash's ownership cause remains unproven; no null-write suppression is applied."
+source = "docs/FACADE_LIFETIME_FAULTS.md; config/render-tests/fh1-facade-transitions.fh1test; issue #674"
+
+[[finding]]
 group = """Crash guards and helpers"""
 base = """sub_82C6DEF0, 0x82C6DFA8"""
 v4 = """0x82D2EC30"""

@@ -76,6 +76,12 @@ ARM found bugs x86 hid:
 - **Drivers.** Each mobile driver needed its own workaround, and frame replay on two devices was the fastest way to bisect them.
 - **One variable, two copies.** A mutable `static inline` member defined in a header is a weak symbol in every shared library that uses it. Android's linker resolves each library within its own group, so the generated code (`libmain.so`) and the runtime (`librexruntime.so`) each had a copy of the global lock's switches, and a setting the runtime changed never reached the generated code. An in-run A/B that toggled such a switch measured nothing; `llvm-nm -D --defined-only` listing `V` symbols in both libraries shows the problem. Define mutable state once in a source file.
 
+Fixed-address allocation also depends on the kernel version. Older Android
+kernels can ignore `MAP_FIXED_NOREPLACE` and return a different mapping.
+Validate the returned address and test reuse of protected stack pages. An ARM64
+probe on the Odin's 4 KB pages reproduced this by stripping the flag: the old
+allocator failed, the fix passed. See [the investigation](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/FACADE_LIFETIME_FAULTS.md).
+
 ## Keep host file names in UTF-8
 
 On Windows, `std::filesystem::path::string()` converts through the ANSI code page and throws when a character has no mapping there. A player's song with a Cyrillic file name crashed the game as soon as the music status line read its title ([#552](https://github.com/arcanite24/pinyon-shift/issues/552)), and the same call sat on mod, LUT and save-backup names. Convert paths to UTF-8 with `u16string()` (`rex::path_to_utf8`), build them from UTF-8 with `rex::to_path`, and test with a file name the test machine's code page can't hold.
