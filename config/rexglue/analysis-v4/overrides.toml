@@ -11,6 +11,8 @@
 # in r31 before its travel-input test. v4 adds a second entry below the branch,
 # so an automatic context match is ambiguous. Both sites precede the input test.
 "82803344" = "828B787C"
+# The same map update's return from its travel predicate (#485 marker fix).
+"82803360" = "828B7898"
 # Native map nearest-road wrapper: r4 is still a position pointer and r3
 # input is unused. v4 replaces the base road_type lookup through component
 # 832FF094 with a query on the GPS position manager (v4 833EDC44).

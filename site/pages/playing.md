@@ -200,7 +200,9 @@ Turn cheats on in **SETTINGS > CHEATS** and restart. The game then plays a separ
 
 **VEHICLE** has an experimental **FAST TRAVEL ANYWHERE** option, off by default.
 Open the game's map, choose a road and press <kbd>X</kbd> to use the game's
-normal travel confirmation, loading screen and streaming wait. Races and
+normal travel confirmation, loading screen and streaming wait. A marker the
+game can already travel to, such as an outpost or the festival, keeps its
+normal arrival spot; any other marker takes you to its nearest road. Races and
 scripted travel locks still apply. This temporary trainer option is separate
 from v4's Fast Travel Anywhere ownership setting.
 

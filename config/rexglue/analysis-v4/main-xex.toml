@@ -1442,6 +1442,14 @@ address = 0x828B787C
 name = "PinyonShiftMapTravelInput"
 registers = ["r21", "r31"]
 
+# The map update's predicate result (r3) before clrlwi. When FAST TRAVEL
+# ANYWHERE alone admitted a marker the title refused, drop r21 for the road
+# fallback; eligible markers (outposts, festival) keep their own placement.
+[[midasm_hook]]
+address = 0x828B7898
+name = "PinyonShiftMapTravelMarker"
+registers = ["r3", "r21", "r31"]
+
 # #482 AI OPPONENTS (pinyon_shift_ai_opponents, src/pinyon_shift_runtime_hooks.cpp):
 # the event's opponent difficulty before sub_8249BCB8 picks the database
 # column suffix (r3); the car spawn's call to the AI config fill

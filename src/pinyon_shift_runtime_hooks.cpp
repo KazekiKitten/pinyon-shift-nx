@@ -7124,11 +7124,20 @@ void PinyonShiftAiTraceDynamicUpdate(PPCRegister&) {
 
 // The map still runs its complete native fade, move and streaming sequence.
 void PinyonShiftMapTravelGate(PPCRegister& r11, PPCRegister& r30, PPCRegister& r31) {
-  if (pinyon_shift::cheats::AllowMapTravel(r30.u32, (r31.u32 & 0xFFu) != 0)) r11.u64 = 1;
+  if (pinyon_shift::cheats::AllowMapTravel(r30.u32, (r31.u32 & 0xFFu) != 0,
+                                           (r11.u32 & 0xFFu) != 0)) {
+    r11.u64 = 1;
+  }
 }
 
 void PinyonShiftMapTravelInput(PPCRegister& r21, PPCRegister& r31) {
   if (pinyon_shift::cheats::PrepareMapTravelInput(r31.u32)) r21.u64 = 0;
+}
+
+// The predicate also runs for the map's button hints, so the hovered marker
+// is only dropped here, at the map update's own call, never in the gate.
+void PinyonShiftMapTravelMarker(PPCRegister& r3, PPCRegister& r21, PPCRegister& r31) {
+  if (pinyon_shift::cheats::UseMapRoadFallback(r31.u32, (r3.u32 & 0xFFu) != 0)) r21.u64 = 0;
 }
 
 // The trainer's live credits (NP-8.3), through the title's own accessors as
