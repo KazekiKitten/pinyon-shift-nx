@@ -76,6 +76,7 @@ set(PINYON_SHIFT_HOST_SOURCES
     src/ui/achievements_menu.cpp
     src/ui/touch_pad.cpp
     src/config/host_config.cpp
+    src/platform/display_hdr.cpp
     src/platform/host_platform.cpp
     src/platform/sha256.cpp
     ${REXSDK_DIR}/thirdparty/crypto/sha256.cpp

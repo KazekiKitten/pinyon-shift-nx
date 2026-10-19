@@ -34,7 +34,7 @@ pinyon = "Presets, MSAA up to 4x, FXAA on the world only, anisotropic filtering,
 feature = "HDR"
 link = "playing.md#hdr"
 xbox = "No"
-pinyon = "HDR output with paper white, highlights and a calibration screen"
+pinyon = "HDR output with paper white, highlights and a calibration screen; on Windows it can turn the display's HDR on while playing"
 
 [[original]]
 feature = "Textures"

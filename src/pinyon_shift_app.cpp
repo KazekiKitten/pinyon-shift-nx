@@ -43,13 +43,14 @@
 #include <rex/ui/windowed_app_context.h>
 #include <rex/ui/window.h>
 
-#if !defined(_WIN32) && !defined(__ANDROID__)
+#if !defined(__ANDROID__)
 #include <SDL3/SDL_video.h>
 #endif
 
 #include "native_renderer/guest_output_renderer.h"
 #include "native_renderer/shader_capture.h"
 #include "pinyon_shift_diagnostics.h"
+#include "platform/display_hdr.h"
 #include "platform/host_platform.h"
 #include "pinyon_shift_runtime_hooks.h"
 #include "config/default_keys.h"
@@ -104,6 +105,10 @@ REXCVAR_DEFINE_STRING(enabled_mods, "", "Mods",
 REXCVAR_DEFINE_BOOL(pinyon_shift_hor_plus, false, "Display",
                     "Ultrawide: widen the horizontal field of view to the window's aspect "
                     "(Hor+), shown stretched from the 16:9 image; the HUD stretches with it")
+    .lifecycle(rex::cvar::Lifecycle::kHotReload);
+REXCVAR_DEFINE_BOOL(pinyon_shift_windows_hdr, false, "Display",
+                    "Windows: turn HDR on for the game's display while the game runs, and "
+                    "back off when it closes (a display already in HDR is left on)")
     .lifecycle(rex::cvar::Lifecycle::kHotReload);
 REXCVAR_DEFINE_BOOL(pinyon_shift_save_backups, true, "Pinyon Shift",
                     "Copy the save files to <state>/backups/saves after the title writes them "
@@ -552,6 +557,7 @@ bool EnsureSupportedConfig(const std::filesystem::path& path, bool& created,
 void OnHostGpuLoss() {
   pinyon_shift::diagnostics::RecordEvent("graphics.device_lost",
                                          {{"gpu_backend", rex::cvar::GetFlagByName("gpu_backend")}});
+  pinyon_shift::platform::RestoreDisplayHdr();
   if (!pinyon_shift::fh1_render_test::Enabled()) {
     pinyon_shift::platform::ShowFatalError(
         "Graphics driver stopped responding",
@@ -561,6 +567,36 @@ void OnHostGpuLoss() {
         "resolution scale in the launcher's settings.");
   }
   pinyon_shift::platform::ExitImmediately(1309);
+}
+
+// WINDOWS HDR: HDR on for the game's display, the window's once it exists,
+// else the one SDL opens it on (the MONITOR setting, else the primary).
+void TurnOnWindowsHdr(void* native_window) {
+  using pinyon_shift::platform::DisplayHdrResult;
+  DisplayHdrResult result = DisplayHdrResult::kUnsupported;
+#if defined(_WIN32)
+  if (native_window) {
+    result = pinyon_shift::platform::TurnOnDisplayHdr(native_window);
+  } else {
+    SDL_DisplayID display = SDL_GetPrimaryDisplay();
+    if (const int32_t index = REXCVAR_GET(monitor); index > 0) {
+      int count = 0;
+      if (SDL_DisplayID* displays = SDL_GetDisplays(&count)) {
+        if (index <= count) display = displays[index - 1];
+        SDL_free(displays);
+      }
+    }
+    SDL_Rect bounds{};
+    result = display && SDL_GetDisplayBounds(display, &bounds)
+                 ? pinyon_shift::platform::TurnOnDisplayHdrAt(bounds.x + bounds.w / 2,
+                                                              bounds.y + bounds.h / 2)
+                 : pinyon_shift::platform::TurnOnDisplayHdrAt(0, 0);
+  }
+#else
+  (void)native_window;
+#endif
+  pinyon_shift::diagnostics::RecordEvent(
+      "display.windows_hdr", {{"result", pinyon_shift::platform::DisplayHdrResultName(result)}});
 }
 
 }  // namespace
@@ -804,6 +840,17 @@ void PinyonShiftApp::OnPreSetup(rex::RuntimeConfig& config) {
   }
   pinyon_shift::fh1_render_test::Configure(config);
   pinyon_shift::rally::ConfigureAudioProbe(config);
+  // WINDOWS HDR: before the swapchain is made, so the presenter is offered
+  // scRGB. A display a crashed run left in HDR is turned back off first.
+  pinyon_shift::platform::SetDisplayHdrRestoreFile(pinyon_shift::diagnostics::StateRoot() /
+                                                   "windows_hdr_restore.txt");
+  if (REXCVAR_GET(pinyon_shift_windows_hdr) && !pinyon_shift::fh1_render_test::Enabled()) {
+    TurnOnWindowsHdr(nullptr);
+  } else if (const int restored = pinyon_shift::platform::RestoreDisplayHdr()) {
+    pinyon_shift::diagnostics::RecordEvent("display.windows_hdr",
+                                           {{"result", "restored_after_crash"},
+                                            {"displays", std::to_string(restored)}});
+  }
   // The on-screen controls feed user 0 beside any controller (AP-4.2);
   // routes keep their scripted pad alone.
   if (REXCVAR_GET(pinyon_shift_touch_controls) && !pinyon_shift::fh1_render_test::Enabled() &&
@@ -1085,6 +1132,20 @@ void PinyonShiftApp::OnPostSetup() {
                                       }
                                     });
   UpdateHorPlus();
+  // WINDOWS HDR switched in the menu applies at once.
+  rex::cvar::RegisterChangeCallback("pinyon_shift_windows_hdr",
+                                    [this](std::string_view, std::string_view value) {
+                                      if (!window()) return;
+                                      const bool on = value == "true";
+                                      window()->app_context().CallInUIThreadDeferred([this, on] {
+                                        if (on) {
+                                          TurnOnWindowsHdr(window() ? window()->GetNativeWindowHandle()
+                                                                    : nullptr);
+                                        } else {
+                                          pinyon_shift::platform::RestoreDisplayHdr();
+                                        }
+                                      });
+                                    });
   // Until the player has a car, DualSense trigger effects stay slack.
   if (auto* input = runtime() ? dynamic_cast<rex::input::InputSystem*>(runtime()->input_system())
                               : nullptr) {
@@ -1456,6 +1517,7 @@ bool PinyonShiftApp::OnWindowCloseRequested() {
   pinyon_shift::mod::NotifyShutdown();
   pinyon_shift::ui::WaitForPhoto();
   save_backups_.reset();
+  pinyon_shift::platform::RestoreDisplayHdr();
   RecordShutdownOnce();
 #ifdef PINYON_SHIFT_PGO_GENERATE
   // The SDK's hard exit skips the executable's profile atexit handler.
@@ -1474,6 +1536,7 @@ void PinyonShiftApp::OnShutdown() {
   pinyon_shift::mod::NotifyShutdown();
   rex::ui::UnregisterBind("bind_game_menu");
   rex::cvar::UnregisterChangeCallbacks("pinyon_shift_hor_plus");
+  rex::cvar::UnregisterChangeCallbacks("pinyon_shift_windows_hdr");
   PinyonShiftSetMapViewCallback(nullptr);
   if (resize_listener_added_ && window()) {
     window()->RemoveListener(&resize_listener_);
@@ -1509,6 +1572,7 @@ void PinyonShiftApp::OnShutdown() {
       runtime() ? runtime()->graphics_system() : nullptr);
   pinyon_shift::native_renderer::UninstallGuestOutputRenderer(
       runtime() ? runtime()->graphics_system() : nullptr);
+  pinyon_shift::platform::RestoreDisplayHdr();
   RecordShutdownOnce();
 }
 
