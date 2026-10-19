@@ -97,6 +97,16 @@ uploaded. The repository refuses Android packages, libraries and signing keys
 
 ## From the PC to the device
 
+The launcher's source ZIP includes `config/performance/symbol-order-base.txt`,
+which the base Android linker requires. It contains only symbol names ordered
+by our local profiling tool, with no translated instructions or game assets.
+Clustering frequently called functions reduced `libmain.so` PSS from 52 MB to
+34-36 MB on the Odin 2 Portal's boot-to-race route (two runs per build;
+[NN-1.9](NEAR_NATIVE_RESEARCH.md)). If Ninja reports this file missing, update
+the launcher and its installed sources, then retry **Build APK**.
+The same applies if CMake reports `tests/camera_tuning_tests.cpp` missing:
+the source ZIP includes the host test sources checked during configuration.
+
 In the launcher, once the game plays on the PC, choose **Android**:
 
 1. **Build APK** builds `.local/android/pinyon-shift.apk` (20 to 60 minutes
