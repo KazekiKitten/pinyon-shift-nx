@@ -126,7 +126,7 @@ what = """A compressed texture must have complete scaled-resolve ownership acros
 how = """Private painted-MX5 re-entry A/B on multivac (RTX 4080, Windows Vulkan, 2x), texture allocation/payload identities and CPU/GPU invalidation ranges. A synthetic 768x256 DXT1 regression fails three of 27 assertions with the old selection and passes all 27 after the correction, including both mixed base/mip ownership directions."""
 confidence = """confirmed"""
 issue = """#628"""
-note = """The recorded texture bases are transient allocations, not static guest symbols. Disabling draw reuse, selective binding reset, partial row/layer reloads, direct resolve writes or one-off readbacks did not remove the bad signs; disabling readbacks also damaged the car."""
+note = """The recorded texture bases are transient allocations, not static guest symbols. Disabling draw reuse, selective binding reset, partial row/layer reloads, direct resolve writes or one-off readbacks did not remove the bad signs; disabling readbacks also damaged the car. Negative result (2026-10-19): the livery path does not make partly resolved compressed targets, so the rule does not send a GPU-made livery to stale memory. Over a v4 Paint Shop edit, save and Design Creator re-entry at 2x, every compressed texture the rule rejected had a CPU-owned base with leftover resolve pages only in its mips, apart from one transient 8x8 DXT5 during a world reload that did not recur; the livery and world matched 1x."""
 source = """docs/native-renderer/LIVERY_TEXTURE_OWNERSHIP.md; SDK tests/unit/graphics/texture_cache_test.cpp"""
 
 [[finding]]
