@@ -82,6 +82,8 @@ Validate the returned address and test reuse of protected stack pages. An ARM64
 probe on the Odin's 4 KB pages reproduced this by stripping the flag: the old
 allocator failed, the fix passed. See [the investigation](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/FACADE_LIFETIME_FAULTS.md).
 
+Host types also vary between standard libraries on the same architecture. NT's 1601 epoch fits in 64-bit 100 ns ticks but overflows Linux's nanosecond `system_clock`. Changing the epoch in 100 ns units and retaining that duration through calendar composition fixed four SDK chrono cases that passed on Windows. Test dates outside the host clock's range as well as current dates; the [clock conversion audit](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/CLOCK_CONVERSIONS.md) covers file times, kernel queries and both calendar directions.
+
 ## Keep host file names in UTF-8
 
 On Windows, `std::filesystem::path::string()` converts through the ANSI code page and throws when a character has no mapping there. A player's song with a Cyrillic file name crashed the game as soon as the music status line read its title ([#552](https://github.com/arcanite24/pinyon-shift/issues/552)), and the same call sat on mod, LUT and save-backup names. Convert paths to UTF-8 with `u16string()` (`rex::path_to_utf8`), build them from UTF-8 with `rex::to_path`, and test with a file name the test machine's code page can't hold.
