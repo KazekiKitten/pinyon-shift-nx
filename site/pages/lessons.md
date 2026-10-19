@@ -104,8 +104,9 @@ A faster clock exposed one more console assumption: the simulation steps on the 
   The request expired safely, but counting subsequent captures as landings
   would have overstated the result. Hold the button for 500 ms, inspect the
   map capture, and pair each landing with its accepted destination. Arm a
-  movement wait with the throttle: a delayed baseline missed a short drive
-  that stopped near roadside collision.
+  movement wait on the script tick after applying throttle: a later baseline
+  can miss a drive that has already stopped near roadside collision. Keep
+  the landing-to-driving pose check too; an input receipt alone proves no motion.
 - **Trace the loader before calling a buffer a saved replay.** FH1's gameplay replay has a main stream, an attached stream and separate initialization; their runtime IDs are replaced on returning to free roam. Its stream time field is a latched start anchor, so sampling it cannot establish a video clock. Validate reconstruction in a new process and one completed presentation per output step before adding a replay list or encoder. The [gameplay replay contract](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/GAMEPLAY_REPLAYS.md) records what remains unqualified.
 - **Hash the executable, not just its sidecar.** The replay probe's existing Windows preview carried an older build manifest whose executable hash did not match. The worktree revision reported by a runner cannot identify a binary supplied through `--build-directory`; preserve its actual hash and leave source provenance unqualified when the manifest is stale.
 
