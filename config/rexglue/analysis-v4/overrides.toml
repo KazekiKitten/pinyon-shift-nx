@@ -2,6 +2,11 @@
 # mapper (tools/map-fh1-v4-addresses.py) cannot place. Each entry records why.
 
 [default]
+# #703/#715: paired through the matching audio vtable at base 8227E680 /
+# v4 822918A0, slot +48. v4 adds an empty-child branch and uses r29 as the
+# index/r31 as the slot; the shared hook goes after that branch and is a no-op.
+"82FFD9E0" = "830BEB68"
+"82FFD9F0" = "830BEB78"
 # #485: the map update still keeps the hovered marker in r21 and the map
 # in r31 before its travel-input test. v4 adds a second entry below the branch,
 # so an automatic context match is ambiguous. Both sites precede the input test.

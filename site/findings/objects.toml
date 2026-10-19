@@ -1,5 +1,16 @@
 # Reverse-engineering records for the "Game objects" page.
 
+[[finding]]
+group = "Audio child dispatch"
+base = "sub_82FFD980, 0x82FFD9E0, 0x82FFD9C4, 0x8227E680, sub_82FFD460, sub_82FFCB20"
+v4 = "sub_830BEAF8, 0x830BEB68, 0x830BEB78, 0x822918A0, sub_830BE5D8, sub_830BDC68"
+name = "counted empty audio children"
+what = """The audio container has a count at +124 and child pointers from +128. Construction sets count one with an empty slot; teardown clears slots without reducing the count. Its +48 virtual method locks, dispatches to each child's +48 method, unlocks and returns the last result (zero if none). Base dereferences empty slots; v4 already skips them and preserves the previous result. #703 and #715 both show the base loop's first slot empty, not a proven freed traffic vehicle. The logged LR 0x82FFD9C4 is the preceding lock's return; the failing read is at 0x82FFD9E0. The base hook supplies v4's empty-slot behavior without changing ownership or accepting invalid nonzero pointers."""
+how = """Compared both loaded images, the corresponding vtable slot and neighbouring methods, constructor and teardown writes, and the Windows/Linux fault registers. The v4 null branch prevents a whole-function normalized match."""
+note = """The short base routes did not emit an empty-child event; the zero-slot comparison uses the actual generated methods with controlled memory. Native v4's initial sign-up timeouts were fixture-position failures, not guest faults. Holding the handbrake keeps the car at the event marker; holding the service brake selects reverse."""
+confidence = "confirmed"
+source = "docs/research/TRAFFIC_EVENT_NULL_DISPATCH.md; src/pinyon_shift_runtime_hooks.cpp PinyonShiftGuardEmptyAudioChild; issues #703 and #715"
+
 # ------------------------------------------------------------- Game and world
 
 [[finding]]

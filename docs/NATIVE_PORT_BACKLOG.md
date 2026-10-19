@@ -4,6 +4,14 @@ Support policy, 2026-10-05: Vulkan is the sole supported graphics API.
 Direct3D 12 is legacy and unsupported; its measurements below are historical.
 New runtime qualification targets Vulkan, with no automatic Direct3D 12 fallback.
 
+Traffic/event crash #703 and consolidated Linux report #715: the base audio
+child dispatcher dereferences a counted empty slot; v4 already skips it.
+The base hook now preserves the last child result and the normal unlock,
+matching that v4 behavior. This does not establish why the reporter sees
+traffic disappear. Evidence, lifetime contract and the Windows/Linux,
+stock/XE, base/v4 acceptance gates are in
+[the investigation](research/TRAFFIC_EVENT_NULL_DISPATCH.md).
+
 Status: **open; created 2026-09-28** at `dev` checkpoint `02ceca9` (ShiftGlue
 `aff6202`). This is the working plan that follows the closed
 [Xenos retirement backlog](native-renderer/XENOS_RETIREMENT_BACKLOG.md). It

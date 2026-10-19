@@ -1845,3 +1845,12 @@ registers = ["r31"]
 address = 0x82CC1B58
 name = "PinyonShiftTraceAllocationOverride"
 registers = ["r3", "r4", "r5", "r11"]
+
+# #703/#715: a counted audio child slot can be empty at construction or after
+# teardown. Match v4's skip, retaining the last result and the normal unlock.
+# See docs/research/TRAFFIC_EVENT_NULL_DISPATCH.md.
+[[midasm_hook]]
+address = 0x82FFD9E0
+name = "PinyonShiftGuardEmptyAudioChild"
+registers = ["r3", "r28", "r30", "r31"]
+jump_address_on_true = 0x82FFD9F0

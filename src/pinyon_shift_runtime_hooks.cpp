@@ -8260,6 +8260,21 @@ bool PinyonShiftGuardChildDispatch(PPCRegister& r11) {
   return true;
 }
 
+// Match v4's empty-slot handling; keep the last result and the loop's unlock.
+bool PinyonShiftGuardEmptyAudioChild(PPCRegister& r3, PPCRegister& r28,
+                                     PPCRegister& r30, PPCRegister& r31) {
+  if (r3.u32 != 0u) return false;
+  r3.u64 = r28.u64;
+  static std::atomic<uint32_t> skipped{};
+  if (skipped.fetch_add(1, std::memory_order_relaxed) < 16u) {
+    pinyon_shift::diagnostics::RecordEvent(
+        "audio.child_dispatch.empty",
+        {{"owner", Hex32(r30.u32)}, {"index", Hex32(r31.u32)},
+         {"previous_result", Hex32(r28.u32)}});
+  }
+  return true;
+}
+
 // Returns true to leave sub_82F9F130 (v4 sub_830603D8) through its normal
 // "return 0" exit when its output handle is missing (#367).
 bool PinyonShiftGuardNullOutputHandle(PPCRegister& r31) {
