@@ -6853,7 +6853,13 @@ static void PinyonShiftApplyCameraEditor() {
       std::array<pinyon_shift::camera::Offset, 2> offsets;
     };
     static std::map<uint32_t, Placement> positions;
-    static std::map<uint32_t, uint32_t> previous_modes;
+    // Per controller: the player's own view before the editor switched it,
+    // and the view the editor switched to.
+    struct ForcedMode {
+      uint32_t player = 0;
+      uint32_t forced = 0;
+    };
+    static std::map<uint32_t, ForcedMode> previous_modes;
     const uint32_t current = g_title_generation.load(std::memory_order_relaxed);
     if (generation != current) {
       // Tuning blocks are static title data and survive world teardown.
@@ -6913,13 +6919,21 @@ static void PinyonShiftApplyCameraEditor() {
       // Leave photo mode, cutscenes, free camera and replay sequences alone.
       if (mode && active <= 4) {
         if (LoadGuestU32(controller + 24 + mode * 4)) {
-          previous_modes[controller] = active;
+          previous_modes[controller] = {active, mode};
           pinyon_shift::mod::CallGuest(FH1_ADDR(0x82858638u), {controller, mode});
           pinyon_shift::diagnostics::RecordEvent("camera.editor.mode", {{"mode", std::to_string(mode)}});
         }
-      } else if (previous != previous_modes.end() && (active == 10 || active == 15) && active != mode) {
-        pinyon_shift::mod::CallGuest(FH1_ADDR(0x82858638u), {controller, mode ? mode : previous->second});
-        if (!mode) previous_modes.erase(previous);
+      } else if (previous != previous_modes.end() && active == previous->second.forced &&
+                 active != mode) {
+        // Only the view the editor set is switched again: the title's own use
+        // of the wheel or car-relative cameras (replay sequences) is left alone.
+        pinyon_shift::mod::CallGuest(FH1_ADDR(0x82858638u),
+                                     {controller, mode ? mode : previous->second.player});
+        if (mode) {
+          previous->second.forced = mode;
+        } else {
+          previous_modes.erase(previous);
+        }
         pinyon_shift::diagnostics::RecordEvent("camera.editor.mode", {{"mode", std::to_string(mode)}});
       }
     }
