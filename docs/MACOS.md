@@ -69,7 +69,21 @@ external drive.
 - **"Pinyon Shift" cannot be opened.** Approve it under Privacy & Security,
   step 2 above.
 - **Setup failed.** The launcher names the step and the log. The same report
-  is in `.local/logs/setup-error.json`; attach it when you file an issue.
+  is in `.local/logs/setup-error.json`; attach it together with the complete
+  log named in the error when you file an issue. The JSON contains only a
+  summary, not the compiler errors.
+- **Building the translator fails in `cmake_pch.hxx`, with missing
+  `std::bit_cast` or `std::byteswap`.** Keep the failed build directory and
+  attach `.local/logs/rexglue-configure.log`, `rexglue-build.log` and
+  `rexglue-pch-diagnostics.log` along with `setup-error.json`. Setup records
+  the failed PCH's compiler version, include search, header trace and macros
+  automatically. It preprocesses with the original compiler flags and
+  environment without replacing build outputs; a diagnostic failure leaves
+  the original build error intact. This distinguishes a different libc++ or
+  a shadowed header/macro from missing compiler support. On the M4 Pro Mac
+  mini, AppleClang 21.0.0 (`clang-2100.1.1.101`) with the CLT macOS 26.5 SDK
+  exposes both APIs, and the filesystem PCH compiles. That does not reproduce
+  or resolve the M1 Pro report in [#702](https://github.com/arcanite24/pinyon-shift/issues/702).
 - **The window turns black or one colour after a resize or fullscreen change.**
   The presenter recreates the Vulkan surface on resize and keeps the Metal
   drawable at the swapchain's size before acquiring an image. Fullscreen

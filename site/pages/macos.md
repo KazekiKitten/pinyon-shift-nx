@@ -38,3 +38,14 @@ interactive check on the affected Macs.
 The launcher's **DLC** panel imports your own DLC packages ([DLC and title update](dlc.md)), and **Import a save** brings a save from another install or from Xenia. On the M4 Pro all 21 packages imported and their 84 car rows loaded and could be driven in a scripted route, and the v4 build ran the 1000 Club challenges and reached the Horizon Rally entry.
 
 More detail is in [docs/MACOS.md](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/MACOS.md).
+
+## Setup failures
+
+Attach `.local/logs/setup-error.json` and the complete log named in the
+error. The JSON alone does not contain compiler errors. If **Building the
+translator** fails in a precompiled header (`cmake_pch.hxx`), setup also
+records `rexglue-pch-diagnostics.log`. Include that file, `rexglue-build.log`
+and `rexglue-configure.log` from `.local/logs`, and keep the failed build
+directory. The [macOS troubleshooting guide](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/MACOS.md#troubleshooting)
+explains the missing `std::bit_cast` / `std::byteswap` report that still
+needs the affected Mac's compiler and header evidence.
