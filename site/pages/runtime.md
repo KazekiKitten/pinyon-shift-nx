@@ -33,9 +33,41 @@ The runtime implements the exports the game uses and stubs the rest:
 
 Implementations include threads, events, semaphores, timers, the file system, content and profiles, and the XAudio render client.
 
+NT timestamps use 100 ns ticks from 1601. Calendar conversion keeps that precision when changing to the Unix epoch: Linux's native nanosecond `system_clock` cannot represent 1601. Both calendar directions retain a 100 ns time point; file metadata and kernel time queries already use integer NT ticks. The [clock conversion audit](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/CLOCK_CONVERSIONS.md) describes the callers and regression coverage.
+
 ## Threads
 
 Each guest thread is one host thread, named `Guest <start address>`. About 42 are alive in a race; the busy ones are the simulation and render threads, FMOD's mixer thread and 11 job workers. Guest CPU numbers rotate over six virtual hardware threads, and guest affinities are ignored by default: honouring them, with one host core per Xenon hardware thread, gave no consistent gain.
+
+A session probe (`cs_session_mode`, `cs_session_path`) in experimental builds
+(`REXGLUE_ENABLE_CS_PROBES=ON`, default OFF) records
+clock, input, wait, file and callback results in separate streams keyed by
+guest thread and sequence number. Round 2 fixed the original global-order
+capture failure. The desktop still diverges at a shared job-state poll:
+the worker's transition to completed state falls on a different side of
+the render thread's read, despite replayed per-object lock grants. The
+final repeat removes all memory observers and still expects a job lock
+where replay makes another timebase read from the poll/work-selection path.
+It verifies zero PM4 frames; an earlier iteration verified one. A useful session oracle must control execution between kernel calls,
+including these ordinary shared-memory polls. It cannot rely on external
+event playback alone. The probe changes critical-section bookkeeping and
+object allocation only while enabled; it is not a performance build.
+[The Round 2 evidence](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/CLEAN_SLATE_STAGE0.md#cs-01-per-thread-replay-and-shared-memory-order)
+records the capture gaps fixed, writer evidence and remaining limits.
+
+A Windows-only scheduling experiment in probe builds admits guest threads
+and service actors one at a time, with call budgets, explicit waits and
+logical clocks. It still fails before racing: a native shader-prewarm
+completion can deadlock schedule replay, and an unobserved repeat reaches
+a different guest boot helper. No 60-second oracle is accepted. Its
+trace-free desktop race costs 144.567 ms mean frame time versus 16.666 ms
+normally (8.67x), with 157.381 versus 22.007 CPU ms per output frame.
+Different cadence and draws/frame prevent treating the CPU ratio as pure
+scheduler overhead. Default Release compiles these hooks out: 785 active
+objects have zero probe symbols.
+[The scheduling gate and cost controls](https://github.com/arcanite24/pinyon-shift/blob/dev/docs/CLEAN_SLATE_STAGE0.md#cs-1-deterministic-scheduling-probe)
+record the prototype's native-completion gap, unresolved guest-path split,
+CPU rate, route qualification and measurement limits.
 
 The job workers run the game's jobs on XAPI fibers. The game's five fiber functions (`ConvertThreadToFiber`, `ConvertFiberToThread`, `CreateFiber`, `DeleteFiber`, `SwitchToFiber`) are served by the runtime's host fibers (Windows fibers; a stack switch of the runtime's own on Linux and Android; `ucontext` on macOS), so a guest fiber switch never leaves the host call chain. Before that mapping the switch went through the kernel's stack-switch call, and every generated function needed an entry for each return address ([why that mattered](recompiler.md#what-the-generator-emits)).
 

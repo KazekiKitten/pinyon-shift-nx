@@ -49,9 +49,20 @@ sha256 = "DB40DF605ADE49A6"  # prefix of the supported default.xex SHA-256
 "launch_options.get" = 0x82479E88       # -> r3 the launch-options singleton (built on first call); its developer flags are bytes
 "content.mount_marketplace" = 0x82516630 # r3 content manager, r4 user index, r5 enumerate flags: enumerates marketplace content (type 2), mounts each package as DLCRoot<n>, takes the offer ID from its media\<hex>.puboffer and ORs the package licence mask into that offer; r3 1 when the enumeration started
 "world.player_car_slot" = 0x8248BAE8     # r3 world -> r3 the player's car slot (a pointer to the car) from the world's car vector
+"world.components" = 0x825F6FB0        # -> r3 the current component-list header; no arguments; required by script.components
+"gps.set_position_action" = 0x829423B0   # r3 a 48-byte aligned descriptor: script.components at +28 and gps_action.position float4 at +32; r4/r5 ignored; queued guest calls only
+"fast_travel.enabled" = 0x82613E28      # r3 fast-travel manager -> r3 whether the title currently permits travel; includes scripted locks
+"fast_travel.find_road_point" = 0x827FADE8 # r4 pointer to float4 world position -> r3 nearest road graph point; r3 input unused; requires road lookup manager
 
 # Byte offsets inside title objects, as the hooks above read them.
 [offsets]
+"script.components" = 28               # pointer to the component-list header, as returned by sub_825F6FB0
+"gps_action.position" = 32             # aligned big-endian float4; x,y,z world metres, w=0
+"gps_manager.destination_locked" = 764 # u8: a script owns the destination, so requests are rejected
+"map.nearest_road_point" = 564          # native map component: road graph point pointer, v4 +576
+"map.request_fast_travel" = 426        # u8: native map update consumes the travel input
+"map.fast_travel_cost" = 444           # u32: native map's quoted cost, copied into fast-travel manager +96
+"road_point.position" = 4              # three big-endian floats, x,y,z
 "main_loop.delta" = 448                  # float seconds at owner+448
 "vehicle.active_slot" = 1500             # u32 index into the slot array
 "vehicle.slot_stride" = 1056
@@ -100,8 +111,11 @@ sha256 = "DB40DF605ADE49A6"  # prefix of the supported default.xex SHA-256
 "dynamics.abs_active" = 3020             # s32, set on the physics steps where ABS releases a wheel, cleared on the others
 "dynamics.speed" = 3128                  # f32 m/s
 "dynamics.abs_assist" = 3436             # s32, the ABS assist setting; the ABS model runs while it is set
+"dynamics.controls" = 3904               # the car's controls as built from the player's input (sub_82487650): f32 gas +0, brake +4, steer +8 (-1 to 1), clutch +12, handbrake +16
 "dynamics.wheels" = 3936                 # four wheel blocks, 0 and 1 front, 2 and 3 rear
 "dynamics.wheel_stride" = 1024
+"wheel.speed" = 12                       # f32 wheel rotation speed in rad/s
 "wheel.surface_index" = 337              # u8 index into the physics surface table
 "wheel.norm_slip_ratio" = 496            # f32 smoothed slip ratio over the tyre's peak: past +1 spinning, past -1 locking (along the car's forward axis)
+"wheel.norm_slip_angle" = 520            # f32 smoothed slip angle over the tyre's peak
 "wheel.contact" = 796                    # u8, nonzero while the wheel touches the ground

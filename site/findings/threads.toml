@@ -3,6 +3,17 @@
 # ---------------------------------------------------------------- Thread map
 
 [[finding]]
+group = "Thread map"
+base = "0x881ED4F0, 0x881ED538"
+v4 = "0x881ED4F0, 0x881ED538"
+name = "XMedia facade thread creation and stack reuse fault"
+what = "The wrapper at 0x881ED4F0 calls ExCreateThread; 0x881ED538 is its return address. The Pixel 3 XL report in issue #556 faults in memset on the parent thread at that LR while a guest stack is initialized, not while a child fiber executes. The POSIX backend accepted relocated mmap results when old kernels ignored MAP_FIXED_NOREPLACE, leaving reused guard pages inaccessible. Exact-address validation and cleanup now preserve the requested stack commit. The reported GPU budget warning does not establish OOM as this fault's cause."
+how = "Import call analysis and normalized base/v4 function matching; report registers and runtime log; production POSIX allocator regression with the NOREPLACE flag stripped to simulate Linux before 4.17."
+confidence = "confirmed"
+note = "The wrapper and allocator bug are confirmed; a current launch on the reporter's Linux 4.9.337 Pixel is still needed to confirm that this fixes their crash."
+source = "docs/FACADE_LIFETIME_FAULTS.md; thirdparty/shiftglue-sdk/tests/unit/core/memory_posix_test.cpp; issue #556"
+
+[[finding]]
 group = """Thread map"""
 base = """8255AE10, 825A6320, 82FB4AF8, 82C0C8C8"""
 v4 = """825CEC88, 8261E318, 83075D18, 82CCC368"""
@@ -49,12 +60,12 @@ source = """docs/NEAR_NATIVE_RESEARCH.md NN-5.1, What native means, layer by lay
 
 [[finding]]
 group = """Thread map"""
-base = """82E4B478, sub_82E4B2D0, 830C6918"""
+base = """82E4B478, sub_82E4B2D0, sub_82E4B3A0, sub_82E44470, 830C6918"""
 name = """asset worker and background thread"""
 what = """An asset worker thread does the decompression while loading: the LZX block decoder and the inflate loop are among its three hot functions. A background thread `830C6918` mostly formats text and allocates: its busiest leaves are the CRT printf engine (12 % of busy samples, about 1 % of a core in a race), the heap allocator (11 %) and a large load-heavy routine (11 %)."""
 how = """Thread sampler on desktop and on the simulated low-spec run."""
 confidence = """probable"""
-note = """The records name the asset worker both as thread `82E4B478` and as `sub_82E4B2D0`. Both are thread entries: the Odin runtime log shows three guest threads starting at `82E4B2D0`, `82E4B3A0` and `82E4B478`. Which of them decompresses is not settled."""
+note = """The records name the asset worker both as thread `82E4B478` and as `sub_82E4B2D0`. Both are thread entries: the Odin runtime log shows three guest threads starting at `82E4B2D0`, `82E4B3A0` and `82E4B478`. Which of them decompresses is not settled. Round 2 found that status helper 82E44470 polls pool bytes +1554/+1555 before taking the pool lock; workers 82E4B2D0 and 82E4B3A0 toggle those bytes. These are further shared-poll candidates, but were not the first observed replay value mismatch (docs/CLEAN_SLATE_STAGE0.md)."""
 source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Hot guest CPU functions"""
 
 [[finding]]
@@ -286,12 +297,12 @@ source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Hot guest CPU functions"""
 
 [[finding]]
 group = """Hot functions"""
-base = """sub_82462050, sub_82462098, sub_823E6738"""
+base = """sub_82462030, sub_82462050, sub_82462098, sub_823E6738"""
 name = """guest time reads"""
-what = """Read the tick count through the kernel's tick query; most of the render thread's clock reads in its idle loop come through them."""
-how = """Call graph."""
+what = """The lowest helper 82462030 reads the PPC timebase, mapped to the runtime guest tick counter. The other helpers use it for time queries and timer setup; most of the render thread's clock reads in its idle loop come through them."""
+how = """Call graph and generated timebase access; same-binary mapped host stack in r2-race-no-watch."""
 confidence = """confirmed"""
-source = """docs/REVERSE_ENGINEERING.md@a72a92a5f215 Hot guest CPU functions"""
+source = """docs/CLEAN_SLATE_STAGE0.md#cs-01-per-thread-replay-and-shared-memory-order"""
 
 
 [[finding]]
@@ -368,6 +379,17 @@ source = """docs/PERFORMANCE_BACKLOG.md PB-3.1, PB-3.12 candidates"""
 
 [[finding]]
 group = """Hot functions"""
+v4 = """sub_82E10560, sub_82E100B0, sub_82E08FF8, sub_82DFC608, sub_82DFC570"""
+name = """car physics call chain"""
+what = """On the v4 drive the car physics runs on the main thread (`825CEC88`) and on a job worker (`82CCC368`) through `sub_82E10560` (main thread only, 2.6 % of process cycles inclusive), `sub_82E100B0`, `sub_82E08FF8` (1.4 % + 1.2 %), `sub_82DFC608` (1.4 % + 1.2 %) and `sub_82DFC570` (1.1 % + 1.0 %), the parent of six of the specialised physics functions; the earlier native-region root `sub_82DE3058` is under 0.3 %. `sub_82DFC570` reaches 77 functions, runs about 46 times a frame and takes about 20 µs a call on the Odin."""
+how = """`simpleperf --call-graph fp` inclusive report on the Odin, 30 s of the v4 drive; call counts and per-call time from the native-region A/B timer."""
+confidence = """probable"""
+note = """The chain's order and shares are measured; that these are the car-physics step rests on the specialised physics functions below them (NN-5.1)."""
+issue = """#756"""
+source = """site/pages/recompiler.md Native regions"""
+
+[[finding]]
+group = """Hot functions"""
 base = """sub_825A6208, sub_82450160, sub_823ED888, sub_823E40D8"""
 name = """render and simulation call chains"""
 what = """In race call graphs the render thread's time runs through `sub_825A6208`, then the render thread frame `sub_8259F3E8`, then `sub_82450160`; the simulation thread's runs through `sub_823ED888`, then `sub_823E40D8`. The roles of `sub_82450160` and `sub_823E40D8` are not known."""
@@ -385,3 +407,12 @@ how = """RTTI class names, template arguments and vtable slots from the RTTI rec
 confidence = """probable"""
 negative = true
 source = """docs/NEAR_NATIVE_RESEARCH.md NN-5.1"""
+
+[[finding]]
+group = "Main loop"
+base = "sub_82412688, sub_8243CB38, sub_82E43EA8, sub_82E4B240, sub_82E4A030"
+name = "job completion polls race with worker state publication"
+what = "The job wait helper at 82412688 polls object bytes +40 and +41 before taking the job critical section. Its caller 8243CB38 then takes the critical section at object +4 and rechecks readiness. The poll may enter queue work selection through 82E4B240 and 82E4A030, which reads the clock while work is pending. The worker transition helper 82E43EA8 writes byte +40 under that critical section; the writer in this capture is asset worker 82E4B2D0. Round 2 session replay observed the same object at +40 as 3 instead of captured 4: the reader passed the worker's completion publication. Replaying kernel outcomes and per-object lock grants therefore does not determine this polling path."
+how = "Generated control-flow and field-access analysis; default-off read/store observations in desktop r2-race1 and r2-boot21, including the last matching writer's thread and sequence. A final repeat without memory observers still diverges at the same job lock versus another polling timebase read. No memory value was substituted by the diagnostic."
+confidence = "confirmed"
+source = "docs/CLEAN_SLATE_STAGE0.md#cs-01-per-thread-replay-and-shared-memory-order"

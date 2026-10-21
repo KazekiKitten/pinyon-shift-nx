@@ -5,6 +5,13 @@
 # offset in fh1-symbols.toml.
 
 [offsets]
+"script.components" = 28  # gps action 829423B0 -> 829F5278, component-list read unchanged
+"gps_action.position" = 32  # gps action 829423B0 -> 829F5278, lvx at this+32 unchanged
+"gps_manager.destination_locked" = 764  # destination setter 8299FB40 -> 82A54068, same lock byte
+"map.nearest_road_point" = 576  # map update: base 8280286C stores +564, v4 map action reads +576
+"map.request_fast_travel" = 426  # native travel input: base 82803350 -> v4 828B7888
+"map.fast_travel_cost" = 444  # native map's quoted cost in both map updates
+"road_point.position" = 4  # road fallback in the base/v4 map action reads floats +4/+8/+12
 "activity.name" = 16  # activity vtable slot 3: base 828A5258 -> v4 82956980
 "activity.revealed" = 8  # activity.reveal 828A52F0 -> 82956A20
 "activity_manager.begin" = 4  # activities.reveal_all 828AF6F8 -> 829613C8
@@ -21,6 +28,7 @@
 "collectible_state.revealed" = 40  # activity.reveal 828A52F0 -> 82956A20
 "dynamics.abs_active" = 3020  # ICarDynamics ABS light getter sub_82D1D880 -> sub_82DDF7E0
 "dynamics.abs_assist" = 3436  # same getter, second word: sub_82D1D880 -> sub_82DDF7E0
+"dynamics.controls" = 3904  # controls getter (ICarDynamics vtable slot 44) sub_82D1D2C0 -> sub_82DDF208, both r3+3904
 "dynamics.engine_angvel" = 324  # RPM getter sub_82D1D078 -> v4 ICarDynamics slot 53, same field
 "dynamics.gear" = 2240  # gear getter sub_82D1D868 -> sub_82DDF7C8
 "dynamics.idle_angvel" = 1228  # idle getter (vtable slot 103) -> sub_82DDF050
@@ -54,7 +62,9 @@
 "vehicle.slot.position" = 15120  # 82BC5870: li r25,0x3B10 82BC59F4 -> 82C843DC
 "vehicle.slot_stride" = 1056  # 82BC5870: mulli r11,r11,0x420 82BC59F8 -> 82C843E0
 "wheel.contact" = 796  # wheel contact getters, unchanged with the CCarDynamics layout
+"wheel.norm_slip_angle" = 520  # slip angle getter (vtable slot 168) sub_82D1DD78 -> sub_82DDFD10, both wheel + 520
 "wheel.norm_slip_ratio" = 496  # smoothed slip ratio getter (vtable slot 169) -> sub_82DDFD20
+"wheel.speed" = 12  # wheel speed getter (vtable slot 150) sub_82D1D670 -> sub_82DDF5B8, both wheel + 12
 "wheel.surface_index" = 337  # surface record getter (vtable slot 206), unchanged with the CCarDynamics layout
 "world.session" = 124  # world.game_mode 824878D0 = v4 824B75E8: lwz r11,124(r3) unchanged
 "world.time_of_day" = 232  # time_of_day.from_world base 82486CF0 = v4 824B6990 = 'lwz r3,232(r3)
